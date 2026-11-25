@@ -201,6 +201,7 @@ pub fn registry() -> Registry {
     r.add::<cmd_quick_trace::QuickTrace>();
     r.add::<cmd_rotary_roughing_toolpath::RotaryRoughingToolpath>();
     r.add::<cmd_rotary_finishing_toolpath::RotaryFinishingToolpath>();
+    r.add::<cmd_rotary_locked_angles_toolpath::RotaryLockedAnglesToolpath>();
     r.add::<cmd_rotary_machining_toolpath::RotaryMachiningToolpath>();
     r.add::<cmd_rotary_lathe_toolpath::RotaryLatheToolpath>();
     r.add_exporter::<fmt_export_svg::ExportSvg>();

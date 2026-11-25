@@ -366,12 +366,6 @@ impl Work<'_> {
     /// The angle (degrees) A locked at reaches the most of what is left of the `material`
     /// for a finish, the holder kept clear, of every 15° but those `tried`: none when no
     /// angle reaches enough to be worth it. Looked at a bit's width apart.
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        clippy::cast_precision_loss,
-        reason = "line and point counts are small"
-    )]
     pub fn best_tilt(
         &self,
         material: &Voxels,
@@ -379,18 +373,61 @@ impl Work<'_> {
         head: &Head,
         tried: &[f64],
     ) -> Option<f64> {
+        best_of(&self.tilt_scores(material, check, head, tried), |s| {
+            s.reached
+        })
+    }
+
+    /// The angle (degrees) A locked at reaches the most of what is left of the `material`
+    /// where it faces the bit squarely (no steeper than [`FACING`]), as [`Work::best_tilt`]
+    /// does: a flat is finished from straight over it, not slantwise with the side of the
+    /// ball. Where nothing is left facing any angle worth it, the angle that reaches the
+    /// most of it anyhow.
+    pub fn best_facing(
+        &self,
+        material: &Voxels,
+        check: &Check,
+        head: &Head,
+        tried: &[f64],
+    ) -> Option<f64> {
+        let scores = self.tilt_scores(material, check, head, tried);
+        best_of(&scores, |s| s.facing).or_else(|| best_of(&scores, |s| s.reached))
+    }
+
+    /// How much of what is left of the `material` A locked at each 15° reaches (none for
+    /// those `tried`), and how much of that faces the bit squarely.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "line and point counts are small"
+    )]
+    fn tilt_scores(
+        &self,
+        material: &Voxels,
+        check: &Check,
+        head: &Head,
+        tried: &[f64],
+    ) -> Vec<Score> {
         let radius = self.turned.radius;
         let step = self.tool.diameter;
         let half = material.swing();
         let lines = ((2.0 * half / step).ceil() as usize).max(1) + 1;
+        let spacing = 2.0 * half / (lines - 1) as f64;
         let points = ((self.end - self.start) / step).ceil() as usize + 1;
         let near =
             |a: f64, b: f64| ((a - b).rem_euclid(360.0)).min((b - a).rem_euclid(360.0)) < 1.0;
+        let steepest = FACING.to_radians().tan();
         // every angle at once, each worked through on its own thread
-        let scores = parallel(24, |k| {
+        parallel(24, |k| {
             let angle = 15.0 * f64::from(u32::try_from(k).unwrap_or(0));
+            let mut score = Score {
+                angle,
+                reached: 0.0,
+                facing: 0.0,
+            };
             if tried.iter().any(|&t| near(t, angle)) {
-                return (angle, 0);
+                return score;
             }
             let round = angle.to_radians() * radius;
             // coarser than the finish's own: only to choose by
@@ -400,36 +437,58 @@ impl Work<'_> {
                 head,
                 (2.0 * material.cell()).max(2.0),
             );
-            let found: usize = (0..lines)
+            let along = |i: usize| (self.start + i as f64 * step).min(self.end);
+            let across = |line: usize| -half + line as f64 * spacing;
+            let tips: Vec<Vec<f64>> = (0..lines)
                 .map(|line| {
-                    let across = -half + line as f64 * 2.0 * half / (lines - 1) as f64;
                     (0..points)
-                        .map(|i| {
-                            let along = (self.start + i as f64 * step).min(self.end);
-                            if head.held(along) {
-                                return 0;
-                            }
-                            let tip = self.tip(along, round, across);
-                            let pose = Pose::new(along, across, tip, round / radius);
-                            if !clear.allows(pose) {
-                                return 0;
-                            }
-                            let n = material.held(&check.looks, pose, 64);
-                            if n >= check.enough { n } else { 0 }
-                        })
-                        .sum::<usize>()
+                        .map(|i| self.tip(along(i), round, across(line)))
+                        .collect()
                 })
-                .sum();
-            (angle, found)
-        });
-        let mut best: Option<(f64, usize)> = None;
-        for (angle, found) in scores {
-            if found > best.map_or(0, |b| b.1) {
-                best = Some((angle, found));
+                .collect();
+            for line in 0..lines {
+                for i in 0..points {
+                    if head.held(along(i)) {
+                        continue;
+                    }
+                    let tip = tips[line][i];
+                    let pose = Pose::new(along(i), across(line), tip, round / radius);
+                    if !clear.allows(pose) {
+                        continue;
+                    }
+                    // looked for with the bit grown by the check's margin all round
+                    let looking = Pose {
+                        height: pose.height - check.margin,
+                        ..pose
+                    };
+                    let n = material.held(&check.looks, looking, 64);
+                    if n < check.enough {
+                        continue;
+                    }
+                    score.reached += n as f64;
+                    // how steep what the bit lands on is, across and along: from the tips
+                    // either side
+                    let slope = |a: f64, b: f64, apart: f64| (a - b).abs() / apart;
+                    let (l0, l1) = (line.saturating_sub(1), (line + 1).min(lines - 1));
+                    let (i0, i1) = (i.saturating_sub(1), (i + 1).min(points - 1));
+                    let sideways = if l1 > l0 {
+                        slope(tips[l1][i], tips[l0][i], (l1 - l0) as f64 * spacing)
+                    } else {
+                        0.0
+                    };
+                    let lengthways = if i1 > i0 {
+                        slope(tips[line][i1], tips[line][i0], along(i1) - along(i0))
+                    } else {
+                        0.0
+                    };
+                    let slant = sideways.max(lengthways);
+                    if slant < steepest {
+                        score.facing += n as f64 * (1.0 - slant / steepest);
+                    }
+                }
             }
-        }
-        // a few points' worth at least: less is slivers, not detail
-        best.filter(|b| b.1 >= 3 * DETAIL * 8).map(|b| b.0)
+            score
+        })
     }
 
     /// `pass` broken where the bit would cut too little of what is left of the `material`
@@ -555,3 +614,30 @@ pub const CELLS: usize = 120_000_000;
 
 /// How many cells of material a ring must find to be worth cutting for detail.
 pub const DETAIL: usize = 3;
+
+/// The steepest (degrees from square to the bit) a surface may be and still face A locked
+/// at an angle, for [`Work::best_facing`].
+pub const FACING: f64 = 30.0;
+
+/// What A locked at an `angle` reaches of what is left: all of it, and what of it faces the
+/// bit squarely.
+#[derive(Debug)]
+struct Score {
+    angle: f64,
+    reached: f64,
+    /// Weighted by how squarely: full straight under the bit, none at [`FACING`].
+    facing: f64,
+}
+
+/// The angle with the most of what `by` counts, when that is enough to be worth it: a few
+/// points' worth at least, as less is slivers, not detail.
+#[expect(clippy::cast_precision_loss, reason = "a small count")]
+fn best_of(scores: &[Score], by: impl Fn(&Score) -> f64) -> Option<f64> {
+    let mut best: Option<(f64, f64)> = None;
+    for s in scores {
+        if by(s) > best.map_or(0.0, |b| b.1) {
+            best = Some((s.angle, by(s)));
+        }
+    }
+    best.filter(|b| b.1 >= (3 * DETAIL * 8) as f64).map(|b| b.0)
+}

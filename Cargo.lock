@@ -2020,6 +2020,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmd-rotary-locked-angles-toolpath"
+version = "0.7.6"
+dependencies = [
+ "cmd-rotary-roughing-toolpath",
+ "cut-craft-core",
+ "cut-craft-rotary",
+ "cut-craft-rotary-carving",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "cmd-rotary-machining-toolpath"
 version = "0.7.6"
 dependencies = [
@@ -2779,6 +2791,7 @@ dependencies = [
  "cmd-reverse-direction",
  "cmd-rotary-finishing-toolpath",
  "cmd-rotary-lathe-toolpath",
+ "cmd-rotary-locked-angles-toolpath",
  "cmd-rotary-machining-toolpath",
  "cmd-rotary-roughing-toolpath",
  "cmd-rotate",

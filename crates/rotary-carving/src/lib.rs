@@ -6,6 +6,7 @@
 mod carving;
 mod finish;
 mod left;
+mod locked;
 mod rough;
 mod shape;
 mod solid;
@@ -15,6 +16,7 @@ mod work;
 pub use carving::*;
 pub use finish::*;
 pub use left::*;
+pub use locked::*;
 pub use rough::*;
 pub use shape::*;
 pub use solid::*;

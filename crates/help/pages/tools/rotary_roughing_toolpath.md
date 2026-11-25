@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-25
-see-also: rotary_finishing_toolpath, rotary_machining_toolpath, rotary_lathe_toolpath, rotary_firmware, job_setup, collisions, save_toolpaths, tool_database
+see-also: rotary_finishing_toolpath, rotary_locked_angles_toolpath, rotary_machining_toolpath, rotary_lathe_toolpath, rotary_firmware, job_setup, collisions, save_toolpaths, tool_database
 ---
 
 **Rotary Roughing** takes the bulk off a carved part on a rotary job: a level at a time from the

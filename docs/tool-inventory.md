@@ -404,6 +404,13 @@ say "not implemented yet".
   where the holder can't get down beside what is left it stays up and says so in red.
   Registration mark and Cut away centre support as in 4-Axis Rotary Machining. Spiral (the
   calculator choosing it over rings when quicker) is still to come.
+- Rotary Locked Angles (Cut Craft's own, `rotary_locked_angles_toolpath`): on a rotary job, A
+  locked at one angle after another (of every 15°), each picked where it reaches the most of
+  what is left, and the side facing the bit finished back and forth along the part with A held
+  still (`Work::locked_angles`, over `best_tilt` and `locked`). Most angles is the limit; it
+  stops sooner when no angle reaches enough to be worth it (a square bar takes four). Cuts
+  only what the toolpaths above it leave; says in red where the holder kept it from the model
+  at every angle, and when the angles allowed ran out with more left.
 - Surfacing Toolpath (Cut Craft's own; Aspire flattens with a Pocket and no edges):
   flattens the whole material, the spoilboard (its size from the machine's bed) or the
   inside of selected closed vectors with a Surfacing Bit (new Tool Type, for spoilboard bits
