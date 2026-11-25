@@ -28,9 +28,11 @@ as **Translated by Ivan · 92% translated**.
   Craft's author. So a pack can have the odd wrong word, and new parts of Cut Craft show in
   English until its translators catch up.
 
-**Igpay Atinlay (test)** is a pack for testing: it shows Cut Craft in Pig Latin. Any word
-still in plain English while it is picked has no translation key yet, so no pack can
-translate it. Right-click it and choose **Report a Bug Here…** to tell Cut Craft.
+**Igpay Atinlay (test)** is a pack for testing: it shows Cut Craft in Pig Latin, the tools'
+forms and settings too. Any word still in plain English while it is picked has no
+translation key yet, so no pack can translate it. A name put into a sentence, such as a file
+name, a tool's name or an error, stays as it is in every language: only the words around it
+show in Pig Latin. Right-click it and choose **Report a Bug Here…** to tell Cut Craft.
 
 A pack that isn't signed still works, but it is marked **⚠ not official**, the same as any
 other [add-on](help:addons).

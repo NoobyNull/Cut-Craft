@@ -7,6 +7,7 @@
 use super::{Field, Kind, english_fields, setting_key};
 use cut_craft_i18n::english;
 use serde_json::Value;
+use std::fmt::Write as _;
 
 /// Every schema a form is made from, each with what it is, for the file's comments.
 fn schemas() -> Vec<(String, Value)> {
@@ -106,8 +107,12 @@ fn ftl_value(text: &str) -> String {
             let mut out = String::new();
             for (i, c) in line.chars().enumerate() {
                 match c {
-                    '{' | '}' => out.push_str(&format!("{{\"{c}\"}}")),
-                    '[' | '*' | '.' if i == 0 => out.push_str(&format!("{{\"{c}\"}}")),
+                    '{' | '}' => {
+                        let _ = write!(out, "{{\"{c}\"}}");
+                    }
+                    '[' | '*' | '.' if i == 0 => {
+                        let _ = write!(out, "{{\"{c}\"}}");
+                    }
                     c => out.push(c),
                 }
             }
@@ -141,9 +146,9 @@ const HEADER: &str = "\
 fn file() -> String {
     let mut out = String::from(HEADER);
     for (what, words) in every_text() {
-        out.push_str(&format!("\n## {what}\n"));
+        let _ = write!(out, "\n## {what}\n");
         for w in words {
-            out.push_str(&format!("{} ={}\n", setting_key(&w), ftl_value(&w)));
+            let _ = writeln!(out, "{} ={}", setting_key(&w), ftl_value(&w));
         }
     }
     out
@@ -169,7 +174,7 @@ fn every_form_text_has_its_english_words() {
             match english().words(&key, None) {
                 Some(got) if plain(&got) == plain(&w) => {}
                 Some(got) => {
-                    problems.push(format!("{what}: {key} = {got:?}, but the code says {w:?}"))
+                    problems.push(format!("{what}: {key} = {got:?}, but the code says {w:?}"));
                 }
                 None => problems.push(format!("{what}: {key} is missing ({w:?})")),
             }
