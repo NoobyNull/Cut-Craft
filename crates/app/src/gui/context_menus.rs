@@ -59,6 +59,7 @@ pub fn toolpath_menu(doc: &Document, id: EntityId, toolpath: &Toolpath) -> Vec<M
                         sheet,
                     },
                 )
+                .named()
             }),
         )
         .enabled(doc.sheets.len() > 1),
@@ -411,6 +412,7 @@ pub(super) fn move_to_level(doc: &Document, component: &Component) -> MenuItem {
                     &l.name,
                     &cmd_move_to_level::Params { level: id },
                 )
+                .named()
                 .checked(component.level == id)
             })
             .collect(),

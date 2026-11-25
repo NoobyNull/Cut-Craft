@@ -729,6 +729,7 @@ impl MenuSystem {
                 &l.name,
                 &cmd_move_to_layer::Params { layer: l.id },
             )
+            .named()
         });
         let mut menu: Vec<MenuItem> = under
             .iter()
@@ -807,6 +808,7 @@ impl MenuSystem {
                 &l.name,
                 &cmd_move_to_layer::Params { layer: l.id },
             )
+            .named()
         });
         vec![
             edit("Undo"),
@@ -981,6 +983,8 @@ pub struct MenuItem {
     pub children: Vec<MenuItem>,
     /// Its picture, an icon path, where the menu has one (the combine modes).
     pub icon: Option<String>,
+    /// Named by the user (a sheet or a level): shown as written in every language.
+    pub named: bool,
 }
 
 impl MenuItem {
@@ -1000,6 +1004,16 @@ impl MenuItem {
             is_checked: false,
             children: vec![],
             icon: None,
+            named: false,
+        }
+    }
+
+    /// Named by the user (a sheet or a level), so its name is never translated.
+    #[must_use]
+    pub fn named(self) -> Self {
+        Self {
+            named: true,
+            ..self
         }
     }
 

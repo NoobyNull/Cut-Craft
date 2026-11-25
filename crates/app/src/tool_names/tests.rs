@@ -114,7 +114,8 @@ fn menu_item_names(items: &[gui::MenuItem], out: &mut Vec<String>) {
         tools.contains(&item.action.as_str()) && english_name(&registry, &item.action) == item.name
     };
     for item in items {
-        if !item.name.is_empty() && !named_as_tool(item) && !out.contains(&item.name) {
+        if !item.name.is_empty() && !item.named && !named_as_tool(item) && !out.contains(&item.name)
+        {
             out.push(item.name.clone());
         }
         menu_item_names(&item.children, out);
