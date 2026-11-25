@@ -1,5 +1,5 @@
 //! Nest Parts: the selected vectors, as parts (vectors whose boxes overlap, or that are
-//! grouped, stay together), laid out inside the job from a chosen corner, kept a tool's
+//! grouped, stay together), laid out inside the job from a chosen corner, kept a bit's
 //! width plus a clearance apart and a border in from the edge: by their boxes in rows, or
 //! (True Shape) each where its own shape first fits, turned in steps, holes filled by
 //! smaller parts, with as many copies of each as asked; mirrored where that fits better,
@@ -44,11 +44,11 @@ pub enum Direction {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[expect(clippy::struct_excessive_bools, reason = "the tick boxes of the form")]
 pub struct Params {
-    /// The cut-out tool: the least gap left between parts
-    #[schemars(title = "Tool diameter", extend("x-unit" = "mm"), range(min = 0))]
+    /// The cut-out bit: the least gap left between parts
+    #[schemars(title = "Bit diameter", extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-dim" = "Dia", "x-diagram" = "diagrams/nest_gaps.png"))]
     pub tool_diameter: f64,
-    /// Added to the tool diameter between parts, and to the border
+    /// Added to the bit diameter between parts, and to the border
     #[schemars(title = "Clearance", extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-dim" = "G"))]
     pub clearance: f64,

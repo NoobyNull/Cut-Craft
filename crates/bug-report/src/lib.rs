@@ -66,7 +66,7 @@ fn frame_id() -> egui::Id {
 /// How tall a dialog opens, as a share of the main window's height.
 pub const DIALOG_HEIGHT_SHARE: f32 = 0.8;
 
-/// A dialog in a window of its own beside the main one (the Tool Database, Machine
+/// A dialog in a window of its own beside the main one (the Bit Library, Machine
 /// Configuration, Report a Bug...), closed with the desktop's own button: `open` goes false
 /// then. It stays above the main window until it closes ([`cut_craft_window_owner`]). Its content scrolls when it is taller than the window. Where no second window can
 /// open (the web, tests), an egui window inside the main one instead.

@@ -80,16 +80,16 @@ pub struct Params {
     /// A V-bit; its stepover sets how close together the carving passes are
     pub tool: Tool,
     /// End mills that clear the flat bottom first, largest first (needs a flat depth): each
-    /// makes a toolpath of its own, and each tool after it, the V-bit last, cuts only what
+    /// makes a toolpath of its own, and each bit after it, the V-bit last, cuts only what
     /// the ones before it left (rest machining)
     #[serde(default)]
-    #[schemars(title = "Clearance Tools")]
+    #[schemars(title = "Clearance Bits")]
     pub clearance_tools: Vec<Tool>,
-    /// This toolpath is this clearance tool's pass over the flat bottom
+    /// This toolpath is this clearance bit's pass over the flat bottom
     #[serde(default)]
     #[schemars(skip)]
     pub clearing: Option<Tool>,
-    /// The V-bit's toolpath after clearance tools: their smallest radius, so it carves the
+    /// The V-bit's toolpath after clearance bits: their smallest radius, so it carves the
     /// slopes and only this far into the flat bottom they cleared
     #[serde(default)]
     #[schemars(skip)]
@@ -127,7 +127,7 @@ impl Default for Params {
                 .tools
                 .into_iter()
                 .find(|t| t.shape == ToolShape::VBit)
-                .expect("the starter tools include a V-bit"),
+                .expect("the starter bits include a V-bit"),
             clearance_tools: vec![],
             clearing: None,
             cleared_within: None,
@@ -161,13 +161,13 @@ impl Command for VcarveEngraveToolpath {
         }
         if p.place != Place::Fill {
             return Err(CommandError::InvalidParams(
-                "clearance tools clear a Fill's flat bottom: set Carve to Fill, or take them off"
+                "clearance bits clear a Fill's flat bottom: set Carve to Fill, or take them off"
                     .into(),
             ));
         }
         if p.flat_depth <= 0.0 {
             return Err(CommandError::InvalidParams(
-                "clearance tools clear the flat bottom: give a flat depth".into(),
+                "clearance bits clear the flat bottom: give a flat depth".into(),
             ));
         }
         cut_craft_core::rest::check_clearing(&p.tool, &p.clearance_tools, false)?;
@@ -224,7 +224,7 @@ impl Command for VcarveEngraveToolpath {
     }
 }
 
-/// The toolpath for `p`'s own tool: the V-bit's carving, or (`clearing`) an end mill's
+/// The toolpath for `p`'s own bit: the V-bit's carving, or (`clearing`) an end mill's
 /// pocket of the flat bottom.
 fn vcarve(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpath, CommandError> {
     {
@@ -237,12 +237,12 @@ fn vcarve(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
                 "pick a V-bit: V-carving needs one".into(),
             ));
         }
-        ensure_positive("tool diameter", tool.diameter)?;
+        ensure_positive("bit diameter", tool.diameter)?;
         ensure_positive("pass depth", tool.pass_depth)?;
         let stepover = tool.finishing_stepover();
         if !(stepover > 0.0 && stepover <= 1.0) {
             return Err(CommandError::InvalidParams(
-                "the tool's finishing stepover must be more than 0% and at most 100%: set it in the Tool Database".into(),
+                "the bit's finishing stepover must be more than 0% and at most 100%: set it in the Bit Library".into(),
             ));
         }
         // on the line follows open vectors too
@@ -294,14 +294,14 @@ fn vcarve(doc: &Document, p: &Params) -> Result<cut_craft_core::toolpath::Toolpa
     }
 }
 
-/// A clearance tool's pass: the flat bottom (where the V-bit, `p.flat_depth` down, is
+/// A clearance bit's pass: the flat bottom (where the V-bit, `p.flat_depth` down, is
 /// narrower than the shape) pocketed with rings stepping in, at each pass depth.
 fn clearing(
     doc: &Document,
     p: &Params,
     tool: &Tool,
 ) -> Result<cut_craft_core::toolpath::Toolpath, CommandError> {
-    ensure_positive("tool diameter", tool.diameter)?;
+    ensure_positive("bit diameter", tool.diameter)?;
     ensure_positive("pass depth", tool.pass_depth)?;
     let (ids, paths) = doc.selected_paths(|path| path.closed);
     if ids.is_empty() {
@@ -318,7 +318,7 @@ fn clearing(
     );
     if flat.is_empty() {
         return Err(CommandError::Failed(format!(
-            "{} is too big to clear any of the flat bottom. Pick a smaller flat-bottom tool",
+            "{} is too big to clear any of the flat bottom. Pick a smaller flat-bottom bit",
             tool.name
         )));
     }

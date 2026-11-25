@@ -111,3 +111,4 @@ the bit clear first, turns A, and comes back down, so it never knocks into them,
 bit. Cutting moves are not lifted: the toolpaths that cut while A turns stay on the material
 already, below its top.
 
+Throughout the forms, the **bit** is what is in the spindle; the tools are the buttons you press.

@@ -1,6 +1,6 @@
 //! How long the machine takes to cut a job: every move, rapids and moves between toolpaths
 //! included, speeding up and slowing down as the machine's accelerations allow, rounding
-//! corners as its controller does, held to each axis's top speed, with tool changes and
+//! corners as its controller does, held to each axis's top speed, with bit changes and
 //! drill dwells added.
 //!
 //! The moves are planned the way a motion controller plans them: each move's top speed is
@@ -14,7 +14,7 @@ use crate::toolpath::{Move, MoveKind, Toolpath};
 use glam::DVec3;
 
 /// What the estimate goes by: the machine's speeds and accelerations, how it corners, and
-/// how long a tool change takes. A 0 is not given: no limit for a speed or acceleration.
+/// how long a bit change takes. A 0 is not given: no limit for a speed or acceleration.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Motion {
     /// The rapid (G0) rate, mm/min, used where the machine gives no top speed for an axis.
@@ -26,7 +26,7 @@ pub struct Motion {
     /// How far from the sharp corner the controller lets the path stray to keep its speed
     /// through it (junction deviation), mm; 0 for the usual [`JUNCTION_DEVIATION`].
     pub junction_deviation: f64,
-    /// How long a tool change takes, seconds: by hand (stop, swap the bit, zero it, start
+    /// How long a bit change takes, seconds: by hand (stop, swap the bit, zero it, start
     /// again), and by the tool changer.
     pub change_by_hand: f64,
     pub change_by_changer: f64,
@@ -37,7 +37,7 @@ pub struct Motion {
 
 /// The usual junction deviation, mm: the common controller default.
 pub const JUNCTION_DEVIATION: f64 = 0.01;
-/// The usual time for a tool change, seconds: by hand, and by a tool changer (as Options ▸
+/// The usual time for a bit change, seconds: by hand, and by a tool changer (as Options ▸
 /// Toolpaths has them to begin with).
 pub const CHANGE_BY_HAND: f64 = 120.0;
 pub const CHANGE_BY_CHANGER: f64 = 15.0;

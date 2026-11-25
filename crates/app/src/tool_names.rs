@@ -152,5 +152,35 @@ pub fn menu_item_name(item: &MenuItem) -> String {
     tr_or(&menu_item_key(&item.name), &item.name)
 }
 
+/// Words besides its name that Find Tool (Ctrl+K) finds a tool by, in English: the words
+/// people knew it by before (the Bit Library was the Tool Database), or call it by elsewhere.
+const ALSO_FOUND_BY: &[(&str, &[&str])] = &[(
+    "tool_database",
+    &[
+        "tool database",
+        "tool library",
+        "tooling",
+        "cutter",
+        "end mill",
+        "endmill",
+        "router bit",
+        "bits",
+    ],
+)];
+
+/// Whether Find Tool lists tool `id`, shown as `name`, for `typed`: its name or one of its
+/// other words holds what was typed, in any case.
+pub fn found_by(id: &str, name: &str, typed: &str) -> bool {
+    let typed = typed.trim().to_lowercase();
+    name.to_lowercase().contains(&typed)
+        || ALSO_FOUND_BY
+            .iter()
+            .filter(|(tool, _)| *tool == id)
+            .flat_map(|(_, words)| words.iter())
+            .any(|word| word.contains(&typed))
+}
+
+#[cfg(test)]
+mod bit_words;
 #[cfg(test)]
 mod tests;

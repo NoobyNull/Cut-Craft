@@ -136,7 +136,7 @@ impl Default for Params {
                 .tools
                 .into_iter()
                 .find(|t| t.shape == ToolShape::BallNose)
-                .expect("the starter tools include a ball nose"),
+                .expect("the starter bits include a ball nose"),
             way: Way::RoundThePart,
             cut_direction: CutDirection::Both,
             held: Held::OverTheAxis,

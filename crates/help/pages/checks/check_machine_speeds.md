@@ -20,7 +20,7 @@ and heats it.
 
 ## How to fix it
 
-Lower the feed or plunge rate in the toolpath's tool settings to what the machine can do.
+Lower the feed or plunge rate in the toolpath's bit settings to what the machine can do.
 If it says *not checked*, give the machine its top speeds in Machine Configuration.
 
 See also [Checks before cutting](help:checks_before_cutting).

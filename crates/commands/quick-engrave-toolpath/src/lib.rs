@@ -1,6 +1,6 @@
 //! Quick Engrave: marks the selected vectors at a shallow depth, along their lines or filling
 //! them with an offset, hatch or cross hatch pattern. A depth deeper than the bit's pass depth
-//! is cut in passes, each running the whole pattern a step deeper; Edit Passes under the tool
+//! is cut in passes, each running the whole pattern a step deeper; Edit Passes under the bit
 //! sets them, as on the other toolpaths.
 
 use cut_craft_core::document::Document;
@@ -53,7 +53,7 @@ pub struct Params {
     /// The pattern that fills the shapes, with Fill
     #[schemars(extend("x-group" = "Engrave"))]
     pub fill_pattern: FillPattern,
-    /// Between fill lines (set here, not from the tool)
+    /// Between fill lines (set here, not from the bit)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Engrave"))]
     pub stepover: f64,
@@ -131,7 +131,7 @@ impl Command for QuickEngraveToolpath {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("depth", p.depth)?;
-        ensure_positive("tool diameter", p.tool.diameter)?;
+        ensure_positive("bit diameter", p.tool.diameter)?;
         let fill = p.strategy == Strategy::Fill;
         if fill {
             ensure_positive("stepover", p.stepover)?;

@@ -69,7 +69,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
     scene(
         Area::Toolpaths,
         "tips/tool_database.png",
-        "Picking a bit from the **Tool Database** fills in its speeds, feeds and depth per pass \
+        "Picking a bit from the **Bit Library** fills in its speeds, feeds and depth per pass \
          for you. Set them once for each bit and every toolpath uses them.",
         "tool_database",
     ),
@@ -879,7 +879,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
         Area::Toolpaths,
         "diagrams/depth_vcarve.png",
         "Big letters V-carved deep take ages with a V-bit alone. Set a **Flat depth** and add an \
-         end mill under **Clearance Tools**: it clears the flat bottom first, and the V-bit cuts \
+         end mill under **Clearance Bits**: it clears the flat bottom first, and the V-bit cuts \
          only what is left.",
         "vcarve_engrave_toolpath",
     ),
@@ -1005,14 +1005,14 @@ pub(in super::super) const TIPS: &[Tip] = &[
     tool(
         Area::Toolpaths,
         "keep_out_zones",
-        "Clamps on the board? **Keep-Out Zones** marks areas a tool must not pass over, such as \
+        "Clamps on the board? **Keep-Out Zones** marks areas a bit must not pass over, such as \
          round each clamp. A toolpath that would cut into one is not made, unless Options let it \
          be clipped.",
     ),
     icon(
         Area::Toolpaths,
         "common/tool_database.png",
-        "Renaming a bit in the **Tool Database** renames it in this job's toolpaths too, and in \
+        "Renaming a bit in the **Bit Library** renames it in this job's toolpaths too, and in \
          other jobs when they open.",
         "tool_database",
     ),

@@ -79,7 +79,7 @@ pub const BUILT_INS: &[BuiltIn] = &[
     act("first_run_setup", "Run First-Time Setup Again", "First Run Setup: asks about your machine, units and material again, starting from your answers, and corrects My Machine (keeping the posts you added)").window(),
     act("draw_rectangle_from_center", "Draw Rectangle from Center", "Draw Rectangle from Center: drag from the middle out to a corner"),
     act("draw_circle_from_edge", "Draw Circle from Edge", "Draw Circle from Edge: drag from one side straight across to the other"),
-    act("tool_changer", "Tool Changer", "Tool Changer: which bit is in each slot of your machine's automatic tool changer").window(),
+    act("tool_changer", "Tool Changer (ATC)", "Tool Changer (ATC): which bit is in each slot of your machine's automatic tool changer").window(),
     act("find_tool", "Find Tool", "Find Tool: type part of a tool's name to find it and open it, wherever it is in the menus").keys("Ctrl+K").window(),
     act("activate_layer_of_selection", "Activate Layer of Selection", "Activate Layer of Selection: makes the selected vectors' layer the current one, so what you draw next goes on it"),
     act("machine_configuration", "Machine Configuration", "Machine Configuration: your machine's size, its post processor and the folder its files go to. If the saved machines can't be read at start, a copy is kept as machines.json.bad and they are never saved over").window(),
@@ -121,7 +121,7 @@ pub const BUILT_INS: &[BuiltIn] = &[
     act("import_toolpaths_file", "Import Toolpaths (G-code)", "Read a G-code file (.nc, .tap, .gcode and the like) back in as toolpaths, to preview \
          and check it before it runs").window(),
     act("print_job_sheet", "Print Job Sheet", "Open the job sheet in the web browser to print it: the job, the material, each \
-         toolpath's tool and how long it takes").window(),
+         toolpath's bit and how long it takes").window(),
     act("import_cut_list", "Import Cut List", "Draw a part for each row of a spreadsheet's cut list (saved as CSV): name, length, \
          width and how many, ready for Nest Parts. Sizes are in the units after the Length \
          and Width headings, such as Length (in) or Length (mm), else in the job's units. \
@@ -137,7 +137,7 @@ pub const BUILT_INS: &[BuiltIn] = &[
     act("load_template", "Load Toolpath Template", "Add the toolpaths saved in a template to this job, ready to pick the vectors (or \
          picture) each one cuts and calculate. A Merged or Array Copy toolpath uses the \
          toolpaths saved with it; one saved without them says to tick the ones to use").window().icon("toolpaths/load_toolpath_template.png"),
-    act("save_selected_toolpath_as_template", "Save Toolpath as Template", "Save the selected toolpath's settings and tools, to make the same cut on another job").window().icon("toolpaths/save_toolpath_template.png"),
+    act("save_selected_toolpath_as_template", "Save Toolpath as Template", "Save the selected toolpath's settings and bits, to make the same cut on another job").window().icon("toolpaths/save_toolpath_template.png"),
     act("save_as_template", "Save As Template", "Save As Template: saves the job as a template, to start new jobs from it with the same material and toolpaths").window(),
     act("new_from_template", "New from Template", "New from Template: starts a new job from a saved template, with its material, vectors and toolpaths ready").window(),
     act("create_component_from_toolpath_preview", "Create Component from Toolpath Preview", "Create Component from Toolpath Preview: turns the previewed, cut material into a 3D component, to carve on or reuse. It goes on the level of the component picked in the tree, else the top shown level, and the status bar names it"),
@@ -147,7 +147,7 @@ pub const BUILT_INS: &[BuiltIn] = &[
     act("copy", "Copy", "Copy: puts a copy of the selected objects on the clipboard, to paste").keys("Ctrl+C"),
     act("paste", "Paste", "Paste: adds the objects on the clipboard to the job exactly where they were copied from, on their own layer (in another job, on the current layer); a copied group or word of text pastes as a group of its own, still text (a dimension stays a dimension). Lines lying on top of their original show red. Ctrl+V of a copy made in another Cut Craft window brings its vectors only: 3D components paste only in the window they were copied in").keys("Ctrl+V"),
     act("increment_and_save", "Increment and Save", "Increment and Save: saves the job as a new copy with the next number on its name (sign_1, sign_2), keeping the earlier versions. A year or date on the end of the name stays as it is (Smith-2024 becomes Smith-2024_1, order_2024-11-15 becomes order_2024-11-15_1)").keys("Ctrl+Alt+S"),
-    act("open_application_data_folder", "Open Application Data Folder", "Open Application Data Folder: opens the folder where Cut Craft keeps your settings, tools and machines"),
+    act("open_application_data_folder", "Open Application Data Folder", "Open Application Data Folder: opens the folder where Cut Craft keeps your settings, bits and machines"),
     act("keyboard_shortcuts", "Keyboard Shortcuts", "Keyboard Shortcuts: lists the keys that run each tool, so you can work without the menus"),
     act("help_contents", "Help Contents", "Help Contents: opens Cut Craft's help, with a page for every tool and a search box"),
     act("did_you_know", "Did You Know?", "Did You Know?: short tips for getting more out of Cut Craft, one at a time").window(),
@@ -186,7 +186,7 @@ pub const BUILT_INS: &[BuiltIn] = &[
     act("zoom_to_job", "Zoom to Job", "Zoom to Job: fits the whole material into the view, however far you zoomed").icon("view/zoom_to_job.png"),
     act("zoom_to_drawing", "Zoom to Drawing", "Zoom to Drawing: fits everything you have drawn into the view, even what is off the material. In the 3D view F does it too, with the pointer over the view and no text box being typed in; F6 always does").keys("F6"),
     act("zoom_selected", "Zoom to Selection", "Zoom Selected: zooms in or out until the selected objects fill the view").icon("view/zoom_selected.png"),
-    act("tool_database", "Tool Database", "Tool Database: the list of your bits, with their sizes, speeds and feeds, to add, change or pick from. Renaming a bit renames it in this job's toolpaths too, and in other jobs when they open, so its tool changer slot still finds it").window(),
+    act("tool_database", "Bit Library", "Bit Library: the list of your bits, with their sizes, speeds and feeds, to add, change or pick from. Renaming a bit renames it in this job's toolpaths too, and in other jobs when they open, so its tool changer slot still finds it").window(),
     act("preview_toolpath", "Preview Toolpath", "Preview Toolpath: shows the selected toolpath, or every toolpath in the selected group, cutting the material in the 3D view"),
     act("preview_all_toolpaths", "Preview All Toolpaths", "Preview All Toolpaths: shows every toolpath cutting the material in the 3D view, in list order"),
     act("preview_visible_toolpaths", "Preview Visible Toolpaths", "Preview Visible Toolpaths: shows the toolpaths ticked in the Toolpath List cutting the material in the 3D view"),
@@ -194,13 +194,13 @@ pub const BUILT_INS: &[BuiltIn] = &[
          Preview, once, turned over to the side the job is on now"),
     act("save_shaded_image", "Save Shaded Image", "Save Shaded Image: saves a picture of the 3D view, to show what the finished piece will look like"),
     act("edit_object", "Edit Object", "Edit Object: opens the selected object in the tool that made it, with its settings, to change them").keys("E"),
-    act("job_sheet_editor", "Job Setup Sheet Editor", "Job Setup Sheet Editor: chooses what the printed job sheet shows: the job, its tools and its toolpaths").window(),
+    act("job_sheet_editor", "Job Setup Sheet Editor", "Job Setup Sheet Editor: chooses what the printed job sheet shows: the job, its bits and its toolpaths").window(),
     act("reset_preview", "Reset Preview", "Reset Preview: clears the preview back to uncut material; Undo Last Preview brings it back"),
     act("export_as_stl", "Export Model as STL", "Save the 3D model as an STL file, for a 3D printer or another program"),
     act("export_as_grayscale_bitmap", "Export Model as Grayscale Picture", "Save the 3D model as a PNG picture where lighter is higher, for another carving \
          program"),
     act("export_as_3d_clipart", "Export Model as 3D Clipart", "Save the selected 3D parts as clipart, to drop into other jobs from the Library"),
-    act("create_job_sheet", "Save Job Sheet", "Save a page for the machine: the job, the material, each toolpath's tool and how long \
+    act("create_job_sheet", "Save Job Sheet", "Save a page for the machine: the job, the material, each toolpath's bit and how long \
          it takes"),
     act("part_labels", "Print Part Labels", "Print a label for each named part, to stick on it once it is cut out").window(),
     act("clearing_settings", "Clearing Settings", "How adaptive and trochoidal clearing cut in this job: the light step, the loops, \

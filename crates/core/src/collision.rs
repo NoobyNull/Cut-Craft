@@ -45,8 +45,8 @@ impl Default for Holder {
     }
 }
 
-/// How the machine holds its bits: the holder, and whether a bit's own holder in the Tool
-/// Database counts instead (Machine Configuration's Holder per bit).
+/// How the machine holds its bits: the holder, and whether a bit's own holder in the Bit
+/// Library counts instead (Machine Configuration's Holder per bit).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Holding {
     pub holder: Holder,
@@ -470,7 +470,7 @@ fn material_sentence(name: &str, tool: &Tool, found: &Found, units: Units) -> Op
     let out = units.length(out, 1);
     let taken = if guessed {
         format!(
-            ", taken as {out} because its Stick-out is not set in the Tool Database. Measure \
+            ", taken as {out} because its Stick-out is not set in the Bit Library. Measure \
              it and set it there"
         )
     } else {

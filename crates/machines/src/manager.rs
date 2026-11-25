@@ -573,8 +573,8 @@ fn holder(ui: &mut egui::Ui, machine: &mut Machine) {
             )
             .on_hover_hint(cut_craft_i18n::t!(
                 "Tick for a tool changer whose bits each sit in a holder of their own: \
-                     each bit can then have its own collet nut and spindle sizes in the Tool \
-                     Database. A bit without them uses the sizes above"
+                     each bit can then have its own collet nut and spindle sizes in the Bit \
+                     Library. A bit without them uses the sizes above"
             ));
         });
 }
@@ -838,8 +838,8 @@ fn shown(value: f64, unit: &str) -> String {
 const MOST_SLOTS: usize = 99;
 
 /// Automatic Tool Changer: how many slots, and what is loaded in them. Given the tool
-/// database's tools (name and tool number), each slot's Select… asks for its tool to be picked
-/// in the Tool Database, × empties it, and Load by Tool Number puts each numbered tool in its
+/// database's tools (name and bit number), each slot's Select… asks for its tool to be picked
+/// in the Bit Library, × empties it, and Load by Bit Number puts each numbered tool in its
 /// holder; else the slots are only listed. Whether anything changed, and the holder (from 1)
 /// whose Select… was clicked.
 pub fn tool_changer(
@@ -864,7 +864,7 @@ pub fn tool_changer(
         }
         if !has {
             ui.weak(cut_craft_i18n::t!(
-                "Tool changes are by hand; tools are numbered in the order they are used"
+                "Bit changes are by hand; bits are numbered in the order they are used"
             ));
             return;
         }
@@ -895,9 +895,9 @@ pub fn tool_changer(
             return;
         };
         if ui
-            .button(cut_craft_i18n::t!("Load by Tool Number"))
+            .button(cut_craft_i18n::t!("Load by Bit Number"))
             .on_hover_hint(cut_craft_i18n::t!(
-                "Each tool with a tool number goes in that holder"
+                "Each bit with a bit number goes in that holder"
             ))
             .clicked()
         {
@@ -920,7 +920,7 @@ pub fn tool_changer(
                         if ui
                             .button(cut_craft_i18n::t!("Select…"))
                             .on_hover_hint(cut_craft_i18n::t!(
-                                "Pick the tool for this holder in the Tool Database"
+                                "Pick the bit for this holder in the Bit Library"
                             ))
                             .clicked()
                         {

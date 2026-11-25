@@ -22,7 +22,7 @@ pub enum Check {
     SpindleRange,
     /// Every bit loaded in the tool changer.
     ToolChanger,
-    /// No two bits sharing a tool number (0, changed by hand, may be shared).
+    /// No two bits sharing a bit number (0, changed by hand, may be shared).
     ToolNumbers,
     /// Bit changes by hand planned: Z zero set again for each bit, a pause the controller
     /// can be zeroed at, and the cutting order when Group by bit changes it.
@@ -147,7 +147,7 @@ impl Check {
             Self::MachineSpeeds => "Feeds the machine can reach",
             Self::SpindleRange => "Spindle speeds the spindle can turn",
             Self::ToolChanger => "Bits loaded in the tool changer",
-            Self::ToolNumbers => "Each bit its own tool number",
+            Self::ToolNumbers => "Each bit its own number",
             Self::BitChanges => "Bit changes you can make",
             Self::KeepOut => "Keeps out of keep-out zones",
             Self::RotarySetup => "Rotary set up",
@@ -207,8 +207,8 @@ impl Check {
                  not stop half-way to ask for one"
             }
             Self::ToolNumbers => {
-                "No two different bits share a tool number, so a tool changer never picks up \
-                 the wrong bit. Tool number 0 means the bit is changed by hand, and any \
+                "No two different bits share a bit number, so a tool changer never picks up \
+                 the wrong bit. Bit number 0 means the bit is changed by hand, and any \
                  number of bits may share it"
             }
             Self::BitChanges => {

@@ -8,12 +8,12 @@ use cut_craft_i18n::tr;
 
 impl CutCraftApp {
     /// Machine ▸ Tool Changer…: the active machine's tool changer, each holder loaded with a
-    /// tool from the Tool Database, or all at once by their tool numbers.
+    /// tool from the Bit Library, or all at once by their bit numbers.
     pub(super) fn tool_changer_window(&mut self, ctx: &egui::Context) {
         if !self.tool_changer_window {
             return;
         }
-        // a tool changer holds My Tools only, not a catalogue's
+        // a tool changer holds My Bits only, not a catalogue's
         let tools: Vec<(String, u32)> = self
             .tools
             .my_tools()
@@ -38,7 +38,7 @@ impl CutCraftApp {
         if changed {
             self.tool_changer_changed();
         }
-        // a holder's Select…: Select Tool, on the tool in it; its Select loads the holder
+        // a holder's Select…: Select Bit, on the tool in it; its Select loads the holder
         if let Some(slot) = select {
             let current = self
                 .machines

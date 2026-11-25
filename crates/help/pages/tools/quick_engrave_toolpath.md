@@ -32,3 +32,5 @@ see-also: vcarve_engrave_toolpath, drag_knife_toolpath, draw_text
    ![Step 6](pictures/quick_engrave_toolpath/step-6.png)
 
 For deeper lettering with crisp corners, use [V-Carve](help:vcarve_engrave_toolpath). When it looks right in the preview, [save it for your machine](help:save_toolpaths).
+
+The **Bit** box on the form says which bit cuts it: **Select…** picks another from the [Bit Library](help:tool_database), and **Edit…** changes its sizes, feeds and speeds there.

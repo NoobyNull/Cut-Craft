@@ -121,10 +121,10 @@ pub struct Limits {
     /// Material left behind is mentioned only where it is more than this, mm (Options ▸
     /// Confirmation Choices); `None` for the usual [`crate::checks::LEFT`].
     pub left: Option<f64>,
-    /// The Tool Database's copy of each bit the toolpaths use, by name, with the cutting
+    /// The Bit Library's copy of each bit the toolpaths use, by name, with the cutting
     /// data for the active material: a maker's catalogue copy where there is one. A bit
-    /// not in it is not in the Tool Database. `None` when the bits are not compared with
-    /// the Tool Database at all.
+    /// not in it is not in the Bit Library. `None` when the bits are not compared with
+    /// the Bit Library at all.
     pub library: Option<std::collections::BTreeMap<String, Tool>>,
     /// How the machine holds its bits, for the collet and holder checks.
     pub holding: crate::collision::Holding,
@@ -402,7 +402,7 @@ fn on_machine(
             format!(
                 "{name}: {} is not loaded in the tool changer of {}, so the machine will stop \
              and ask for it. Load it in a slot in Machine Configuration; if it is no longer \
-             in the Tool Database, pick a tool again with the toolpath's Select…",
+             in the Bit Library, pick a tool again with the toolpath's Select…",
                 tool.name, limits.name
             ),
         ));
@@ -410,7 +410,7 @@ fn on_machine(
 }
 
 /// Whether each bit is from a maker's catalogue, and its feeds and speeds near the maker's
-/// figures, as the Tool Database has them ([`Limits::library`]).
+/// figures, as the Bit Library has them ([`Limits::library`]).
 fn library(
     toolpath: &Toolpath,
     limits: &Limits,
@@ -425,9 +425,9 @@ fn library(
         found.push(Finding::warning(
             Check::GenericTool,
             format!(
-                "{name}: {} is not in the Tool Database, so its feeds and speeds cannot be \
+                "{name}: {} is not in the Bit Library, so its feeds and speeds cannot be \
                  compared with a maker's figures. Pick the bit with the toolpath's Select…, \
-                 or add it to the Tool Database",
+                 or add it to the Bit Library",
                 tool.name
             ),
         ));
@@ -441,7 +441,7 @@ fn library(
                 "{name}: {} is a generic bit, not one from a maker's catalogue, so its feeds \
                  and speeds are starting values, not figures made for your bit. Watch the \
                  first cut with a hand near the stop button, or pick your own bit from a \
-                 maker's catalogue in the Tool Database",
+                 maker's catalogue in the Bit Library",
                 tool.name
             ),
         ));
@@ -506,7 +506,7 @@ fn keep_out(doc: &Document, toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
     }
 }
 
-/// Whether two different bits share a tool number other than 0 (changed by hand).
+/// Whether two different bits share a bit number other than 0 (changed by hand).
 fn tool_numbers(toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
     let mut by_number: std::collections::BTreeMap<u32, Vec<&str>> =
         std::collections::BTreeMap::new();
@@ -528,9 +528,9 @@ fn tool_numbers(toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
         found.push(Finding::warning(
             Check::ToolNumbers,
             format!(
-                "Tool number {number} is given to both {} and {last}: a tool changer picks \
+                "Bit number {number} is given to both {} and {last}: a tool changer picks \
                  bits by number, so one of them would cut with the wrong bit. Give each bit \
-                 its own number in the Tool Database (0 means the bit is changed by hand, \
+                 its own number in the Bit Library (0 means the bit is changed by hand, \
                  and any number of bits may share 0)",
                 rest.join(", ")
             ),
@@ -959,14 +959,14 @@ pub fn not_checked(
         for check in [Check::GenericTool, Check::MakersFigures] {
             skipped.push((
                 check,
-                "The bits were not compared with the Tool Database".to_owned(),
+                "The bits were not compared with the Bit Library".to_owned(),
             ));
         }
     }
     if toolpaths.iter().all(|t| t.tool.number == 0) {
         skipped.push((
             Check::ToolNumbers,
-            "Every bit is changed by hand (tool number 0)".to_owned(),
+            "Every bit is changed by hand (bit number 0)".to_owned(),
         ));
     }
     skipped

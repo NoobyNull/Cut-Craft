@@ -1,2 +1,2 @@
 # src/app/actions.rs
-actions-tool = Tool
+actions-tool = Bit

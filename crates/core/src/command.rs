@@ -99,7 +99,7 @@ pub const EMPTY_MODEL: &str =
     "This file has no triangles in it. Export it again from the program that made it.";
 
 /// Every message reads as a sentence, whatever case it was written in: a capital first and a
-/// full stop last. A message should also say what to do about it ("Pick a smaller tool"),
+/// full stop last. A message should also say what to do about it ("Pick a smaller bit"),
 /// not only what is wrong; the app's tests run every command to keep that so. It is shown in
 /// the chosen language ([`error_words`]).
 impl fmt::Display for CommandError {
@@ -156,13 +156,13 @@ pub fn ensure_positive(name: &str, value: f64) -> Result<(), CommandError> {
 pub fn tool_does_not_fit(tool: &crate::toolpath::Tool, instead: Option<&str>) -> CommandError {
     let name = tool.name.trim();
     let tool = if name.is_empty() {
-        format!("{} mm tool", tool.diameter)
+        format!("{} mm bit", tool.diameter)
     } else {
         name.to_owned()
     };
     let instead = instead.unwrap_or("make the shapes bigger");
     CommandError::Failed(format!(
-        "The {tool} does not fit inside the selected shapes. Pick a smaller tool, or {instead}."
+        "The {tool} does not fit inside the selected shapes. Pick a smaller bit, or {instead}."
     ))
 }
 

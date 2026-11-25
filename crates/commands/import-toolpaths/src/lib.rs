@@ -1,5 +1,5 @@
 //! Import Toolpaths: a G-code file (as a post-processor writes it, from Cut Craft or another
-//! program) read back as toolpaths, one for each tool it uses, to preview, check and save
+//! program) read back as toolpaths, one for each bit it uses, to preview, check and save
 //! again through another post.
 //!
 //! Read: G0 / G1 / G2 / G3 (arcs by centre or R radius, in the plane G17 / G18 / G19 picks:
@@ -19,24 +19,24 @@ pub struct ImportToolpaths;
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Params {
-    /// The toolpath's name; with more than one tool in the file, each is named after it and
-    /// its tool number
+    /// The toolpath's name; with more than one bit in the file, each is named after it and
+    /// its bit number
     pub name: String,
     /// The G-code file (.nc, .tap, .gcode, .ngc, .cnc, .txt). Straight moves and arcs are
     /// read, arcs in the XY plane and the upright XZ and YZ ones too (G17, G18, G19); a
     /// drilling cycle is not. Rotary-axis turns (A, B, C) are left out, with a note in red,
     /// so a rotary file shows and saves flat
     pub file: String,
-    /// The tool the file cuts with: its shape and size draw the preview; the file's own
+    /// The bit the file cuts with: its shape and size draw the preview; the file's own
     /// feed rate (from its first cutting move), plunge rate (from its first straight-down
-    /// plunge), spindle speed and tool number are used where it gives them. A toolpath keeps
+    /// plunge), spindle speed and bit number are used where it gives them. A toolpath keeps
     /// one of each, so a file that cuts at a second feed rate, plunges at a second one or
-    /// changes the spindle speed with one tool is noted in red, as saving it again writes
+    /// changes the spindle speed with one bit is noted in red, as saving it again writes
     /// every move at those. With more than
-    /// one tool in the file each part's tool is named after its number (`6 mm End Mill (T3
-    /// in the file)`), so saving it again still changes tools between them
+    /// one bit in the file each part's bit is named after its number (`6 mm End Mill (T3
+    /// in the file)`), so saving it again still changes bits between them
     pub tool: Tool,
-    /// Which tool's part of the file, counting from 1 in the order they come (0: every
+    /// Which bit's part of the file, counting from 1 in the order they come (0: every
     /// part, a toolpath each)
     #[serde(default)]
     #[schemars(skip)]
@@ -94,7 +94,7 @@ impl Command for ImportToolpaths {
             if several {
                 tool.name = match part.tool {
                     Some(t) => format!("{} (T{t} in the file)", p.tool.name),
-                    None => format!("{} (tool {n} in the file)", p.tool.name),
+                    None => format!("{} (bit {n} in the file)", p.tool.name),
                 };
             }
             if let Some(feed) = part.feed {
@@ -124,7 +124,7 @@ impl Command for ImportToolpaths {
         }
         if made == 0 {
             return Err(CommandError::Failed(format!(
-                "{} has no part {} (it has fewer tools). Pick a lower part number",
+                "{} has no part {} (it has fewer bits). Pick a lower part number",
                 p.file, p.part
             )));
         }
@@ -132,7 +132,7 @@ impl Command for ImportToolpaths {
     }
 }
 
-/// The moves made with one tool.
+/// The moves made with one bit.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Part {
     /// Its `T` number, if the file gives one.
@@ -187,11 +187,11 @@ impl Part {
         if dropped.is_empty() {
             return None;
         }
-        let or_form = |v: Option<f64>| v.map_or("the tool's own".to_owned(), |v| list(&[v]));
+        let or_form = |v: Option<f64>| v.map_or("the bit's own".to_owned(), |v| list(&[v]));
         Some(format!(
-            "the file uses {} with this tool, but a toolpath keeps one feed rate ({}), one \
+            "the file uses {} with this bit, but a toolpath keeps one feed rate ({}), one \
              plunge rate ({}) and one spindle speed ({}), so Save Toolpaths writes every move \
-             at those. Check them in the toolpath's tool before saving it again",
+             at those. Check them in the toolpath's bit before saving it again",
             dropped.join(" and "),
             or_form(self.feed),
             or_form(self.plunge),
@@ -218,14 +218,14 @@ impl Part {
         ))
     }
 
-    /// A rotary axis, `letter`, turned with this tool.
+    /// A rotary axis, `letter`, turned with this bit.
     fn turns(&mut self, letter: char) {
         if !self.rotary.contains(&letter) {
             self.rotary.push(letter);
         }
     }
 
-    /// A spindle speed, `rpm`, given with this tool.
+    /// A spindle speed, `rpm`, given with this bit.
     fn spun_at(&mut self, rpm: f64) {
         self.spindle.get_or_insert(rpm);
         add_once(&mut self.speeds, rpm);
@@ -255,7 +255,7 @@ fn add_once(values: &mut Vec<f64>, v: f64) {
 const ARC_TOLERANCE: f64 = 0.01;
 const MM_PER_INCH: f64 = 25.4;
 
-/// `text`'s moves, a part for each tool, in job millimetres with z from the material
+/// `text`'s moves, a part for each bit, in job millimetres with z from the material
 /// surface (the job's Z zero undone).
 #[expect(
     clippy::cast_possible_truncation,
@@ -453,7 +453,7 @@ fn moves_to(
     })
 }
 
-/// A tool change: a new part, unless nothing was cut with the last tool yet.
+/// A bit change: a new part, unless nothing was cut with the last bit yet.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -474,8 +474,8 @@ fn new_part(parts: &mut Vec<Part>, tool: Option<f64>) {
     }
 }
 
-/// The tool number a comment names (`(Change to T3: 6mm End Mill)`): a `T` standing on
-/// its own before digits, as posts that change tools by hand write it.
+/// The bit number a comment names (`(Change to T3: 6mm End Mill)`): a `T` standing on
+/// its own before digits, as posts that change bits by hand write it.
 fn tool_in(comment: &str) -> Option<f64> {
     let bytes = comment.as_bytes();
     (0..bytes.len()).find_map(|i| {
@@ -802,7 +802,7 @@ mod tests {
 
     #[test]
     fn a_pause_for_a_tool_changed_by_hand_starts_a_part_named_from_its_comment() {
-        // as Cut Craft's grbl posts write a tool change
+        // as Cut Craft's grbl posts write a bit change
         let text = "(First tool T1: 6mm End Mill, fitted and zeroed before starting)\n\
                     G0 X0 Y0 Z5\nG1 Z-1 F500\nM5\n\
                     (Change to T4: 60 V-Bit, zero it, then resume)\nM0\nG0 X5 Y5\nG1 Z-1\n";
@@ -883,10 +883,7 @@ mod tests {
             .values()
             .find(|t| t.name == "sign T1")
             .unwrap();
-        assert_ne!(
-            t1.tool.name, t3.tool.name,
-            "a tool change between the parts"
-        );
+        assert_ne!(t1.tool.name, t3.tool.name, "a bit change between the parts");
         assert!(t3.tool.name.contains("T3"), "{}", t3.tool.name);
         assert_eq!(
             t3.params["part"], 2,

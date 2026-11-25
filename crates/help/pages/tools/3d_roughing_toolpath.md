@@ -32,3 +32,5 @@ see-also: 3d_finishing_toolpath, create_shape
    ![Step 6](pictures/3d_roughing_toolpath/step-6.png)
 
 Then make a [3D Finishing](help:3d_finishing_toolpath) toolpath to take off the allowance. When it looks right in the preview, [save it for your machine](help:save_toolpaths).
+
+The **Bit** box on the form says which bit cuts it: **Select…** picks another from the [Bit Library](help:tool_database), and **Edit…** changes its sizes, feeds and speeds there.

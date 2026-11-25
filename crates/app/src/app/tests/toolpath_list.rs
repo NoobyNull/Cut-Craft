@@ -237,7 +237,7 @@ fn the_toolpath_list_stays_under_every_toolpaths_tab() {
             .unwrap()
     };
     // Make opens first, the job and its tools over the tabs, the list under them
-    assert!(h.text_at("Job and Tools").is_some());
+    assert!(h.text_at("Job and Bits").is_some());
     assert!(h.text_at("Create a toolpath: pick how to cut").is_some());
     assert!(h.text_at("Toolpath List").is_some());
     assert!(

@@ -145,7 +145,7 @@ impl CutCraftApp {
             ..self.doc.job
         });
         let cell = c.finish();
-        let done = format!("Units: {name}; every length now reads in {name}, tools in their own");
+        let done = format!("Units: {name}; every length now reads in {name}, bits in their own");
         self.record(Ok(cell), &done);
     }
 
@@ -216,7 +216,7 @@ impl CutCraftApp {
     }
 
     /// Whether dropping `path` imports it into the job (it is not a job, a post-processor or
-    /// a tool database).
+    /// a bit library).
     pub(super) fn drop_imports(path: &std::path::Path) -> bool {
         let ext = path
             .extension()
@@ -226,7 +226,7 @@ impl CutCraftApp {
             || (files::TOOL_FILE_EXTENSIONS.contains(&ext.as_str()) && ext != "json"))
     }
 
-    /// One dropped file: a job opens; a post-processor installs; a tool database's tools are
+    /// One dropped file: a job opens; a post-processor installs; a bit library's tools are
     /// added; anything else is imported into the open job.
     pub(super) fn drop_file(&mut self, path: &std::path::Path) {
         let ext = path
@@ -451,6 +451,10 @@ impl CutCraftApp {
             WindowLayout::Ribbon => self.ribbon_layout(ui),
             WindowLayout::Canvas => self.canvas_layout(ui),
         }
+        // in every layout, over the drawing
+        self.floating_toolbars(ui.ctx());
+        self.toolbar_rename_window(ui.ctx());
+        self.toolbar_changes(ui.ctx());
     }
 
     /// The top bar's sheet, layer and level drop-downs: a command to apply, if one was
@@ -824,8 +828,8 @@ pub(super) fn immediate_output(
 pub(super) const TICK_TO_SAVE: &str =
     "Tick each ⚠ under Checks before cutting to say you have read it, then save";
 
-/// Save Toolpaths' tool changes: a file for each tool, the tool changer (when the machine
-/// has one), or a pause to change the tool by hand.
+/// Save Toolpaths' bit changes: a file for each tool, the tool changer (when the machine
+/// has one), or a pause to change the bit by hand.
 pub(super) fn tool_changes_section(
     ui: &mut egui::Ui,
     changes: &mut files::ToolChanges,
@@ -861,7 +865,7 @@ pub(super) fn tiling_on(tiles: usize) -> String {
     tr!("views-tiling-on", tiles = tiles)
 }
 
-/// Save Toolpaths' files: what goes in each, why there is a file for each tool, and that
+/// Save Toolpaths' files: what goes in each, why there is a file for each bit, and that
 /// each is saved once per tile while tiling is on.
 pub(super) fn files_section(
     ui: &mut egui::Ui,

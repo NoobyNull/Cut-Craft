@@ -81,7 +81,7 @@ pub struct Params {
         "x-widget" = "named-icons",
         "x-icon" = "toolpaths/cut_{}_outside.png"
     ))]
-    /// Which way round the shapes the tool travels
+    /// Which way round the shapes the bit travels
     pub cut_direction: CutDirection,
     /// Every pass the same way, or each back the way the last came
     #[serde(default)]
@@ -114,7 +114,7 @@ impl Default for Params {
                 .tools
                 .into_iter()
                 .find(|t| t.shape == ToolShape::VBit)
-                .expect("the starter tools include a V-bit"),
+                .expect("the starter bits include a V-bit"),
         }
     }
 }
@@ -146,7 +146,7 @@ impl Params {
 
     /// Why a V-bit can't cut this chamfer, with how to fix it: deeper than its V (measured
     /// from the top surface), the straight shank above the V would cut a wall, not a slope.
-    /// `None` when it fits, or the tool is not a V-bit.
+    /// `None` when it fits, or the bit is not a V-bit.
     fn beyond_the_v(&self, units: Units) -> Option<String> {
         if self.tool.shape != ToolShape::VBit {
             return None;
@@ -184,7 +184,7 @@ impl Params {
         Some(format!("{why} {fix}."))
     }
 
-    /// The tool tip's runs, each (how far out from the vector towards the chamfer side, z),
+    /// The bit tip's runs, each (how far out from the vector towards the chamfer side, z),
     /// shallowest first.
     fn tips(&self) -> Vec<(f64, f64)> {
         let (width, height, start) = (self.width, self.cut_depth(), self.start_depth);
@@ -258,7 +258,7 @@ impl Command for ChamferToolpath {
             ));
         }
         ensure_positive("width", p.width)?;
-        ensure_positive("tool diameter", p.tool.diameter)?;
+        ensure_positive("bit diameter", p.tool.diameter)?;
         ensure_positive("pass depth", p.tool.pass_depth)?;
         if !(p.slope_angle() > 0.0 && p.slope_angle() < std::f64::consts::FRAC_PI_2) {
             return Err(CommandError::InvalidParams(

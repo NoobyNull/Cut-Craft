@@ -134,7 +134,7 @@ pub const TOOLPATH_SUBTABS: &[SubTab] = &[
 
 /// The groups the Toolpaths page shows over its sub-tabs whichever is open: the material
 /// and the bits, wanted at any stage.
-pub const TOOLPATH_ALWAYS_SHOWN: &[&str] = &["Job and Tools"];
+pub const TOOLPATH_ALWAYS_SHOWN: &[&str] = &["Job and Bits"];
 
 /// Moving a Toolpaths sub-tab between the tab row and a section of its own, as
 /// [`SUBTAB_PLACE`] does for the Design page's.
@@ -1000,7 +1000,7 @@ mod menu_tests {
         let registry = crate::commands::registry();
         for group in super::toolpath_groups() {
             if [
-                "Job and Tools",
+                "Job and Bits",
                 "Reports",
                 "Save for the Machine",
                 "Paperwork for the Job",

@@ -463,7 +463,7 @@ fn two_bits_with_one_tool_number_are_called_out_but_hand_changed_ones_are_not() 
     assert!(
         numbers[0]
             .message
-            .starts_with("Tool number 3 is given to both 6 mm End Mill and 60° V-Bit"),
+            .starts_with("Bit number 3 is given to both 6 mm End Mill and 60° V-Bit"),
         "{}",
         numbers[0].message
     );
@@ -505,9 +505,9 @@ fn a_generic_bit_or_one_not_in_the_tool_database_is_called_out() {
     assert!(generic[0].contains("is a generic bit"), "{}", generic[0]);
     let found = check(&job(), &[&slot], &with_library(vec![]));
     assert!(
-        found.iter().any(
-            |f| f.check == Check::GenericTool && f.message.contains("not in the Tool Database")
-        ),
+        found
+            .iter()
+            .any(|f| f.check == Check::GenericTool && f.message.contains("not in the Bit Library")),
         "{found:?}"
     );
     // not compared at all: nothing said, and the list says why
@@ -917,7 +917,7 @@ fn the_machine_limits_are_checked() {
             .iter()
             .any(|m| m.contains("not loaded in the tool changer"))
     );
-    // a tool deleted from the Tool Database cannot be loaded: the advice says what to do
+    // a tool deleted from the Bit Library cannot be loaded: the advice says what to do
     assert!(
         warnings
             .iter()

@@ -22,7 +22,7 @@ see-also: cutting_time, create_job_sheet, save_toolpaths
 ## What the times count
 
 Each toolpath's time counts every move it makes: cutting, plunging, rapids, getting to it
-from where the toolpath before it ended (or from home, for the first), and its tool change
+from where the toolpath before it ended (or from home, for the first), and its bit change
 when it uses another bit. The **Total machining time** adds the trip back home at the end.
 
 The machine speeds up, slows down and slows for corners as its **Limits** in Machine
