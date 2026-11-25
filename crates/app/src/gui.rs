@@ -492,8 +492,15 @@ pub fn command_ids() -> impl Iterator<Item = &'static str> {
     abouts::ABOUTS.iter().map(|(id, _)| *id)
 }
 
-/// What command `id` does (its crate's first sentence), for its tooltip and the status bar.
-pub fn about(id: &str) -> Option<&'static str> {
+/// What command `id` does (its crate's first sentence), for its tooltip and the status bar,
+/// in the language in use. See [`crate::tool_names::tooltip`].
+pub fn about(id: &str) -> Option<String> {
+    english_about(id).map(|english| crate::tool_names::tooltip(id, english))
+}
+
+/// What command `id` does, in the code's English: its hint, its crate's first sentence, a
+/// built-in tool's description or a tool box variant's hint.
+pub fn english_about(id: &str) -> Option<&'static str> {
     // the hints first: a crate holding several commands says one thing for all of them
     crate::hints::hint(id)
         .or_else(|| {
@@ -521,7 +528,7 @@ pub fn intro(id: &str, label: &str) -> Option<String> {
                 .find(|(command, _)| *command == id)
                 .map(|(_, docs)| *docs)
         })
-        .or_else(|| about(id))?;
+        .or_else(|| english_about(id))?;
     let body = docs
         .strip_prefix(label)
         .and_then(|rest| rest.strip_prefix(':'))
@@ -722,6 +729,7 @@ impl MenuSystem {
                 &l.name,
                 &cmd_move_to_layer::Params { layer: l.id },
             )
+            .named()
         });
         let mut menu: Vec<MenuItem> = under
             .iter()
@@ -730,6 +738,7 @@ impl MenuSystem {
                 let pick = format!("{SELECT_COMPONENT}{}", id.0);
                 Some(
                     MenuItem::with_action(name, &pick)
+                        .named()
                         .checked(doc.selected_components.contains(id)),
                 )
             })
@@ -800,6 +809,7 @@ impl MenuSystem {
                 &l.name,
                 &cmd_move_to_layer::Params { layer: l.id },
             )
+            .named()
         });
         vec![
             edit("Undo"),
@@ -974,6 +984,8 @@ pub struct MenuItem {
     pub children: Vec<MenuItem>,
     /// Its picture, an icon path, where the menu has one (the combine modes).
     pub icon: Option<String>,
+    /// Named by the user (a sheet or a level): shown as written in every language.
+    pub named: bool,
 }
 
 impl MenuItem {
@@ -993,6 +1005,16 @@ impl MenuItem {
             is_checked: false,
             children: vec![],
             icon: None,
+            named: false,
+        }
+    }
+
+    /// Named by the user (a sheet or a level), so its name is never translated.
+    #[must_use]
+    pub fn named(self) -> Self {
+        Self {
+            named: true,
+            ..self
         }
     }
 

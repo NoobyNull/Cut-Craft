@@ -260,7 +260,8 @@ impl CutCraftApp {
             && ctx.input_mut(|i| i.consume_shortcut(&escape))
         {
             self.join_ends_forget();
-            self.status.set_message("End let go");
+            self.status
+                .set_message(&cut_craft_i18n::tr!("status-end-let-go"));
         }
         // Escape stops a preview playing (keeping what it has cut), and does nothing else
         if self.playback.is_some()
@@ -269,7 +270,7 @@ impl CutCraftApp {
         {
             self.finish_playback();
             self.status
-                .set_message("Preview stopped: what it had cut is kept");
+                .set_message(&cut_craft_i18n::tr!("status-preview-stopped"));
         }
         // Escape with no form open, stepped inside a group, steps out one level
         if let Some(group) = self.doc.inside_group
@@ -322,8 +323,10 @@ impl CutCraftApp {
             }
             self.status.current_tool =
                 crate::tool_names::form_name(&self.registry, behind.id, behind.label);
-            self.status
-                .set_message(&format!("Back to {}, as you left it", behind.label));
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-back-to",
+                tool = self.status.current_tool.clone()
+            ));
             self.form = Some(behind);
             return;
         }
@@ -586,7 +589,10 @@ impl CutCraftApp {
                         files::show_folder(&path).map_err(|e| e.to_string())
                     });
                 if let Err(e) = opened {
-                    self.status.set_message(&format!("could not print: {e}"));
+                    self.status.set_message(&cut_craft_i18n::tr!(
+                        "status-could-not-print",
+                        error = e.clone()
+                    ));
                 }
             }
             "open_application_data_folder" => {
@@ -598,8 +604,10 @@ impl CutCraftApp {
                         files::show_folder(&dir).map_err(|e| e.to_string())
                     });
                 if let Err(e) = opened {
-                    self.status
-                        .set_message(&format!("could not open the folder: {e}"));
+                    self.status.set_message(&cut_craft_i18n::tr!(
+                        "status-could-not-open-folder",
+                        error = e.clone()
+                    ));
                 }
             }
             _ => {}

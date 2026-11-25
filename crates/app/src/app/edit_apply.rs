@@ -142,7 +142,7 @@ impl CutCraftApp {
             });
         self.status.set_message(&result.map_or_else(
             |e| e,
-            |n| format!("Saved {n} job sheet{}", if n == 1 { "" } else { "s" }),
+            |n| cut_craft_i18n::tr!("status-saved-job-sheets", count = n),
         ));
     }
 
@@ -236,8 +236,9 @@ impl CutCraftApp {
             form.applied = Some(params);
         }
         let label = self.registry.get(command).map_or("", |c| c.meta().label);
-        self.status.set_message(&format!(
-            "Editing the shape in {label}: change the form to change it"
+        self.status.set_message(&cut_craft_i18n::tr!(
+            "status-editing-the-shape",
+            tool = crate::tool_names::tool_name(command, label)
         ));
     }
 
@@ -389,12 +390,14 @@ impl CutCraftApp {
     /// hidden so a new shape that cannot be seen is not taken for lost.
     pub(super) fn placed_on(&self, level: u64) -> String {
         self.doc.levels.get(&level).map_or_else(String::new, |l| {
-            let hidden = if l.visible {
-                ""
-            } else {
-                " (hidden: show the level to see it)"
-            };
-            format!(": new component on level {}{hidden}", l.name)
+            cut_craft_i18n::tr!(
+                if l.visible {
+                    "status-placed-on-level"
+                } else {
+                    "status-placed-on-hidden-level"
+                },
+                level = l.name.clone()
+            )
         })
     }
 
@@ -448,8 +451,11 @@ impl CutCraftApp {
             form.params = fresh;
         }
         let placed = new_level.map_or_else(String::new, |l| self.placed_on(l));
-        self.status
-            .set_message(&format!("{} applied{placed}", cmd.meta().label));
+        self.status.set_message(&cut_craft_i18n::tr!(
+            "status-applied",
+            tool = crate::tool_names::name_of(&self.registry, id),
+            placed = placed
+        ));
         // new keep-out zones: the toolpaths are made again round them
         if id == "keep_out_zones" {
             self.keep_out_changed();
@@ -459,8 +465,10 @@ impl CutCraftApp {
             && let Ok(p) = serde_json::from_value(params.clone())
             && let Some(turns) = cmd_wrapped_spiral_layout::revolutions(&self.doc, &p)
         {
-            self.status
-                .set_message(&format!("Each strand makes {turns:.2} revolutions"));
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-strand-revolutions",
+                turns = format!("{turns:.2}")
+            ));
         }
         // a toolpath made already out of date (Plate Production's, cutting each plate's own
         // text) is recalculated straight away, then warned about
