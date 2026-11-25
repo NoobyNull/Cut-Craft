@@ -7,13 +7,18 @@
 //! Each area's verbs are in its own file under `verbs/`.
 
 mod bit_library;
+mod checks;
 mod files;
 mod help;
 mod interface;
 mod job;
+mod jobs;
 mod machines;
+mod nodes_and_text;
 mod panels;
 mod preview;
+mod saving;
+mod selecting;
 mod settings;
 mod snapping;
 mod toolpaths;
@@ -24,7 +29,7 @@ mod views;
 mod window;
 
 /// The test files moved onto the verbs, each with its source: they never reach into the app.
-const THROUGH_THE_HARNESS: [(&str, &str); 25] = [
+const THROUGH_THE_HARNESS: [(&str, &str); 31] = [
     ("layers_sheets.rs", include_str!("layers_sheets.rs")),
     (
         "accessibility_tests.rs",
@@ -56,6 +61,12 @@ const THROUGH_THE_HARNESS: [(&str, &str); 25] = [
         "snapping_and_guides.rs",
         include_str!("snapping_and_guides.rs"),
     ),
+    ("collisions.rs", include_str!("collisions.rs")),
+    ("selecting.rs", include_str!("selecting.rs")),
+    ("nodes_and_text.rs", include_str!("nodes_and_text.rs")),
+    ("previews.rs", include_str!("previews.rs")),
+    ("saving_toolpaths.rs", include_str!("saving_toolpaths.rs")),
+    ("jobs_and_files.rs", include_str!("jobs_and_files.rs")),
 ];
 
 /// The lines of `source` that reach into the app past the harness.

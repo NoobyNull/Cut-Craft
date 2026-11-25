@@ -6,29 +6,29 @@ use super::*;
 fn edit_units_switches_the_job_between_millimetres_and_inches() {
     use cut_craft_core::document::Units;
     let mut h = Harness::new();
-    assert_eq!(h.app.units_checked("units_mm"), Some(true));
-    assert_eq!(h.app.units_checked("zoom_box"), None);
-    h.app.cursor = Some(Point::new(25.4, 50.8));
-    assert_eq!(h.app.coordinates().map(|(_, unit)| unit), Some("mm"));
-    h.app.invoke(&h.ctx, "units_inch");
-    assert_eq!(h.app.doc.job.units, Units::Inch);
-    assert_eq!(h.app.units_checked("units_inch"), Some(true));
-    assert_eq!(h.app.units_checked("units_mm"), Some(false));
-    let (figures, unit) = h.app.coordinates().unwrap();
+    assert_eq!(h.units_checked("units_mm"), Some(true));
+    assert_eq!(h.units_checked("zoom_box"), None);
+    h.given_pointer_at(Point::new(25.4, 50.8));
+    assert_eq!(h.coordinates().map(|(_, unit)| unit), Some("mm"));
+    h.invoke("units_inch");
+    assert_eq!(h.doc().job.units, Units::Inch);
+    assert_eq!(h.units_checked("units_inch"), Some(true));
+    assert_eq!(h.units_checked("units_mm"), Some(false));
+    let (figures, unit) = h.coordinates().unwrap();
     assert_eq!((figures.as_str(), unit), ("X    1.000  Y    2.000", "in"));
     h.frame(vec![]);
     assert!(h.text_at("in").is_some(), "the status bar's unit button");
-    h.app.invoke(&h.ctx, "undo");
-    assert_eq!(h.app.doc.job.units, Units::Mm, "undoable");
+    h.invoke("undo");
+    assert_eq!(h.doc().job.units, Units::Mm, "undoable");
 }
 
 #[test]
 fn a_new_job_is_set_up_over_the_2d_view() {
     let mut h = Harness::at_start();
-    h.app.view = View::ThreeD;
-    h.app.invoke(&h.ctx, "new");
+    h.show_view(View::ThreeD);
+    h.invoke("new");
     assert!(
-        h.app.view == View::TwoD,
+        *h.view() == View::TwoD,
         "the material shows while it is set up"
     );
 }
@@ -36,107 +36,97 @@ fn a_new_job_is_set_up_over_the_2d_view() {
 #[test]
 fn it_starts_on_the_start_page_with_the_no_job_menus() {
     let h = Harness::at_start();
-    assert_eq!(h.app.screen, Screen::Start);
-    assert_eq!(h.app.title, "Cut Craft", "no job, so no file name");
+    assert_eq!(h.screen(), Screen::Start);
+    assert_eq!(h.window_title(), "Cut Craft", "no job, so no file name");
     assert_eq!(
-        h.app.menu_names(),
+        h.menu_names(),
         ["File", "Edit", "Machine", "Toolpaths", "Gadgets", "Help"]
     );
-    assert!(
-        h.app.view_transform.is_none(),
-        "no 2D view before there is a job"
-    );
+    assert!(!h.has_2d_view(), "no 2D view before there is a job");
 }
 
 #[test]
 fn create_a_new_file_goes_through_job_setup_to_the_job() {
     let mut h = Harness::at_classic_start();
-    h.app.invoke(&h.ctx, "new");
+    h.invoke("new");
     h.frame(vec![]);
-    assert_eq!(h.app.screen, Screen::NewJob);
-    let form = h.app.form.as_mut().expect("the Job Setup form");
-    assert_eq!(form.id, "job_setup");
-    form.params["size"]["width"] = 300.0.into();
+    assert_eq!(h.screen(), Screen::NewJob);
+    assert_eq!(h.form_id(), Some("job_setup"));
+    h.edit_form(|p| p["size"]["width"] = 300.0.into());
     assert!(
-        (h.app.shown_job().width - 300.0).abs() < 1e-9,
+        (h.shown_job().width - 300.0).abs() < 1e-9,
         "the 2D view shows the job being set up"
     );
-    h.app.job_setup_ok();
+    h.job_setup_ok();
     h.frame(vec![]);
-    assert_eq!(h.app.screen, Screen::Job);
-    assert!(h.app.form.is_none());
-    assert!((h.app.doc.job.width - 300.0).abs() < 1e-9);
-    assert!(
-        !h.app.history.can_undo(),
-        "a new job starts with nothing to undo"
-    );
-    assert_eq!(
-        h.app.status.current_tool, "Select",
-        "Job Setup is done with"
-    );
-    assert!(h.app.menu_names().contains(&"Model"));
-    assert!(h.app.view_transform.is_some());
+    assert_eq!(h.screen(), Screen::Job);
+    assert!(h.form_id().is_none());
+    assert!((h.doc().job.width - 300.0).abs() < 1e-9);
+    assert!(!h.can_undo(), "a new job starts with nothing to undo");
+    assert_eq!(h.current_tool(), "Select", "Job Setup is done with");
+    assert!(h.menu_names().contains(&"Model"));
+    assert!(h.has_2d_view());
 }
 
 #[test]
 fn cancelling_job_setup_goes_back_to_the_start_page() {
     let mut h = Harness::at_start();
-    h.app.invoke(&h.ctx, "new");
-    h.app.job_setup_cancel();
+    h.invoke("new");
+    h.job_setup_cancel();
     h.frame(vec![]);
-    assert_eq!(h.app.screen, Screen::Start);
-    assert!(h.app.form.is_none());
+    assert_eq!(h.screen(), Screen::Start);
+    assert!(h.form_id().is_none());
 }
 
 #[test]
 fn closing_the_job_goes_back_to_the_start_page() {
     let mut h = Harness::new();
-    h.app.options.job_defaults.classic_startup = true;
-    h.app.invoke(&h.ctx, "close");
+    h.given_options(|o| o.job_defaults.classic_startup = true);
+    h.invoke("close");
     h.frame(vec![]);
-    assert_eq!(h.app.screen, Screen::Start);
+    assert_eq!(h.screen(), Screen::Start);
 }
 
 #[test]
 fn saved_and_opened_jobs_are_listed_as_recent_files() {
     let mut h = Harness::new();
     let dir = fresh_dir("recent");
-    h.app.recent_path = Some(dir.join("recent.json"));
+    h.given_recent_list_at(dir.join("recent.json"));
     let job = dir.join("first.ccjob");
-    h.app.save_to(&job);
-    assert_eq!(h.app.recent, std::slice::from_ref(&job));
+    h.save_to(&job);
+    assert_eq!(h.recent_shown(), std::slice::from_ref(&job));
     assert_eq!(
         files::load_recent(&dir.join("recent.json")),
         std::slice::from_ref(&job)
     );
-    h.app.invoke(&h.ctx, "close");
-    h.app.invoke(&h.ctx, "open_recent:0");
-    assert_eq!(h.app.screen, Screen::Job);
-    assert_eq!(h.app.session.path.as_deref(), Some(job.as_path()));
+    h.invoke("close");
+    h.invoke("open_recent:0");
+    assert_eq!(h.screen(), Screen::Job);
+    assert_eq!(h.job_path(), Some(job.as_path()));
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]
 fn a_recent_file_that_has_gone_is_dropped() {
     let mut h = Harness::at_start();
-    h.app.recent = vec![std::env::temp_dir().join("cut-craft-gone.ccjob")];
-    h.app.invoke(&h.ctx, "open_recent:0");
-    assert_eq!(h.app.screen, Screen::Start);
-    assert_eq!(h.app.recent, Vec::<std::path::PathBuf>::new());
-    assert!(h.app.status.message.contains("cut-craft-gone.ccjob"));
+    h.given_recent_files(vec![std::env::temp_dir().join("cut-craft-gone.ccjob")]);
+    h.invoke("open_recent:0");
+    assert_eq!(h.screen(), Screen::Start);
+    assert_eq!(h.recent_shown(), Vec::<std::path::PathBuf>::new());
+    assert!(h.status_message().contains("cut-craft-gone.ccjob"));
 }
 
 #[test]
 fn the_clipart_library_button_opens_the_library_tab() {
     let mut h = Harness::new();
-    assert!(h.app.available("clipart_library"));
+    assert!(h.available("clipart_library"));
     // picked from a flown-out Design page, the page stays out on the Library tab
-    h.app.pages.set_pinned(Page::Design, false);
-    h.app.pages.open(Page::Design);
-    h.app.pick(&h.ctx, Page::Design, "clipart_library");
-    assert_eq!(DESIGN_TABS[h.app.design_tab], "Library");
-    assert_ne!(h.app.pages.shown(Page::Design), Shown::Hidden);
-    assert_eq!(h.app.tool_label("import_cut_list"), "Import Cut List");
+    h.unpin(Page::Design);
+    h.open_page(Page::Design);
+    h.pick_on_page(Page::Design, "clipart_library");
+    assert_eq!(h.design_tab(), "Library");
+    assert_ne!(h.page_shown(Page::Design), Shown::Hidden);
+    assert_eq!(h.tool_label("import_cut_list"), "Import Cut List");
 }
 
 /// The text drawn by `draw`, alone in a window of its own.
@@ -159,12 +149,17 @@ fn drawn_alone(draw: impl FnMut(&mut egui::Ui)) -> Vec<String> {
 fn rest_machining_sizes_show_in_inches_in_an_inch_job() {
     use cut_craft_core::document::Units;
     let h = Harness::new();
-    let tool = h.app.tools.tools.first().cloned().expect("a starter tool");
+    let tool = h
+        .tool_database()
+        .tools
+        .first()
+        .cloned()
+        .expect("a starter tool");
     let mut section = serde_json::json!({
         "rest": { "after": [tool], "minimum_detail": 2.54, "overlap": 12.7 }
     });
     let texts = drawn_alone(|ui| {
-        rest_section(ui, &mut section, &h.app.tools, &[], Units::Inch);
+        rest_section(ui, &mut section, h.tool_database(), &[], Units::Inch);
     });
     assert!(shows_number(&texts, "0.100", " in"), "{texts:?}");
     assert!(shows_number(&texts, "0.500", " in"), "{texts:?}");
@@ -181,23 +176,20 @@ fn rest_machining_sizes_show_in_inches_in_an_inch_job() {
 fn a_longer_recovery_interval_in_the_options_waits_longer() {
     let dir = fresh_dir("later");
     let mut h = Harness::new();
-    h.app.options.general.autosave_seconds = 120;
-    h.app.recovery_path = Some(dir.join("later.ccjob"));
+    h.given_options(|o| o.general.autosave_seconds = 120);
+    h.given_recovery_path(dir.join("later.ccjob"));
     h.rectangle(10.0, 10.0, 20.0, 20.0);
     h.frame(vec![]);
     h.time += AUTOSAVE_SECONDS;
     h.frame(vec![]);
-    assert!(h.app.autosave.is_none(), "not after the default interval");
+    assert!(!h.writing_recovery_copy(), "not after the default interval");
     h.time += 120.0;
     h.frame(vec![]);
-    h.app
-        .autosave
-        .take()
-        .expect("written once the options' interval is up")
-        .1
-        .join()
-        .unwrap()
-        .unwrap();
+    assert!(
+        h.writing_recovery_copy(),
+        "written once the options' interval is up"
+    );
+    h.finish_recovery_copy();
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -207,37 +199,36 @@ fn unsaved_work_is_kept_for_recovery_and_opens_after_a_crash() {
     // each run (window) keeps a copy of its own, named for it
     let copy = |run: &str| dir.join(format!("recovery-{run}.ccjob"));
     let autosaved = |h: &mut Harness, run: &str| {
-        h.app.claim_recovery(&dir, run);
-        assert_eq!(h.app.recovery_path, Some(copy(run)));
+        h.claim_recovery(&dir, run);
+        assert_eq!(h.recovery_path(), Some(copy(run).as_path()));
         h.rectangle(10.0, 10.0, 20.0, 20.0);
         h.frame(vec![]);
         assert!(!copy(run).exists(), "not at once");
         h.time += AUTOSAVE_SECONDS;
         h.frame(vec![]);
-        let (_, writing) = h.app.autosave.take().expect("a copy is being written");
-        writing.join().unwrap().unwrap();
+        h.finish_recovery_copy();
         assert!(copy(run).exists());
     };
     // closing the job on purpose leaves nothing to recover
     let mut h = Harness::new();
     autosaved(&mut h, "1");
-    h.app.session.discard_changes(&h.app.history);
-    h.app.invoke(&h.ctx, "close");
+    h.discard_changes();
+    h.invoke("close");
     assert!(!copy("1").exists());
     drop(h);
     // a second window still running leaves the first one's live work alone
     let mut first = Harness::new();
     autosaved(&mut first, "2");
     let mut second = Harness::at_start();
-    second.app.claim_recovery(&dir, "3");
+    second.claim_recovery(&dir, "3");
     assert!(
-        !second.app.open_recovery(),
+        !second.open_recovered_work(),
         "another window's work is not a crash"
     );
-    assert_eq!(second.app.screen, Screen::Start);
-    second.app.invoke(&second.ctx, "new");
-    second.app.job_setup_ok();
-    second.app.invoke(&second.ctx, "close");
+    assert_eq!(second.screen(), Screen::Start);
+    second.invoke("new");
+    second.job_setup_ok();
+    second.invoke("close");
     assert!(
         copy("2").exists(),
         "closing the second keeps the first one's copy"
@@ -246,33 +237,30 @@ fn unsaved_work_is_kept_for_recovery_and_opens_after_a_crash() {
     drop(first);
     drop(second);
     let mut next = Harness::at_start();
-    next.app.claim_recovery(&dir, "4");
-    assert!(next.app.open_recovery());
-    assert_eq!(next.app.screen, Screen::Job);
-    assert_eq!(next.app.doc.vectors.len(), 1);
-    assert!(
-        next.app.session.is_dirty(&next.app.history),
-        "unsaved until saved"
-    );
-    assert!(next.app.status.message.contains("Recovered"));
+    next.claim_recovery(&dir, "4");
+    assert!(next.open_recovered_work());
+    assert_eq!(next.screen(), Screen::Job);
+    assert_eq!(next.doc().vectors.len(), 1);
+    assert!(next.has_unsaved_changes(), "unsaved until saved");
+    assert!(next.status_message().contains("Recovered"));
     // opening it keeps the work, now as this run's copy, so a second crash before any edit
     // still has it
     assert!(!copy("2").exists());
     assert!(copy("4").exists(), "kept until saved or closed");
     let mut other = Harness::at_start();
-    other.app.claim_recovery(&dir, "5");
+    other.claim_recovery(&dir, "5");
     assert!(
-        !other.app.open_recovery(),
+        !other.open_recovered_work(),
         "not while the run that has it is open"
     );
     drop(next);
-    assert!(other.app.open_recovery(), "still there for the run after");
-    other.app.save_to(&dir.join("kept.ccjob"));
+    assert!(other.open_recovered_work(), "still there for the run after");
+    other.save_to(&dir.join("kept.ccjob"));
     assert!(
         !copy("4").exists() && !copy("5").exists(),
         "saved: nothing to recover"
     );
-    assert!(!other.app.open_recovery());
+    assert!(!other.open_recovered_work());
     // a copy left by a version that kept one for every window is recovered too
     drop(other);
     std::fs::write(
@@ -281,8 +269,8 @@ fn unsaved_work_is_kept_for_recovery_and_opens_after_a_crash() {
     )
     .unwrap();
     let mut updated = Harness::at_start();
-    updated.app.claim_recovery(&dir, "6");
-    assert!(updated.app.open_recovery());
+    updated.claim_recovery(&dir, "6");
+    assert!(updated.open_recovered_work());
     assert!(!dir.join("recovery.ccjob").exists());
     drop(updated);
     // a crashed run whose number a new run is given still has its copy recovered
@@ -290,9 +278,9 @@ fn unsaved_work_is_kept_for_recovery_and_opens_after_a_crash() {
     autosaved(&mut crashed, "7");
     drop(crashed);
     let mut same = Harness::at_start();
-    same.app.claim_recovery(&dir, "7");
-    assert!(same.app.open_recovery());
-    assert_eq!(same.app.doc.vectors.len(), 1);
+    same.claim_recovery(&dir, "7");
+    assert!(same.open_recovered_work());
+    assert_eq!(same.doc().vectors.len(), 1);
     drop(same);
     std::fs::remove_dir_all(&dir).unwrap();
 }
@@ -302,7 +290,7 @@ fn options_close_with_changes_not_applied_asks_first() {
     let mut h = options_with_a_change_not_applied();
     click_button(&mut h, "Close");
     h.frame(vec![]);
-    assert!(h.app.options_editor.window.open, "not closed yet");
+    assert!(h.options_window_open(), "not closed yet");
     assert!(
         h.text_at(super::options_apply::ASK).is_some(),
         "{:?}",
@@ -310,16 +298,16 @@ fn options_close_with_changes_not_applied_asks_first() {
     );
     // Keep Editing: back to the settings, the change still waiting
     click_button(&mut h, "Keep Editing");
-    assert!(h.app.options_editor.window.open);
-    assert!(h.app.options_dirty());
+    assert!(h.options_window_open());
+    assert!(h.options_dirty());
     h.frame(vec![]);
     assert!(h.text_at(super::options_apply::ASK).is_none());
     // Discard Changes: closed, nothing used
     click_button(&mut h, "Close");
     h.frame(vec![]);
     click_button(&mut h, "Discard Changes");
-    assert!(!h.app.options_editor.window.open);
-    assert_eq!(h.app.options.general.recent_file_list_size, 9);
+    assert!(!h.options_window_open());
+    assert_eq!(h.options().general.recent_file_list_size, 9);
 }
 
 #[test]
@@ -328,45 +316,45 @@ fn options_close_can_apply_the_changes_on_the_way_out() {
     click_button(&mut h, "Close");
     h.frame(vec![]);
     click_button(&mut h, "Apply and Close");
-    assert!(!h.app.options_editor.window.open);
-    assert_eq!(h.app.options.recent_count(), files::RECENT_COUNT);
+    assert!(!h.options_window_open());
+    assert_eq!(h.options().recent_count(), files::RECENT_COUNT);
 }
 
 #[test]
 fn options_close_with_nothing_changed_just_closes() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "options");
+    h.invoke("options");
     h.frame(vec![]);
     h.frame(vec![]);
-    let options = h.app.options.clone();
+    let options = h.options().clone();
     // Apply does nothing while nothing has changed
     click_button(&mut h, "Apply");
-    assert_eq!(h.app.options, options);
+    assert_eq!(*h.options(), options);
     click_button(&mut h, "Close");
-    assert!(!h.app.options_editor.window.open, "closed without asking");
+    assert!(!h.options_window_open(), "closed without asking");
 }
 
 #[test]
 fn set_as_default_in_job_setup_is_what_new_jobs_start_with() {
     let mut h = Harness::at_classic_start();
-    h.app.invoke(&h.ctx, "new");
+    h.invoke("new");
     h.frame(vec![]);
-    let form = h.app.form.as_mut().expect("the Job Setup form");
-    form.params["size"]["width"] = 300.0.into();
-    form.params["size"]["thickness"] = 12.0.into();
+    h.edit_form(|p| {
+        p["size"]["width"] = 300.0.into();
+        p["size"]["thickness"] = 12.0.into();
+    });
     let button = h
         .text_at("Set as Default")
         .expect("a Set as Default button");
     h.click(button, Modifiers::NONE);
     h.frame(vec![]);
-    let saved = h.app.options.default_job.expect("kept in the options");
+    let saved = h.options().default_job.expect("kept in the options");
     assert!((saved.width - 300.0).abs() < 1e-9);
-    h.app.job_setup_cancel();
-    h.app.invoke(&h.ctx, "new");
+    h.job_setup_cancel();
+    h.invoke("new");
     h.frame(vec![]);
-    let form = h.app.form.as_ref().expect("Job Setup again");
-    assert_eq!(form.params["size"]["width"], 300.0);
-    assert_eq!(form.params["size"]["thickness"], 12.0);
+    assert_eq!(h.form_settings()["size"]["width"], 300.0);
+    assert_eq!(h.form_settings()["size"]["thickness"], 12.0);
 }
 
 #[test]
@@ -401,31 +389,23 @@ fn a_crash_log_goes_to_the_service_by_itself_when_allowed() {
     for (post, said, form, retried) in cases {
         let mut h = Harness::new();
         let dir = fresh_dir("retry");
-        h.app.options.bug_reports.crash_logs = crate::options::CrashLogs::Send;
-        h.app.reporter.crash_service = Some("https://crash.example/v1/crash".into());
-        h.app.reporter.post = post;
-        h.app.reporter.work_bits = 4;
-        h.app.reporter.retry_dir = Some(dir.clone());
-        let ctx = h.ctx.clone();
-        h.app.offer_crash(&ctx, CRASH.into());
+        h.given_options(|o| o.bug_reports.crash_logs = crate::options::CrashLogs::Send);
+        h.given_crash_service("https://crash.example/v1/crash", post, dir.clone());
+        h.crashed_last_time(CRASH.into());
         assert!(
-            h.app.options.bug_reports.install_id.is_some(),
+            h.options().bug_reports.install_id.is_some(),
             "numbered once"
         );
         for _ in 0..200 {
             h.frame(vec![]);
-            if h.app.status.message.contains("crash report") || h.app.reporter.is_open() {
+            if h.status_message().contains("crash report") || h.bug_report_open() {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
         h.frame(vec![]);
-        assert!(
-            h.app.status.message.contains(said),
-            "{}",
-            h.app.status.message
-        );
-        assert_eq!(h.app.reporter.is_open(), form, "{said}");
+        assert!(h.status_message().contains(said), "{}", h.status_message());
+        assert_eq!(h.bug_report_open(), form, "{said}");
         let kept = cut_craft_bug_report::logs::take_crash(&dir);
         assert_eq!(
             kept.is_some(),
@@ -440,39 +420,35 @@ fn a_crash_log_goes_to_the_service_by_itself_when_allowed() {
 fn cancel_takes_back_what_a_tool_did_and_closes_it() {
     let mut h = Harness::new();
     // a tool that has done nothing yet has nothing to cancel
-    h.app.start_command("draw_circle");
+    h.start_command("draw_circle");
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Cancel").is_some());
-    let undoable = h.app.history.undo_depth();
-    h.app.form = None;
+    let undoable = h.undo_steps();
+    h.close_form();
     // Import 3D Model puts the model in the job at once
     let file = pyramid_stl("cancel");
-    h.app.import_file(&file);
+    h.import(&file);
     h.frame(vec![]);
     h.frame(vec![]);
-    assert_eq!(
-        h.app.doc.components.len(),
-        1,
-        "placed while the form is open"
-    );
+    assert_eq!(h.doc().components.len(), 1, "placed while the form is open");
     let over = h.text_at("Initial Orientation").unwrap();
     let cancel = h.scroll_to(over, "Cancel").expect("a Cancel button");
     h.click(cancel, Modifiers::NONE);
     h.frame(vec![]);
-    assert!(h.app.form.is_none(), "closed");
-    assert!(h.app.doc.components.is_empty(), "the model taken back");
-    assert_eq!(h.app.history.undo_depth(), undoable);
-    assert!(h.app.history.can_redo(), "and it can be redone");
+    assert!(h.form_id().is_none(), "closed");
+    assert!(h.doc().components.is_empty(), "the model taken back");
+    assert_eq!(h.undo_steps(), undoable);
+    assert!(h.can_redo(), "and it can be redone");
     let _ = std::fs::remove_file(file);
 }
 
 #[test]
 fn job_setup_for_a_new_job_is_as_wide_as_the_design_page_after() {
     let mut h = Harness::at_start();
-    h.app.invoke(&h.ctx, "new");
+    h.invoke("new");
     let setup = page_widths(&mut h, 3);
-    h.app.job_setup_ok();
+    h.job_setup_ok();
     let job = page_widths(&mut h, 2);
     assert_eq!(setup[2][0], job[1][0], "no jump when the job is made");
 }
@@ -489,23 +465,22 @@ fn library_adds_several_in_turn() {
     std::fs::write(&first, square).unwrap();
     std::fs::write(&last, square).unwrap();
     let model = pyramid_stl("library-add");
-    h.app
-        .add_from_library(vec![first, model, last, dir.join("gone.svg")], None);
-    assert_eq!(h.app.doc.vectors.len(), 1, "the first is in");
+    h.add_from_library(vec![first, model, last, dir.join("gone.svg")]);
+    assert_eq!(h.doc().vectors.len(), 1, "the first is in");
     assert_eq!(
-        h.app.form.as_ref().map(|f| f.id),
+        h.form_id(),
         Some("orientate_3d_model"),
         "the model waits on its form"
     );
-    assert_eq!(h.app.import_queue.len(), 2, "the rest wait their turn");
-    h.app.form = None; // the form closed
+    assert_eq!(h.imports_waiting(), 2, "the rest wait their turn");
+    h.close_form(); // the form closed
     h.frame(vec![]);
-    assert_eq!(h.app.doc.vectors.len(), 2, "then the next comes in");
-    assert!(h.app.import_queue.is_empty());
+    assert_eq!(h.doc().vectors.len(), 2, "then the next comes in");
+    assert_eq!(h.imports_waiting(), 0);
     assert!(
-        h.app.status.message.contains("isn't there"),
+        h.status_message().contains("isn't there"),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -513,24 +488,19 @@ fn library_adds_several_in_turn() {
 #[test]
 fn what_a_slow_job_made_is_not_used_if_the_job_changed_meanwhile() {
     let mut h = Harness::new();
-    h.app.wait_before_showing = std::time::Duration::ZERO;
+    h.given_progress_shown_at_once();
     h.rectangle(10.0, 10.0, 50.0, 50.0);
     let (go, wait) = std::sync::mpsc::channel::<()>();
-    h.app.in_background(
-        "Calculating",
-        "test:calculating",
-        move || {
-            wait.recv().ok();
-        },
-        |app, ()| app.status.set_message("used"),
-    );
-    h.app.invoke(&h.ctx, "undo");
+    h.start_slow_job("Calculating", move || {
+        wait.recv().ok();
+    });
+    h.invoke("undo");
     go.send(()).unwrap();
     until_not_busy(&mut h);
     assert!(
-        h.app.status.message.contains("was not used"),
+        h.status_message().contains("was not used"),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
 }
 
@@ -538,11 +508,11 @@ fn what_a_slow_job_made_is_not_used_if_the_job_changed_meanwhile() {
 fn a_dxf_without_units_asks_which_with_the_guess_picked_then_zooms_to_it() {
     let mut h = Harness::new();
     // a 600 x 400 mm job: 6 mm would be a speck, so inches are picked
-    h.app.import_file(&unitless_dxf("units-ask"));
+    h.import(&unitless_dxf("units-ask"));
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(
-        h.app.doc.vectors.is_empty(),
+        h.doc().vectors.is_empty(),
         "nothing comes in before the answer"
     );
     assert!(
@@ -557,7 +527,7 @@ fn a_dxf_without_units_asks_which_with_the_guess_picked_then_zooms_to_it() {
         h.text_at("Millimetres: 6.0 mm by 6.0 mm (too small to see)")
             .is_some()
     );
-    let camera = h.app.camera.map(|c| c.scale);
+    let camera = h.zoom_2d_scale();
     h.click(h.text_at("Zoom to It").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
     assert!(
@@ -565,12 +535,12 @@ fn a_dxf_without_units_asks_which_with_the_guess_picked_then_zooms_to_it() {
         "{}",
         drawn_width(&h)
     );
-    assert_eq!(h.app.doc.selection.len(), 1, "still selected");
-    assert_ne!(h.app.camera.map(|c| c.scale), camera, "zoomed to it");
-    assert!(h.app.form.is_none());
+    assert_eq!(h.doc().selection.len(), 1, "still selected");
+    assert_ne!(h.zoom_2d_scale(), camera, "zoomed to it");
+    assert!(h.form_id().is_none());
     // undone in one step
-    h.app.invoke(&h.ctx, "undo");
-    assert!(h.app.doc.vectors.is_empty());
+    h.invoke("undo");
+    assert!(h.doc().vectors.is_empty());
 }
 
 #[test]
@@ -580,9 +550,11 @@ fn a_save_that_fails_after_replace_or_archive_leaves_the_earlier_files_where_the
     let mut h = Harness::new();
     two_tools(&mut h);
     // every toolpath hidden once the save was asked for: nothing to make the files from
-    for t in h.app.doc.toolpaths.values_mut() {
-        t.visible = false;
-    }
+    h.given_document(|d| {
+        for t in d.toolpaths.values_mut() {
+            t.visible = false;
+        }
+    });
     let dir = fresh_dir("resave-fail");
     let form = SaveForm {
         mode: SaveMode::VisibleToOneFile,
@@ -592,16 +564,16 @@ fn a_save_that_fails_after_replace_or_archive_leaves_the_earlier_files_where_the
         changes: ToolChanges::ToolChanger,
         job_sheet: false,
     };
-    let post = h.app.form_post(&form).unwrap();
+    let post = h.form_post(&form).unwrap();
     let path = dir.join("sign.nc");
     let numbered = dir.join("sign_3_Old-Vcarve.nc");
     for file in [&path, &numbered] {
         std::fs::write(file, "old").unwrap();
     }
     for choice in [EarlierGcode::Replace, EarlierGcode::Archive] {
-        h.app.save_over_earlier(&form, post.clone(), path.clone());
-        h.app.answer_earlier(Some(choice), false);
-        let message = h.app.status.message.clone();
+        h.save_over_earlier(&form, post.clone(), path.clone());
+        h.answer_earlier(Some(choice), false);
+        let message = h.status_message().to_owned();
         assert!(message.contains("no toolpaths are shown"), "{message}");
         assert!(message.contains("earlier files were left"), "{message}");
         for file in [&path, &numbered] {
@@ -633,7 +605,7 @@ fn saving_over_an_earlier_save_asks_then_replaces_or_archives_its_files() {
         changes: ToolChanges::ToolChanger,
         job_sheet: false,
     };
-    let post = h.app.form_post(&form).unwrap();
+    let post = h.form_post(&form).unwrap();
     let path = dir.join("sign.nc");
     let stale = dir.join("sign_3_Old-Vcarve.nc");
     let mine = dir.join("sign notes.nc");
@@ -641,40 +613,40 @@ fn saving_over_an_earlier_save_asks_then_replaces_or_archives_its_files() {
         std::fs::write(file, "old").unwrap();
     }
     // asked first: nothing is written until it is answered
-    h.app.save_over_earlier(&form, post.clone(), path.clone());
-    assert!(h.app.earlier_ask.is_some());
+    h.save_over_earlier(&form, post.clone(), path.clone());
+    assert!(h.asking_earlier());
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "old");
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Replace the earlier G-code?").is_some());
     // Cancel keeps them
-    h.app.answer_earlier(None, false);
+    h.answer_earlier(None, false);
     assert_eq!(std::fs::read_to_string(&stale).unwrap(), "old");
     // Replace: the new file, and no older numbered one left to run by mistake
-    h.app.save_over_earlier(&form, post.clone(), path.clone());
-    h.app.answer_earlier(Some(EarlierGcode::Replace), false);
+    h.save_over_earlier(&form, post.clone(), path.clone());
+    h.answer_earlier(Some(EarlierGcode::Replace), false);
     assert!(std::fs::read_to_string(&path).unwrap().contains("G0"));
     assert!(!stale.exists());
     assert!(mine.exists(), "a file of the user's own is left alone");
-    assert_eq!(h.app.options.confirmations.earlier_gcode, EarlierGcode::Ask);
+    assert_eq!(h.options().confirmations.earlier_gcode, EarlierGcode::Ask);
     // Archive, remembered: the earlier file moved aside, and not asked next time
-    h.app.save_over_earlier(&form, post.clone(), path.clone());
-    h.app.answer_earlier(Some(EarlierGcode::Archive), true);
+    h.save_over_earlier(&form, post.clone(), path.clone());
+    h.answer_earlier(Some(EarlierGcode::Archive), true);
     assert_eq!(
-        h.app.options.confirmations.earlier_gcode,
+        h.options().confirmations.earlier_gcode,
         EarlierGcode::Archive
     );
     let archived =
         |dir: &std::path::Path| std::fs::read_dir(dir.join("Archive")).map_or(0, Iterator::count);
-    assert_eq!(archived(&dir), 1, "{}", h.app.status.message);
+    assert_eq!(archived(&dir), 1, "{}", h.status_message());
     assert!(
-        h.app.status.message.contains("Archive"),
+        h.status_message().contains("Archive"),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
     // a second archive in the same second gets a folder of its own
-    h.app.save_over_earlier(&form, post, path.clone());
-    assert!(h.app.earlier_ask.is_none(), "not asked once remembered");
+    h.save_over_earlier(&form, post, path.clone());
+    assert!(!h.asking_earlier(), "not asked once remembered");
     assert_eq!(archived(&dir), 2);
     assert!(path.exists());
     let _ = std::fs::remove_dir_all(dir);
@@ -684,51 +656,43 @@ fn saving_over_an_earlier_save_asks_then_replaces_or_archives_its_files() {
 fn answering_dont_save_keeps_the_job_unsaved_until_something_replaces_it() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 20.0);
-    assert!(h.app.session.is_dirty(&h.app.history));
+    assert!(h.has_unsaved_changes());
     // No at "Save changes?", then the file picker cancelled (or the file would not open):
     // the job is still there and still unsaved, so it is asked about again and kept safe
-    assert!(h.app.discard_answered(&rfd::MessageDialogResult::No));
+    assert!(h.discard_answered(&rfd::MessageDialogResult::No));
     assert!(
-        h.app.session.is_dirty(&h.app.history),
+        h.has_unsaved_changes(),
         "backing out after No must not mark the work saved"
     );
-    assert!(
-        h.app
-            .session
-            .title("Cut Craft", &h.app.history)
-            .contains('*')
-    );
-    assert!(!h.app.discard_answered(&rfd::MessageDialogResult::Cancel));
-    assert!(h.app.session.is_dirty(&h.app.history));
+    assert!(h.job_title("Cut Craft").contains('*'));
+    assert!(!h.discard_answered(&rfd::MessageDialogResult::Cancel));
+    assert!(h.has_unsaved_changes());
     // a file that will not open leaves the job unsaved too
     let missing = std::env::temp_dir().join("cut-craft-no-such-job.ccjob");
-    h.app.open_path(&missing);
-    assert!(h.app.session.is_dirty(&h.app.history));
+    h.open(&missing);
+    assert!(h.has_unsaved_changes());
 }
 
 #[test]
 fn save_changes_names_just_the_file_and_its_buttons_say_what_they_do() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 20.0);
-    assert_eq!(h.app.save_changes_question(), "Save changes to Untitled?");
-    h.app.session.path = Some(std::path::PathBuf::from("/jobs/sign.ccjob"));
-    assert_eq!(h.app.save_changes_question(), "Save changes to sign.ccjob?");
+    assert_eq!(h.save_changes_question(), "Save changes to Untitled?");
+    h.given_job_path(std::path::PathBuf::from("/jobs/sign.ccjob"));
+    assert_eq!(h.save_changes_question(), "Save changes to sign.ccjob?");
     // Don't Save lets the work go; Cancel keeps it
     let custom = |c: &str| rfd::MessageDialogResult::Custom(c.to_owned());
-    assert!(h.app.discard_answered(&custom(super::actions::DONT_SAVE)));
-    assert!(!h.app.discard_answered(&custom("Cancel")));
+    assert!(h.discard_answered(&custom(super::actions::DONT_SAVE)));
+    assert!(!h.discard_answered(&custom("Cancel")));
 }
 
 #[test]
 fn save_as_suggests_the_jobs_own_name_in_its_own_folder() {
     let mut h = Harness::new();
+    assert_eq!(h.save_as_suggestion(), (None, "untitled.ccjob".to_owned()));
+    h.given_job_path(std::path::PathBuf::from("/jobs/garden sign.ccjob"));
     assert_eq!(
-        h.app.save_as_suggestion(),
-        (None, "untitled.ccjob".to_owned())
-    );
-    h.app.session.path = Some(std::path::PathBuf::from("/jobs/garden sign.ccjob"));
-    assert_eq!(
-        h.app.save_as_suggestion(),
+        h.save_as_suggestion(),
         (
             Some(std::path::PathBuf::from("/jobs")),
             "garden sign.ccjob".to_owned()
@@ -745,16 +709,16 @@ fn opening_a_job_from_a_newer_version_warns_which_settings_this_one_will_leave_o
     json["document"]["hologram"] = serde_json::json!(true);
     std::fs::write(&path, serde_json::to_vec(&json).unwrap()).unwrap();
     let mut h = Harness::at_start();
-    assert!(h.app.open_path(&path));
-    assert_eq!(h.app.screen, Screen::Job);
-    let told = &h.app.status.message;
+    assert!(h.open(&path));
+    assert_eq!(h.screen(), Screen::Job);
+    let told = h.status_message();
     assert!(
         told.contains("Warning") && told.contains("newer version") && told.contains("hologram"),
         "{told}"
     );
     // saving says again, as it happens, what was left out
-    h.app.save_to(&dir.join("here.ccjob"));
-    let told = &h.app.status.message;
+    h.save_to(&dir.join("here.ccjob"));
+    let told = h.status_message();
     assert!(
         told.starts_with("Saved") && told.contains("Warning") && told.contains("hologram"),
         "{told}"
@@ -768,13 +732,13 @@ fn a_file_named_on_the_command_line_opens_at_startup() {
     let path = dir.join("sign.ccjob");
     std::fs::write(&path, cut_craft_core::file::save_job(&Document::default())).unwrap();
     let mut h = Harness::at_start();
-    h.app.open_given(Some(&path));
-    assert_eq!(h.app.screen, Screen::Job);
-    assert_eq!(h.app.session.path.as_deref(), Some(path.as_path()));
+    h.open_given(&path);
+    assert_eq!(h.screen(), Screen::Job);
+    assert_eq!(h.job_path(), Some(path.as_path()));
     // nothing named: the start page as before
     let mut h = Harness::at_start();
-    h.app.open_given(None);
-    assert_eq!(h.app.screen, Screen::Start);
+    h.open_given_nothing();
+    assert_eq!(h.screen(), Screen::Start);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -784,37 +748,35 @@ fn save_anyway_is_asked_in_the_window_not_by_a_dialog_that_can_hide_behind_it() 
     // shows rfd's questions as zenity windows of their own, not kept above Cut Craft's
     let mut h = ready_for_output();
     let form = one_file_form();
-    let post = h.app.form_post(&form).unwrap();
-    h.app.save_checks = vec![super::SaveChecks {
-        plan: h.app.plan(&form, &post).unwrap(),
-        changes: form.changes,
-        revision: h.app.history.revision(),
-        machine: h.app.machines.active,
-        found: Some(vec![cut_craft_core::preflight::Finding {
+    let post = h.form_post(&form).unwrap();
+    h.given_checks_found(
+        &form,
+        &post,
+        vec![cut_craft_core::preflight::Finding {
             severity: cut_craft_core::preflight::Severity::Warning,
             message: "Air cutting".to_owned(),
             check: cut_craft_core::preflight::Check::AirCutting,
-        }]),
-    }];
+        }],
+    );
     // asked over the window rather than by the system (a test opening one panics)
     assert!(
-        h.app.ready_to_save(&form, false).is_none(),
+        h.ready_to_save(&form, false).is_none(),
         "waits for the answer"
     );
-    assert!(h.app.save_anyway.is_some());
+    assert!(h.asking_save_anyway());
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Save the toolpaths anyway?").is_some());
     assert!(h.text_at("• Air cutting").is_some());
     h.click(h.text_at("Don't Save").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
-    assert!(h.app.save_anyway.is_none());
-    assert_eq!(h.app.status.message, "Toolpaths not saved");
+    assert!(!h.asking_save_anyway());
+    assert_eq!(h.status_message(), "Toolpaths not saved");
     // answered Save Anyway, the same save goes on without asking again
-    assert!(h.app.ready_to_save(&form, false).is_none());
-    h.app.saving.accept(vec!["Air cutting".to_owned()]);
-    assert!(h.app.ready_to_save(&form, false).is_some(), "agreed to");
-    assert!(h.app.saving.accepted().is_empty(), "only for that save");
+    assert!(h.ready_to_save(&form, false).is_none());
+    h.given_save_anyway_agreed(&["Air cutting"]);
+    assert!(h.ready_to_save(&form, false).is_some(), "agreed to");
+    assert!(h.save_anyway_agreed().is_empty(), "only for that save");
 }
 
 #[test]
@@ -823,85 +785,72 @@ fn save_anyway_counts_only_for_the_save_it_answered() {
     // running) must not let a later save skip its question
     let mut h = ready_for_output();
     let form = one_file_form();
-    let post = h.app.form_post(&form).unwrap();
-    let (plan, revision, machine) = (
-        h.app.plan(&form, &post).unwrap(),
-        h.app.history.revision(),
-        h.app.machines.active,
-    );
-    let checks = |severity, message: &str| {
-        vec![super::SaveChecks {
-            plan: plan.clone(),
-            changes: form.changes,
-            revision,
-            machine,
-            found: Some(vec![cut_craft_core::preflight::Finding {
-                severity,
-                message: message.to_owned(),
-                check: cut_craft_core::preflight::Check::AirCutting,
-            }]),
+    let post = h.form_post(&form).unwrap();
+    let found = |severity, message: &str| {
+        vec![cut_craft_core::preflight::Finding {
+            severity,
+            message: message.to_owned(),
+            check: cut_craft_core::preflight::Check::AirCutting,
         }]
     };
-    h.app.save_checks = checks(cut_craft_core::preflight::Severity::Error, "Too deep");
-    h.app.saving.accept(vec!["Too deep".to_owned()]);
+    h.given_checks_found(
+        &form,
+        &post,
+        found(cut_craft_core::preflight::Severity::Error, "Too deep"),
+    );
+    h.given_save_anyway_agreed(&["Too deep"]);
     assert!(
-        h.app.ready_to_save(&form, false).is_some(),
+        h.ready_to_save(&form, false).is_some(),
         "Save Anyway answered"
     );
     assert!(
-        h.app.saving.accepted().is_empty(),
+        h.save_anyway_agreed().is_empty(),
         "used up by the save it was for"
     );
     // the same error, the next save: asked again, never remembered
-    assert!(h.app.ready_to_save(&form, false).is_none(), "asks again");
-    assert!(h.app.save_anyway.take().is_some());
-    h.app.save_checks = checks(cut_craft_core::preflight::Severity::MustAsk, "Collet hits");
-    assert!(h.app.ready_to_save(&form, false).is_none(), "asks again");
-    assert!(h.app.save_anyway.is_some());
+    assert!(h.ready_to_save(&form, false).is_none(), "asks again");
+    assert!(h.dismiss_save_anyway());
+    h.given_checks_found(
+        &form,
+        &post,
+        found(cut_craft_core::preflight::Severity::MustAsk, "Collet hits"),
+    );
+    assert!(h.ready_to_save(&form, false).is_none(), "asks again");
+    assert!(h.asking_save_anyway());
 }
 
 #[test]
 fn saving_past_an_error_ticks_each_one_and_the_files_say_so() {
     let mut h = ready_for_output();
     let form = one_file_form();
-    let post = h.app.form_post(&form).unwrap();
-    let plan = h.app.plan(&form, &post).unwrap();
+    let post = h.form_post(&form).unwrap();
     let error = "Profile: End Mill has no feed rate";
-    h.app.save_checks = vec![super::SaveChecks {
-        plan,
-        changes: form.changes,
-        revision: h.app.history.revision(),
-        machine: h.app.machines.active,
-        found: Some(vec![cut_craft_core::preflight::Finding {
+    h.given_checks_found(
+        &form,
+        &post,
+        vec![cut_craft_core::preflight::Finding {
             severity: cut_craft_core::preflight::Severity::Error,
             message: error.to_owned(),
             check: cut_craft_core::preflight::Check::CanCut,
-        }]),
-    }];
+        }],
+    );
     // asked, not refused: the error to tick on its own, and the job will not run
-    assert!(h.app.ready_to_save(&form, false).is_none());
-    let ask = h.app.save_anyway.as_ref().expect("Save Anyway asks");
+    assert!(h.ready_to_save(&form, false).is_none());
+    let ask = h.save_anyway().expect("Save Anyway asks");
     assert_eq!(ask.asking.errors, [error]);
     assert_eq!(ask.asking.wont_run, [error]);
     assert!(ask.ticked.is_empty(), "nothing ticked for them");
     // ticked under the checks, it shows ticked here, but is still asked about
-    h.app.save_anyway = None;
-    h.app.acknowledged.insert(error.to_owned());
-    assert!(
-        h.app.ready_to_save(&form, false).is_none(),
-        "asked every time"
-    );
-    let ask = h.app.save_anyway.take().unwrap();
-    assert!(ask.ticked.contains(error));
+    h.dismiss_save_anyway();
+    h.tick_as_read(error);
+    assert!(h.ready_to_save(&form, false).is_none(), "asked every time");
+    assert!(h.save_anyway().unwrap().ticked.contains(error));
+    h.dismiss_save_anyway();
     // Save Anyway: saved, and the file says what it was saved past
-    h.app.saving.accept(vec![error.to_owned()]);
-    let post = h
-        .app
-        .ready_to_save(&form, false)
-        .expect("Save Anyway answered");
+    h.given_save_anyway_agreed(&[error]);
+    let post = h.ready_to_save(&form, false).expect("Save Anyway answered");
     let dir = fresh_dir("saved-with-errors");
     let written = h
-        .app
         .write_toolpath_files(&form, &post, &dir.join("sign.nc"))
         .unwrap();
     let text = std::fs::read_to_string(&written[0]).unwrap();
@@ -909,14 +858,11 @@ fn saving_past_an_error_ticks_each_one_and_the_files_say_so() {
     assert!(text.contains("no feed rate"), "{text}");
     // the job changed before the files were written (the Web API can, while a question
     // waits): nothing written, saved again once checked as it is now
-    h.app.saving.accept(vec![error.to_owned()]);
-    let post = h.app.ready_to_save(&form, false).unwrap();
+    h.given_save_anyway_agreed(&[error]);
+    let post = h.ready_to_save(&form, false).unwrap();
     h.rectangle(300.0, 20.0, 10.0, 10.0);
     let later = dir.join("later.nc");
-    let why = h
-        .app
-        .write_toolpath_files(&form, &post, &later)
-        .unwrap_err();
+    let why = h.write_toolpath_files(&form, &post, &later).unwrap_err();
     assert!(why.contains("the job changed while saving"), "{why}");
     assert!(!later.exists());
     let _ = std::fs::remove_dir_all(dir);
@@ -925,30 +871,32 @@ fn saving_past_an_error_ticks_each_one_and_the_files_say_so() {
 #[test]
 fn new_and_close_give_a_blank_job_and_classic_startup_flow_asks_first() {
     let mut h = Harness::at_start();
-    h.app.options.default_job = Some(cut_craft_core::document::Job {
-        thickness: 12.0,
-        ..Default::default()
+    h.given_options(|o| {
+        o.default_job = Some(cut_craft_core::document::Job {
+            thickness: 12.0,
+            ..Default::default()
+        });
     });
-    h.app.invoke(&h.ctx, "new");
-    assert_eq!(h.app.screen, Screen::Job);
-    assert!(h.app.form.is_none());
-    assert_eq!(h.app.doc.job.thickness, 12.0, "made with the Job Defaults");
-    h.app.invoke(&h.ctx, "close");
-    assert_eq!(h.app.screen, Screen::Job, "no start page to go back to");
+    h.invoke("new");
+    assert_eq!(h.screen(), Screen::Job);
+    assert!(h.form_id().is_none());
+    assert_eq!(h.doc().job.thickness, 12.0, "made with the Job Defaults");
+    h.invoke("close");
+    assert_eq!(h.screen(), Screen::Job, "no start page to go back to");
     // classic: Job Setup first, Close back to the start page
-    h.app.options.job_defaults.classic_startup = true;
-    h.app.invoke(&h.ctx, "new");
-    assert_eq!(h.app.screen, Screen::NewJob);
-    assert!(h.app.form.as_ref().is_some_and(|f| f.new_job));
-    h.app.job_setup_ok();
-    h.app.invoke(&h.ctx, "close");
-    assert_eq!(h.app.screen, Screen::Start);
+    h.given_options(|o| o.job_defaults.classic_startup = true);
+    h.invoke("new");
+    assert_eq!(h.screen(), Screen::NewJob);
+    assert!(h.form_for_new_job());
+    h.job_setup_ok();
+    h.invoke("close");
+    assert_eq!(h.screen(), Screen::Start);
 }
 
 #[test]
 fn job_defaults_page_changes_new_jobs_once_applied() {
     let mut h = Harness::new();
-    h.app.open_job_defaults();
+    h.open_job_defaults();
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Classic Startup Flow").is_some());
@@ -956,24 +904,23 @@ fn job_defaults_page_changes_new_jobs_once_applied() {
         h.text_at("XY Datum Position").is_some(),
         "Job Setup's settings too"
     );
-    let (_, mut params, _) = h.app.job_defaults_state();
+    let (mut params, _) = h.job_defaults_shown();
     params["size"]["width"] = 1220.0.into();
-    h.app.job_defaults_edited(params.clone());
-    assert!(h.app.options_dirty(), "waits for Apply");
-    assert_eq!(h.app.options.default_job, None);
-    assert_eq!(h.app.doc.job.width, 600.0, "the open job is left as it is");
+    h.edit_job_defaults(params.clone());
+    assert!(h.options_dirty(), "waits for Apply");
+    assert_eq!(h.options().default_job, None);
+    assert_eq!(h.doc().job.width, 600.0, "the open job is left as it is");
     // a refused change is kept as typed, with why
     let mut wrong = params.clone();
     wrong["gaps"]["plunge"] = 50.0.into();
-    h.app.job_defaults_edited(wrong);
-    assert!(h.app.job_defaults_state().2.is_some());
-    h.app.job_defaults_edited(params);
-    h.app
-        .options_button(&h.ctx.clone(), options_apply::Button::Apply);
-    assert_eq!(h.app.options.default_job.map(|j| j.width), Some(1220.0));
-    assert_eq!(h.app.doc.job.width, 600.0, "still the open job's");
-    h.app.invoke(&h.ctx, "new");
-    assert_eq!(h.app.doc.job.width, 1220.0, "the next job's");
+    h.edit_job_defaults(wrong);
+    assert!(h.job_defaults_shown().1.is_some());
+    h.edit_job_defaults(params);
+    h.apply_options_window();
+    assert_eq!(h.options().default_job.map(|j| j.width), Some(1220.0));
+    assert_eq!(h.doc().job.width, 600.0, "still the open job's");
+    h.invoke("new");
+    assert_eq!(h.doc().job.width, 1220.0, "the next job's");
 }
 
 /// An add-ons folder holding the Depth add-on, as Gadgets ▸ Add-ons installs it.
@@ -1011,7 +958,7 @@ fn my_gadgets_in(menus: &gui::MenuSystem) -> Vec<(String, String, bool)> {
 #[test]
 fn my_gadgets_lists_what_is_installed_and_how_to_add_more() {
     let mut h = Harness::new();
-    let nothing = my_gadgets_in(&h.app.menus);
+    let nothing = my_gadgets_in(h.job_menus());
     assert_eq!(
         nothing[0],
         ("Nothing installed yet".to_owned(), String::new(), false)
@@ -1022,13 +969,13 @@ fn my_gadgets_lists_what_is_installed_and_how_to_add_more() {
     assert!(named(&nothing, "Open My Gadgets Folder"));
     let (last, action, _) = nothing.last().unwrap();
     assert_eq!((last.as_str(), action.as_str()), ("Add-ons...", "addons"));
-    assert!(h.app.available(gui::OPEN_GADGETS_FOLDER));
-    assert_eq!(h.app.gadget_tools(), [""; 0]);
+    assert!(h.available(gui::OPEN_GADGETS_FOLDER));
+    assert_eq!(h.gadget_tools(), [""; 0]);
 
     let dir = depth_installed("my-gadgets");
-    h.app.addons = crate::addons::Addons::new(Some(dir.clone()));
-    h.app.refresh_installed();
-    for menus in [&h.app.menus, &h.app.start_menus] {
+    h.given_add_ons_folder(dir.clone());
+    h.refresh_installed();
+    for menus in [h.job_menus(), h.start_menus()] {
         let installed = my_gadgets_in(menus);
         assert_eq!(
             installed[0],
@@ -1042,38 +989,28 @@ fn my_gadgets_lists_what_is_installed_and_how_to_add_more() {
         assert!(!named(&installed, "Nothing installed yet"));
         assert!(named(&installed, "Add-ons..."));
     }
-    assert_eq!(h.app.gadget_tools(), ["relief_from_photo"]);
+    assert_eq!(h.gadget_tools(), ["relief_from_photo"]);
 
     // removed: gone from the menu at once
     std::fs::remove_dir_all(&dir).unwrap();
-    h.app.refresh_installed();
-    assert_eq!(my_gadgets_in(&h.app.menus)[0].0, "Nothing installed yet");
+    h.refresh_installed();
+    assert_eq!(my_gadgets_in(h.job_menus())[0].0, "Nothing installed yet");
 }
 
 #[test]
 fn my_gadgets_marks_what_is_not_official() {
     let mut h = Harness::new();
-    h.app.my_gadgets = vec![
+    h.given_my_gadgets(vec![
         ("Box Maker".to_owned(), "gadget_box_maker"),
         ("Star Burst".to_owned(), "gadget_star_burst"),
-    ];
-    let code = crate::trust::Code::gadget("gadget_star_burst", "Star Burst", b"");
-    let unsigned = crate::gadgets::Unsigned {
-        code,
-        waiting: None,
-    };
-    h.app.unsigned_gadgets = [("gadget_star_burst".to_owned(), unsigned)].into();
-    h.app.installed_addons = vec![(
+    ]);
+    h.given_gadget_not_signed("gadget_star_burst", "Star Burst");
+    h.given_installed_addons(vec![(
         "Depth (Relief from Photo)".to_owned(),
         Some("relief_from_photo"),
         true,
-    )];
-    let names: Vec<String> = h
-        .app
-        .installed_items()
-        .into_iter()
-        .map(|(n, _)| n)
-        .collect();
+    )]);
+    let names = h.my_gadgets();
     assert_eq!(
         names,
         [
@@ -1090,10 +1027,10 @@ fn a_gadgets_section_shows_in_every_layout_once_something_is_installed() {
     let dir = depth_installed("gadgets-section");
     let harness = |layout: WindowLayout, installed: bool| {
         let mut h = Harness::new();
-        h.app.options.general.layout = layout;
+        h.given_options(|o| o.general.layout = layout);
         if installed {
-            h.app.addons = crate::addons::Addons::new(Some(dir.clone()));
-            h.app.refresh_installed();
+            h.given_add_ons_folder(dir.clone());
+            h.refresh_installed();
         }
         h.frame(vec![]);
         h.frame(vec![]);
@@ -1115,7 +1052,7 @@ fn a_gadgets_section_shows_in_every_layout_once_something_is_installed() {
     assert_eq!(tabs(true), tabs(false) + 1, "Ribbon: the tab");
     // the Ribbon's Gadgets tab holds the installed tools
     let mut h = harness(WindowLayout::Ribbon, true);
-    h.app.ribbon_tab = RIBBON_TABS.iter().position(|&t| t == "Gadgets").unwrap();
+    h.show_ribbon_tab("Gadgets");
     h.frame(vec![]);
     assert_eq!(
         h.texts_at("Gadgets").len(),
@@ -1124,19 +1061,19 @@ fn a_gadgets_section_shows_in_every_layout_once_something_is_installed() {
     );
     // with nothing installed it is not there to be on
     let mut h = harness(WindowLayout::Ribbon, false);
-    h.app.ribbon_tab = RIBBON_TABS.iter().position(|&t| t == "Gadgets").unwrap();
+    h.show_ribbon_tab("Gadgets");
     h.frame(vec![]);
-    assert_eq!(h.app.ribbon_tab, 0);
+    assert_eq!(h.ribbon_tab(), RIBBON_TABS[0]);
     // the Rail: a last button, after Favourites, opening their list
     let mut h = harness(WindowLayout::Rail, true);
     assert!(h.text_at("Relief from Photo").is_none(), "no list open");
-    h.app.rail.open = super::super::rail_list::List::Gadgets;
+    h.open_rail_gadgets();
     h.frame(vec![]);
     assert!(h.text_at("Relief from Photo").is_some());
     let mut h = harness(WindowLayout::Rail, false);
-    h.app.rail.open = super::super::rail_list::List::Gadgets;
+    h.open_rail_gadgets();
     h.frame(vec![]);
-    assert!(!h.app.rail.is_open(), "nothing installed: no list");
+    assert!(!h.rail_list_open(), "nothing installed: no list");
     std::fs::remove_dir_all(dir).unwrap();
 }
 
@@ -1147,12 +1084,12 @@ fn a_recovery_copy_that_could_not_be_written_is_tried_again() {
     let missing = dir.join("not-yet");
     std::fs::write(&missing, "in the way").unwrap();
     let mut h = Harness::new();
-    h.app.recovery_path = Some(missing.join("retry.ccjob"));
+    h.given_recovery_path(missing.join("retry.ccjob"));
     h.rectangle(10.0, 10.0, 20.0, 20.0);
     let written = |h: &mut Harness| {
         for _ in 0..500 {
             h.frame(vec![]);
-            if h.app.autosave.is_none() {
+            if !h.writing_recovery_copy() {
                 return;
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
@@ -1161,20 +1098,20 @@ fn a_recovery_copy_that_could_not_be_written_is_tried_again() {
     };
     h.time += AUTOSAVE_SECONDS;
     h.frame(vec![]);
-    assert!(h.app.autosave.is_some(), "a copy is being written");
+    assert!(h.writing_recovery_copy(), "a copy is being written");
     written(&mut h);
     assert!(
-        h.app.status.message.contains("recovery copy"),
+        h.status_message().contains("recovery copy"),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
     std::fs::remove_file(&missing).unwrap();
     // not at once, but once the interval is up again
     h.frame(vec![]);
-    assert!(h.app.autosave.is_none(), "retries are spaced out");
+    assert!(!h.writing_recovery_copy(), "retries are spaced out");
     h.time += AUTOSAVE_SECONDS;
     h.frame(vec![]);
-    assert!(h.app.autosave.is_some(), "tried again with no new change");
+    assert!(h.writing_recovery_copy(), "tried again with no new change");
     written(&mut h);
     assert!(missing.join("retry.ccjob").exists());
     let _ = std::fs::remove_dir_all(&dir);
@@ -1185,37 +1122,33 @@ fn save_anyway_agrees_only_to_the_problems_it_showed() {
     // an answer to one list of problems is no answer to a list with more in it
     let mut h = ready_for_output();
     let form = one_file_form();
-    let post = h.app.form_post(&form).unwrap();
+    let post = h.form_post(&form).unwrap();
     let finding = |message: &str| cut_craft_core::preflight::Finding {
         severity: cut_craft_core::preflight::Severity::Warning,
         message: message.to_owned(),
         check: cut_craft_core::preflight::Check::AirCutting,
     };
-    h.app.save_checks = vec![super::SaveChecks {
-        plan: h.app.plan(&form, &post).unwrap(),
-        changes: form.changes,
-        revision: h.app.history.revision(),
-        machine: h.app.machines.active,
-        found: Some(vec![finding("Air cutting"), finding("Slow feed")]),
-    }];
-    h.app.saving.accept(vec!["Air cutting".to_owned()]);
+    h.given_checks_found(
+        &form,
+        &post,
+        vec![finding("Air cutting"), finding("Slow feed")],
+    );
+    h.given_save_anyway_agreed(&["Air cutting"]);
     assert!(
-        h.app.ready_to_save(&form, false).is_none(),
+        h.ready_to_save(&form, false).is_none(),
         "Slow feed was never shown"
     );
-    assert!(h.app.save_anyway.is_some(), "asked again");
+    assert!(h.asking_save_anyway(), "asked again");
     // answered for both, it saves
-    h.app.save_anyway = None;
-    h.app
-        .saving
-        .accept(vec!["Slow feed".to_owned(), "Air cutting".to_owned()]);
-    assert!(h.app.ready_to_save(&form, false).is_some());
+    h.dismiss_save_anyway();
+    h.given_save_anyway_agreed(&["Slow feed", "Air cutting"]);
+    assert!(h.ready_to_save(&form, false).is_some());
 }
 
 #[test]
 fn a_new_job_forgets_a_save_anyway_answer() {
     let mut h = ready_for_output();
-    h.app.saving.accept(vec!["Air cutting".to_owned()]);
-    h.app.reset_job();
-    assert!(h.app.saving.accepted().is_empty(), "forgotten");
+    h.given_save_anyway_agreed(&["Air cutting"]);
+    h.reset_job();
+    assert!(h.save_anyway_agreed().is_empty(), "forgotten");
 }
