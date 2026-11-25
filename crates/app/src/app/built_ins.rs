@@ -348,7 +348,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
         .run(|a, _| a.pick_view_tool(ViewTool::Pan, "pan")),
     act("zoom_box", "Zoom Box", "Zoom Box: drag a box round the part of the drawing you want to fill the view").icon("view/zoom_box.png")
         .run(|a, _| a.pick_view_tool(ViewTool::ZoomBox, "zoom_box")),
-    act("zoom_to_job", "Zoom to Job", "Zoom to Job: fits the whole material into the view").icon("view/zoom_to_job.png")
+    act("zoom_to_job", "Zoom to Job", "Zoom to Job: fits the whole material into the view, however far you zoomed").icon("view/zoom_to_job.png")
         .run(|a, _| a.camera = None),
     act("zoom_to_drawing", "Zoom to Drawing", "Zoom to Drawing: fits everything you have drawn into the view, even what is off the material. In the 3D view F does it too, with the pointer over the view and no text box being typed in; F6 always does").keys("F6")
         .run(|a, _| a.camera = None),
