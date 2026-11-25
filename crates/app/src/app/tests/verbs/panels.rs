@@ -101,4 +101,29 @@ impl Harness {
     pub(in super::super) fn show_only_layers_on_sheet(&mut self) {
         self.app.layers_on_sheet = true;
     }
+
+    /// The right-click menu of `id`'s row in the Rail layout.
+    pub(in super::super) fn row_menu(&self, id: &str) -> Vec<gui::MenuItem> {
+        self.app.row_menu(id)
+    }
+
+    /// Whether the Rail's favourites list (its star) is open.
+    pub(in super::super) fn rail_favourites_open(&self) -> bool {
+        self.app.rail_favourites
+    }
+
+    /// The Design page's tab now showing.
+    pub(in super::super) fn design_tab(&self) -> &'static str {
+        DESIGN_TABS[self.app.design_tab]
+    }
+
+    /// Flies `page` out, as its side tab does.
+    pub(in super::super) fn open_page(&mut self, page: Page) {
+        self.app.pages.open(page);
+    }
+
+    /// Picks the tool `id` on `page`, as its button there does.
+    pub(in super::super) fn pick_on_page(&mut self, page: Page, id: &str) {
+        self.app.pick(&self.ctx, page, id);
+    }
 }
