@@ -11,6 +11,7 @@ mod web_api;
 mod calculating;
 mod canvas;
 mod collisions;
+mod custom_toolbars;
 mod drawing;
 mod help_pages;
 mod how_to;
@@ -18,6 +19,7 @@ mod interface;
 mod jobs_and_files;
 mod keys_and_mouse;
 mod layers_sheets;
+mod locked_face;
 mod machines;
 mod materials;
 mod models_3d;
@@ -409,12 +411,12 @@ fn pyramid_stl(name: &str) -> std::path::PathBuf {
     path
 }
 
-/// Picks `name` in the open Select Tool window and clicks its Select.
+/// Picks `name` in the open Select Bit window and clicks its Select.
 fn select_in_tool_database(h: &mut Harness, name: &str) {
     h.frame(vec![]);
     h.frame(vec![]);
-    let manager = h.app.tool_manager.as_mut().expect("Select Tool");
-    assert!(manager.selecting, "the Tool Database opens to pick in");
+    let manager = h.app.tool_manager.as_mut().expect("Select Bit");
+    assert!(manager.selecting, "the Bit Library opens to pick in");
     let at = manager
         .draft
         .tools
@@ -919,4 +921,57 @@ fn fresh_dir(name: &str) -> std::path::PathBuf {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a temp folder");
     dir
+}
+
+/// The right-click menus of a job's toolpaths, a toolpath group, layers, sheets, levels,
+/// components and their groups, the selection and the version line, each opened on a job
+/// that has one of each; and the job's own names (a layer's, a sheet's…), which name menu
+/// items too but are the person's, never translated.
+pub(crate) fn document_menus() -> (Vec<gui::MenuItem>, Vec<String>) {
+    let mut h = Harness::new();
+    h.app.doc.job.width = 100.0;
+    h.app.doc.job.height = 100.0;
+    h.rectangle(10.0, 10.0, 40.0, 40.0);
+    h.rectangle(30.0, 30.0, 40.0, 40.0);
+    h.app.invoke(&h.ctx, "select_all_vectors");
+    for id in ["profile_toolpath", "create_shape"] {
+        let params = h.app.registry.get(id).unwrap().initial_params(&h.app.doc);
+        h.app.apply(id, &params).unwrap();
+    }
+    let doc = &h.app.doc;
+    let mut menus = h.app.menus.selection_menu(doc);
+    let mut names: Vec<String> = vec![];
+    for layer in &doc.layers {
+        menus.extend(gui::layer_menu(doc, layer));
+        names.push(layer.name.clone());
+    }
+    for (i, sheet) in doc.sheets.iter().enumerate() {
+        menus.extend(gui::sheet_menu(doc, i));
+        names.push(sheet.name.clone());
+    }
+    for (&id, toolpath) in &doc.toolpaths {
+        menus.extend(gui::toolpath_menu(doc, id, toolpath));
+        names.push(toolpath.name.clone());
+    }
+    menus.extend(gui::toolpath_group_menu("Group 1"));
+    names.push("Group 1".to_owned());
+    for (&id, component) in &doc.components {
+        menus.extend(gui::component_menu(doc, id, component));
+        names.push(component.name.clone());
+    }
+    for (&id, level) in &doc.levels {
+        menus.extend(gui::level_menu(doc, id, level));
+        names.push(level.name.clone());
+    }
+    for group in doc.components.values().filter_map(|k| k.group.as_ref()) {
+        menus.extend(gui::group_menu(group));
+        names.push(group.name.clone());
+    }
+    for page in [crate::pages::Page::Design, crate::pages::Page::Toolpaths] {
+        for only in [false, true] {
+            menus.extend(gui::favourites_menu(page, only));
+        }
+    }
+    menus.extend(gui::version_menu());
+    (menus, names)
 }

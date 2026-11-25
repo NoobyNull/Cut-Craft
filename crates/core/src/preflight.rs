@@ -192,10 +192,10 @@ pub struct Limits {
     /// Material left behind is mentioned only where it is more than this, mm (Options ▸
     /// Confirmation Choices); `None` for the usual [`crate::checks::LEFT`].
     pub left: Option<f64>,
-    /// The Tool Database's copy of each bit the toolpaths use, by name, with the cutting
+    /// The Bit Library's copy of each bit the toolpaths use, by name, with the cutting
     /// data for the active material: a maker's catalogue copy where there is one. A bit
-    /// not in it is not in the Tool Database. `None` when the bits are not compared with
-    /// the Tool Database at all.
+    /// not in it is not in the Bit Library. `None` when the bits are not compared with
+    /// the Bit Library at all.
     pub library: Option<std::collections::BTreeMap<String, Tool>>,
     /// How the machine holds its bits, for the collet and holder checks.
     pub holding: crate::collision::Holding,
@@ -500,7 +500,7 @@ fn on_machine(
             format!(
                 "{name}: {} is not loaded in the tool changer of {}, so the machine will stop \
              and ask for it. Load it in a slot in Machine Configuration; if it is no longer \
-             in the Tool Database, pick a tool again with the toolpath's Select…",
+             in the Bit Library, pick a tool again with the toolpath's Select…",
                 tool.name, limits.name
             ),
         ));
@@ -508,7 +508,7 @@ fn on_machine(
 }
 
 /// Whether each bit is from a maker's catalogue, and its feeds and speeds near the maker's
-/// figures, as the Tool Database has them ([`Limits::library`]).
+/// figures, as the Bit Library has them ([`Limits::library`]).
 fn library(
     toolpath: &Toolpath,
     limits: &Limits,
@@ -523,9 +523,9 @@ fn library(
         found.push(Finding::warning(
             Check::GenericTool,
             format!(
-                "{name}: {} is not in the Tool Database, so its feeds and speeds cannot be \
+                "{name}: {} is not in the Bit Library, so its feeds and speeds cannot be \
                  compared with a maker's figures. Pick the bit with the toolpath's Select…, \
-                 or add it to the Tool Database",
+                 or add it to the Bit Library",
                 tool.name
             ),
         ));
@@ -539,7 +539,7 @@ fn library(
                 "{name}: {} is a generic bit, not one from a maker's catalogue, so its feeds \
                  and speeds are starting values, not figures made for your bit. Watch the \
                  first cut with a hand near the stop button, or pick your own bit from a \
-                 maker's catalogue in the Tool Database",
+                 maker's catalogue in the Bit Library",
                 tool.name
             ),
         ));
@@ -681,7 +681,7 @@ fn machine_name(limits: &Limits) -> String {
     }
 }
 
-/// Whether two different bits share a tool number other than 0 (changed by hand).
+/// Whether two different bits share a bit number other than 0 (changed by hand).
 fn tool_numbers(toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
     let mut by_number: std::collections::BTreeMap<u32, Vec<&str>> =
         std::collections::BTreeMap::new();
@@ -703,9 +703,9 @@ fn tool_numbers(toolpaths: &[&Toolpath], found: &mut Vec<Finding>) {
         found.push(Finding::warning(
             Check::ToolNumbers,
             format!(
-                "Tool number {number} is given to both {} and {last}: a tool changer picks \
+                "Bit number {number} is given to both {} and {last}: a tool changer picks \
                  bits by number, so one of them would cut with the wrong bit. Give each bit \
-                 its own number in the Tool Database (0 means the bit is changed by hand, \
+                 its own number in the Bit Library (0 means the bit is changed by hand, \
                  and any number of bits may share 0)",
                 rest.join(", ")
             ),
@@ -806,12 +806,12 @@ fn rotary_setup(
     if !marked
         && toolpaths
             .iter()
-            .any(|t| t.strategy == "rotary_machining_toolpath")
+            .any(|t| t.strategy.starts_with("rotary_") && t.strategy != "rotary_lathe_toolpath")
     {
         found.push(Finding::warning(
             Check::RotarySetup,
-            "No toolpath cuts a registration mark at A=0. Tick Registration mark in 4-Axis Rotary \
-             Machining, or pencil a line on the material at A=0, so the part can be put back \
+            "No toolpath cuts a registration mark at A=0. Tick Registration mark in Rotary \
+             Finishing, or pencil a line on the material at A=0, so the part can be put back \
              exactly as it was if the job has to be started again"
                 .to_owned(),
         ));
@@ -839,7 +839,7 @@ fn rotary_setup(
             ),
         ));
     }
-    room(&job, &axis, toolpaths, found);
+    room(&job, doc.job.turning_gap(), &axis, toolpaths, found);
     if job.along != axis.along {
         found.push(Finding::warning(
             Check::RotarySetup,
@@ -884,9 +884,10 @@ fn too_far(
 
 /// Whether the material has room to turn on the rotary: below it down to the spoilboard
 /// (or the bed with the spoilboard out), above it up to the bit lifted all the way, and
-/// whether the toolpaths lift the bit clear of its corners before A turns.
+/// whether the bit has room to lift clear of its corners before A turns.
 fn room(
     job: &crate::document::Rotary,
+    turning_gap: f64,
     axis: &crate::rotary_axis::RotaryAxis,
     toolpaths: &[&Toolpath],
     found: &mut Vec<Finding>,
@@ -955,29 +956,67 @@ fn room(
             ));
         }
     }
-    // A turning with the bit lower than the material swings: it knocks into a corner
+    // A turning with the bit lower than the material swings: the file lifts it clear first,
+    // which needs that much room under Z all the way up
     let round = |p: DVec3| if job.along == Along::X { p.y } else { p.x };
-    for t in toolpaths {
-        let low = t.moves.windows(2).find(|m| {
-            m[1].kind == MoveKind::Rapid
-                && (round(m[1].to) - round(m[0].to)).abs() > 1e-6
-                && radius + m[0].to.z.min(m[1].to.z) < swing - 1e-6
-        });
-        if let Some(m) = low {
-            let high = radius + m[0].to.z.min(m[1].to.z);
+    let lift = radius + turning_gap;
+    let Some(above) = axis.room_above() else {
+        return;
+    };
+    if lift <= above + 1e-9 {
+        return;
+    }
+    let low = turned_low(toolpaths, radius, lift, round);
+    for (t, low) in toolpaths.iter().zip(low) {
+        if low {
             found.push(Finding::warning(
                 Check::RotarySetup,
                 format!(
-                    "\"{}\" turns A with the bit {high:.1} mm above the turning axis, but the \
-                     {shape} swing out to {swing:.1} mm: the bit knocks into the material. \
-                     Raise Clearance (Z1) in Job Setup to {:.1} mm or more, and calculate it \
-                     again",
+                    "\"{}\" turns A, and the file lifts the bit {lift:.1} mm above the turning \
+                     axis first so the {shape} swing under it, higher than Z can go \
+                     ({above:.1} mm). Use smaller material, or lower the clearance (Z1) in Job \
+                     Setup",
                     t.name,
-                    (swing - radius + 1.0).ceil()
                 ),
             ));
         }
     }
+}
+
+/// For each of `toolpaths` in order, whether a rapid of it turns A with the bit lower than
+/// `lift` above the axis, as the post writes it: A (as `round`) and Z once a bit held off the
+/// axis is turned to where its tip cuts, carried from one toolpath to the next, as the post's
+/// first move of each starts where the last one ended.
+fn turned_low(
+    toolpaths: &[&Toolpath],
+    radius: f64,
+    lift: f64,
+    round: impl Fn(DVec3) -> f64,
+) -> Vec<bool> {
+    let mut was: Option<(f64, f64)> = None;
+    toolpaths
+        .iter()
+        .map(|t| {
+            let mut low = false;
+            for (i, m) in t.moves.iter().enumerate() {
+                let now = match t.across.get(i) {
+                    Some(&across) => {
+                        crate::rotary_axis::held_at(radius, round(m.to), m.to.z, across)
+                    }
+                    None => (round(m.to), m.to.z),
+                };
+                if let Some(before) = was
+                    && m.kind == MoveKind::Rapid
+                    && (now.0 - before.0).abs() > 1e-6
+                    && radius + before.1.min(now.1) < lift - 1e-6
+                {
+                    low = true;
+                }
+                was = Some(now);
+            }
+            low
+        })
+        .collect()
 }
 
 fn capitalised(text: &str) -> String {
@@ -1102,14 +1141,14 @@ pub fn not_checked(
         for check in [Check::GenericTool, Check::MakersFigures] {
             skipped.push((
                 check,
-                "The bits were not compared with the Tool Database".to_owned(),
+                "The bits were not compared with the Bit Library".to_owned(),
             ));
         }
     }
     if toolpaths.iter().all(|t| t.tool.number == 0) {
         skipped.push((
             Check::ToolNumbers,
-            "Every bit is changed by hand (tool number 0)".to_owned(),
+            "Every bit is changed by hand (bit number 0)".to_owned(),
         ));
     }
     skipped

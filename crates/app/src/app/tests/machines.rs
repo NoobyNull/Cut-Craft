@@ -74,7 +74,7 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
             .iter()
             .any(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text() == text))
     };
-    assert!(drawn("Rest Machining") && drawn("Add a tool…"));
+    assert!(drawn("Rest Machining") && drawn("Add a bit…"));
     let mut params = h.app.form.as_ref().unwrap().params.clone();
     h.app.apply("pocket_toolpath", &params).unwrap();
     // how far it cuts: a pocket links its rings at depth, so moves alone undercount it
@@ -760,4 +760,38 @@ fn laser_and_rotary_toolpaths_show_only_on_a_machine_that_has_them() {
     h.app.machines.active_mut().unwrap().laser = true;
     h.frame(vec![]);
     assert!(h.text_at(lacks).is_none());
+}
+
+#[test]
+fn the_lathe_form_says_how_fast_a_turns_and_when_the_machine_caps_it() {
+    use cut_craft_core::document::{Along, Job};
+    let mut h = Harness::new();
+    h.app.doc.job = Job::rotary(100.0, 40.0, Along::X);
+    h.app.invoke(&h.ctx, "rotary_lathe_toolpath");
+    {
+        let form = h.app.form.as_mut().expect("the lathe form is open");
+        form.params["tool"]["feed_rate"] = 1000.0.into();
+        form.params["holding_stub"] = 8.0.into();
+    }
+    // a machine whose top A speed isn't known: the rate, plainly
+    let (note, capped) = h.app.lathe_a_speed(h.app.form.as_ref().unwrap()).unwrap();
+    assert!(!capped, "{note}");
+    assert!(note.contains("14324°/min"), "{note}");
+    // one that turns A at most 3600°/min can't keep up within 15.9 mm of the axis
+    let package =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../machines/genmitsu.json");
+    h.app.install_package(&package);
+    let machine = h.app.machines.active_mut().unwrap();
+    machine.rotary = true;
+    machine.firmware = Some(cut_craft_machines::Firmware::GrblHal);
+    machine.rotary_axis.max_rate = 3600.0;
+    let (note, capped) = h.app.lathe_a_speed(h.app.form.as_ref().unwrap()).unwrap();
+    assert!(capped, "{note}");
+    assert!(
+        note.contains("3600°/min") && note.contains("15.9"),
+        "{note}"
+    );
+    // no note on other forms
+    h.app.invoke(&h.ctx, "rotary_roughing_toolpath");
+    assert_eq!(h.app.lathe_a_speed(h.app.form.as_ref().unwrap()), None);
 }

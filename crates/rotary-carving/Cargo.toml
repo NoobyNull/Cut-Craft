@@ -1,0 +1,17 @@
+[package]
+name = "cut-craft-rotary-carving"
+description = "The shared engine of the rotary carving toolpaths: the model round the axis, passes over it, and what is left of the material"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cut-craft-core.workspace = true
+cut-craft-rotary.workspace = true
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+cut-craft-core = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

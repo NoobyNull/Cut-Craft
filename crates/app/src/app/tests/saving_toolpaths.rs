@@ -417,7 +417,7 @@ fn the_job_time_counts_every_move_tool_changes_and_the_trip_home() {
         "getting there from home counts: {one} against {alone}"
     );
     assert!(h.app.job_minutes() > one, "so does the trip back home");
-    // the same toolpath with another bit: a tool change by hand
+    // the same toolpath with another bit: a bit change by hand
     let mut other = h.app.doc.toolpaths.values().next().unwrap().clone();
     other.tool.name = "Another bit".into();
     let id = h.app.doc.next_id();
@@ -747,7 +747,7 @@ fn first_time_setup_picks_the_machine_units_and_material_for_new_jobs() {
     let machine = h.app.machines.active().expect("the machine set up");
     assert_eq!(machine.name, "Sienci LongMill MK2 30x30");
     assert_eq!(machine.post(), Some("Cut Craft GRBL Arcs (inch) (*.nc)"));
-    assert_eq!(h.app.tools.groups[0].path, "Imperial Tools");
+    assert_eq!(h.app.tools.groups[0].path, "Imperial Bits");
     // a new job starts as answered
     h.app.invoke(&h.ctx, "new");
     h.app.job_setup_ok();

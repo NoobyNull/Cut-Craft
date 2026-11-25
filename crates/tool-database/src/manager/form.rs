@@ -1,4 +1,4 @@
-//! The Tool Database's tool form: each section of a tool's settings.
+//! The Bit Library's tool form: each section of a tool's settings.
 
 use super::{
     BTreeMap, Changer, CuttingData, HoverHint, INCH, Look, NOTES_ROWS, Number, RateUnits, Tool,
@@ -12,11 +12,17 @@ pub(super) fn load_slot(ui: &mut egui::Ui, changer: &Changer, tool: &str) -> Opt
     let shown = now.map_or_else(|| "(not loaded)".to_owned(), |n| format!("T{n}"));
     let mut chosen = None;
     ui.horizontal(|ui| {
-        ui.label(format!("Loaded in {}", changer.machine));
+        ui.label(cut_craft_i18n::tr!(
+            "tool-database-loaded-in",
+            machine = changer.machine.clone()
+        ));
         egui::ComboBox::from_id_salt("tool_changer_slot")
             .selected_text(shown)
             .show_ui(ui, |ui| {
-                if ui.selectable_label(now.is_none(), "(not loaded)").clicked() {
+                if ui
+                    .selectable_label(now.is_none(), cut_craft_i18n::t!("(not loaded)"))
+                    .clicked()
+                {
                     chosen = Some(0);
                 }
                 for (i, slot) in changer.slots.iter().enumerate() {
@@ -32,7 +38,9 @@ pub(super) fn load_slot(ui: &mut egui::Ui, changer: &Changer, tool: &str) -> Opt
                 }
             });
     });
-    ui.weak("The slot it is loaded in becomes its tool number");
+    ui.weak(cut_craft_i18n::t!(
+        "The slot it is loaded in becomes its bit number"
+    ));
     chosen
 }
 
@@ -73,7 +81,7 @@ pub(super) fn number(ui: &mut egui::Ui, name: &str, value: &mut f64, per: f64, u
     changed
 }
 
-/// A framed block with a heading (Tool Info, Cutting Parameters, Feeds and
+/// A framed block with a heading (Bit Info, Cutting Parameters, Feeds and
 /// Speeds).
 pub(super) fn section(ui: &mut egui::Ui, title: &str, body: impl FnOnce(&mut egui::Ui)) {
     ui.group(|ui| {
@@ -91,27 +99,27 @@ pub(super) fn tool_details(
     material: &str,
     library: Option<&cut_craft_core::material_library::MaterialLibrary>,
 ) {
-    // the drawing in a card of its own right of Tool Info, so it does not push the cutting
+    // the drawing in a card of its own right of Bit Info, so it does not push the cutting
     // data down; under it when the window is too narrow for both
     let gap = ui.spacing().item_spacing.x;
     if let Some((info, card)) = split(ui.available_width(), gap) {
         ui.horizontal_top(|ui| {
             ui.vertical(|ui| {
                 ui.set_width(info);
-                section(ui, "Tool Info", |ui| {
+                section(ui, "Bit Info", |ui| {
                     tool_info(ui, tool, (groups, formats), look, (loaded, taken));
                 });
             });
             ui.vertical(|ui| {
                 ui.set_width(card);
-                section(ui, "Tool Shape", |ui| geometry(ui, tool));
+                section(ui, "Bit Shape", |ui| geometry(ui, tool));
             });
         });
     } else {
-        section(ui, "Tool Info", |ui| {
+        section(ui, "Bit Info", |ui| {
             tool_info(ui, tool, (groups, formats), look, (loaded, taken));
         });
-        section(ui, "Tool Shape", |ui| geometry(ui, tool));
+        section(ui, "Bit Shape", |ui| geometry(ui, tool));
     }
     // the cutting data shown is the active material's
     let own = tool
@@ -119,9 +127,9 @@ pub(super) fn tool_details(
         .iter()
         .any(|m| m.material.eq_ignore_ascii_case(material));
     if !material.is_empty() && !own {
-        ui.weak(format!(
-            "No cutting data for {material} yet: the default's is shown, and a change \
-             keeps it as {material}'s own"
+        ui.weak(cut_craft_i18n::tr!(
+            "tool-database-no-data-yet",
+            material = material.to_string()
         ));
     }
     copy_settings_from(ui, tool, material);
@@ -147,7 +155,7 @@ pub(super) fn copy_settings_from(ui: &mut egui::Ui, tool: &mut Tool, material: &
         return;
     }
     ui.horizontal(|ui| {
-        ui.label("Copy settings from");
+        ui.label(cut_craft_i18n::t!("Copy settings from"));
         egui::ComboBox::from_id_salt("copy_cutting_from")
             .selected_text("another material…")
             .show_ui(ui, |ui| {
@@ -188,14 +196,14 @@ pub(super) fn name_format(
     ui.vertical(|ui| {
         ui.add(
             egui::TextEdit::singleline(&mut tool.name_format)
-                .hint_text("{Tool Type} {Diameter|F}")
+                .hint_text("{Bit Type} {Diameter|F}")
                 .desired_width(f32::INFINITY),
         )
-        .on_hover_hint(
+        .on_hover_hint(cut_craft_i18n::t!(
             "The name made from the tool's own sizes: leave empty to type the name. \
              Modifiers: |U upper case, |L lower case, |0.00 decimals, |F inches as a \
-             fraction",
-        );
+             fraction"
+        ));
         ui.horizontal(|ui| name_format_buttons(ui, tool, formats, &key));
     });
 }
@@ -218,49 +226,56 @@ pub(super) fn name_format_buttons(
             }
         });
     if ui
-        .button("Set as Default")
-        .on_hover_hint("New tools of this type are named by this format")
+        .button(cut_craft_i18n::t!("Set as Default"))
+        .on_hover_hint(cut_craft_i18n::t!(
+            "New bits of this type are named by this format"
+        ))
         .clicked()
     {
         formats.insert(key.to_owned(), tool.name_format.clone());
     }
     if let Some(default) = formats.get(key).filter(|d| **d != tool.name_format)
         && ui
-            .button("Restore")
-            .on_hover_hint(format!("Back to this type's default: {default}"))
+            .button(cut_craft_i18n::t!("Restore"))
+            .on_hover_hint(cut_craft_i18n::tr!(
+                "tool-database-back-to-default",
+                default = default.clone()
+            ))
             .clicked()
     {
         tool.name_format.clone_from(default);
     }
 }
 
-/// A form tool's row in Tool Info: Use Selected Vector takes its shape from the job's
+/// A form tool's row in Bit Info: Use Selected Vector takes its shape from the job's
 /// selected open vector, and how many points its profile has.
 pub(super) fn form_row(ui: &mut egui::Ui, tool: &mut Tool, look: &Look) {
     if tool.shape != ToolShape::FormTool {
         return;
     }
-    ui.label("Form");
+    ui.label(cut_craft_i18n::t!("Form"));
     ui.horizontal(|ui| {
         let use_it = ui
             .add_enabled(
                 look.profile.is_some(),
-                egui::Button::new("Use Selected Vector"),
+                egui::Button::new(cut_craft_i18n::t!("Use Selected Vector")),
             )
-            .on_hover_hint(
+            .on_hover_hint(cut_craft_i18n::t!(
                 "Half the tool's section, drawn upright: the axis at its left, the \
-                 tip at its lowest point",
-            )
-            .on_disabled_hover_text("Select one open vector in the job first");
+                 tip at its lowest point"
+            ))
+            .on_disabled_hover_text(cut_craft_i18n::t!(
+                "Select one open vector in the job first"
+            ));
         if use_it.clicked()
             && let Some(path) = look.profile
         {
             tool.set_form(path);
         }
         ui.weak(if tool.form.is_empty() {
-            "no profile yet".to_owned()
+            cut_craft_i18n::t!("no profile yet")
         } else {
-            format!("{} points", tool.form.len())
+            cut_craft_i18n::tr!("tool-database-points", count = tool.form.len())
         });
     });
     ui.end_row();
@@ -275,7 +290,7 @@ pub(super) fn tool_info(
     (loaded, taken): (Option<(&str, usize)>, &[String]),
 ) {
     egui::Grid::new("tool_info").num_columns(2).show(ui, |ui| {
-        ui.label("Name");
+        ui.label(cut_craft_i18n::t!("Name"));
         // a name made from its name format is not typed
         ui.add_enabled(
             tool.name_format.is_empty(),
@@ -283,18 +298,18 @@ pub(super) fn tool_info(
         );
         ui.end_row();
         // under the name it makes (rather than in a dialog of its own)
-        ui.label("Name Format");
+        ui.label(cut_craft_i18n::t!("Name Format"));
         name_format(ui, tool, formats);
         ui.end_row();
-        ui.label("Manufacturer")
-            .on_hover_hint("Who makes the bit, for the name format's {Manufacturer}; leave it empty if you don't know");
+        ui.label(cut_craft_i18n::t!("Manufacturer"))
+            .on_hover_hint(cut_craft_i18n::t!("Who makes the bit, for the name format's {Manufacturer}; leave it empty if you don't know"));
         ui.add(
             egui::TextEdit::singleline(&mut tool.manufacturer)
-                .hint_text("e.g. Amana, Whiteside")
+                .hint_text(cut_craft_i18n::t!("e.g. Amana, Whiteside"))
                 .desired_width(f32::INFINITY),
         );
         ui.end_row();
-        ui.label("Tool Type");
+        ui.label(cut_craft_i18n::t!("Bit Type"));
         ui.horizontal(|ui| {
             tool_type(ui, tool);
             // the tool's own units beside it, whatever the job's: a 6 mm end mill reads
@@ -306,20 +321,19 @@ pub(super) fn tool_info(
                     "mm"
                 })
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut tool.units, Units::Mm, "mm");
-                    ui.selectable_value(&mut tool.units, Units::Inch, "inches");
+                    ui.selectable_value(&mut tool.units, Units::Mm, cut_craft_i18n::t!("mm"));
+                    ui.selectable_value(&mut tool.units, Units::Inch, cut_craft_i18n::t!("inches"));
                 })
                 .response
-                .on_hover_hint("Units: how this tool's lengths read; the tool stays the same size");
-            ui.checkbox(&mut tool.drill_only, "Drill only").on_hover_hint(
-                "A drill (twist or brad-point) cuts only straight down. Any toolpath but \
+                .on_hover_hint(cut_craft_i18n::t!("Units: how this bit's lengths read; the bit stays the same size"));
+            ui.checkbox(&mut tool.drill_only, cut_craft_i18n::t!("Drill only")).on_hover_hint(cut_craft_i18n::t!("A drill (twist or brad-point) cuts only straight down. Any toolpath but \
                  Drilling that uses it is warned of in red, as moved sideways it can snap or \
-                 tear the work",
+                 tear the work"),
             );
         });
         ui.end_row();
         // stands in for dragging a tool between groups
-        ui.label("Group");
+        ui.label(cut_craft_i18n::t!("Group"));
         egui::ComboBox::from_id_salt("tool_group")
             .selected_text(if tool.group.is_empty() {
                 "(top)"
@@ -327,24 +341,24 @@ pub(super) fn tool_info(
                 &tool.group
             })
             .show_ui(ui, |ui| {
-                ui.selectable_value(&mut tool.group, String::new(), "(top)");
+                ui.selectable_value(&mut tool.group, String::new(), cut_craft_i18n::t!("(top)"));
                 for g in groups {
                     ui.selectable_value(&mut tool.group, g.clone(), g);
                 }
             });
         ui.end_row();
-        ui.label("Tool Number")
-            .on_hover_hint("The post's [T] for this tool without a tool changer, and its holder for Load by Tool Number; 0 for none");
+        ui.label(cut_craft_i18n::t!("Bit Number"))
+            .on_hover_hint(cut_craft_i18n::t!("The post's [T] for this bit without a tool changer, and its holder for Load by Bit Number; 0 for none"));
         // a tool in a tool changer is numbered by its slot: change the slot, not the number
         match loaded {
             Some((machine, slot)) => {
                 ui.horizontal(|ui| {
-                    ui.add_enabled(false, Number::new(&mut tool.number).name("Tool Number"));
-                    ui.weak(format!("from slot T{slot} of {machine}'s tool changer"));
+                    ui.add_enabled(false, Number::new(&mut tool.number).name("Bit Number"));
+                    ui.weak(cut_craft_i18n::tr!("tool-database-from-slot", slot = slot, machine = machine.to_string()));
                 });
             }
             None => {
-                ui.add(Number::new(&mut tool.number).range(0..=999).name("Tool Number"));
+                ui.add(Number::new(&mut tool.number).range(0..=999).name("Bit Number"));
             }
         }
         ui.end_row();
@@ -360,7 +374,7 @@ pub(super) fn tool_info(
             ui.end_row();
         }
         form_row(ui, tool, look);
-        ui.label("Notes");
+        ui.label(cut_craft_i18n::t!("Notes"));
         ui.add(
             egui::TextEdit::multiline(&mut tool.notes)
                 .desired_rows(NOTES_ROWS)
@@ -385,7 +399,7 @@ pub fn sharing_number(tools: &[Tool], i: usize) -> Vec<String> {
         .collect()
 }
 
-/// The red note under Tool Number when other tools have it: a tool changer picks bits by
+/// The red note under Bit Number when other tools have it: a tool changer picks bits by
 /// number, so it would pick up the wrong one.
 pub fn number_taken(number: u32, taken: &[String]) -> Option<String> {
     let (first, more) = taken.split_first()?;
@@ -395,20 +409,20 @@ pub fn number_taken(number: u32, taken: &[String]) -> Option<String> {
         n => format!(" and {n} more"),
     };
     Some(format!(
-        "Tool number {number} is also {first}'s{also}. A tool changer would pick up the \
+        "Bit number {number} is also {first}'s{also}. A tool changer would pick up the \
          wrong bit: give this one a number of its own, or 0 if you change it by hand"
     ))
 }
 
-/// The narrowest Tool Info beside the drawing's card.
+/// The narrowest Bit Info beside the drawing's card.
 pub(super) const INFO_MIN: f32 = 420.0;
 /// The drawing's card: its share of the width, between these.
 pub(super) const SHAPE_SHARE: f32 = 0.45;
 pub(super) const SHAPE_MIN: f32 = 380.0;
 pub(super) const SHAPE_MAX: f32 = 500.0;
 
-/// Tool Info's and the drawing card's widths side by side in `width` (`gap` between),
-/// or `None` when both do not fit and the card goes under Tool Info.
+/// Bit Info's and the drawing card's widths side by side in `width` (`gap` between),
+/// or `None` when both do not fit and the card goes under Bit Info.
 pub(super) fn split(width: f32, gap: f32) -> Option<(f32, f32)> {
     let card = (width * SHAPE_SHARE).clamp(SHAPE_MIN, SHAPE_MAX);
     let info = width - card - gap;
@@ -423,10 +437,11 @@ pub(super) fn geometry(ui: &mut egui::Ui, tool: &mut Tool) {
         egui::Grid::new("tool_geometry")
             .num_columns(2)
             .show(ui, |ui| {
-                ui.label("Kerf").on_hover_hint(
-                    "The width the laser burns (its diameter): Cut Outside and Cut Inside \
-                     keep half of it off the line",
-                );
+                ui.label(cut_craft_i18n::t!("Kerf"))
+                    .on_hover_hint(cut_craft_i18n::t!(
+                        "The width the laser burns (its diameter): Cut Outside and Cut Inside \
+                     keep half of it off the line"
+                    ));
                 length(ui, "Kerf", &mut tool.diameter, tool.units);
                 ui.end_row();
             });
@@ -439,8 +454,10 @@ pub(super) fn geometry(ui: &mut egui::Ui, tool: &mut Tool) {
             if tool.shape == ToolShape::ThreadMill {
                 thread_mill(ui, tool);
             }
-            ui.label("Number of Flutes")
-                .on_hover_hint("How many cutting edges the bit has, for the chip load");
+            ui.label(cut_craft_i18n::t!("Number of Flutes"))
+                .on_hover_hint(cut_craft_i18n::t!(
+                    "How many cutting edges the bit has, for the chip load"
+                ));
             ui.add(
                 Number::new(&mut tool.flutes)
                     .range(1..=12)
@@ -455,12 +472,13 @@ pub(super) fn geometry(ui: &mut egui::Ui, tool: &mut Tool) {
 /// Stick-out: how far the bit pokes out below the collet nut, with what is taken while it
 /// is not set.
 pub(super) fn stickout_row(ui: &mut egui::Ui, tool: &mut Tool) {
-    ui.label("Stick-out").on_hover_hint(
-        "How far the bit pokes out below the collet nut, from its tip up to the nut's face. \
+    ui.label(cut_craft_i18n::t!("Stick-out"))
+        .on_hover_hint(cut_craft_i18n::t!(
+            "How far the bit pokes out below the collet nut, from its tip up to the nut's face. \
          Measure it once the bit is tightened in. On a deep cut the collet nut and spindle \
          can hit material beside the cut: the preview and Save Toolpaths warn of it. 0 for \
-         not set",
-    );
+         not set"
+        ));
     ui.horizontal(|ui| {
         length(ui, "Stickout", &mut tool.stickout, tool.units);
         let (taken, guessed) = cut_craft_core::collision::stickout(tool);
@@ -470,7 +488,10 @@ pub(super) fn stickout_row(ui: &mut egui::Ui, tool: &mut Tool) {
             } else {
                 format!("{taken:.1} mm")
             };
-            ui.weak(format!("not set: taken as {shown}"));
+            ui.weak(cut_craft_i18n::tr!(
+                "tool-database-taken-as",
+                shown = shown.clone()
+            ));
         }
     });
     ui.end_row();
@@ -487,14 +508,14 @@ pub(super) fn own_holder(ui: &mut egui::Ui, tool: &mut Tool) {
     egui::CollapsingHeader::new(summary)
         .id_salt("tool_own_holder")
         .show(ui, |ui| {
-            ui.weak(
+            ui.weak(cut_craft_i18n::t!(
                 "Only for a machine with Holder per bit ticked in Machine Configuration (a \
                  tool changer, each bit in a holder of its own). Otherwise the machine's \
-                 collet nut and spindle are used",
-            );
+                 collet nut and spindle are used"
+            ));
             let mut own = tool.holder.is_some();
             if ui
-                .checkbox(&mut own, "This bit has its own holder")
+                .checkbox(&mut own, cut_craft_i18n::t!("This bit has its own holder"))
                 .changed()
             {
                 tool.holder = own.then(cut_craft_core::collision::Holder::default);
@@ -520,51 +541,55 @@ pub(super) fn own_holder(ui: &mut egui::Ui, tool: &mut Tool) {
 /// A single-point thread mill's tooth: size, height (which changes the size, the angle
 /// staying) and offset.
 pub(super) fn thread_mill(ui: &mut egui::Ui, tool: &mut Tool) {
-    ui.label("Tooth Size");
+    ui.label(cut_craft_i18n::t!("Tooth Size"));
     length(ui, "Tooth Size", &mut tool.tooth_size, tool.units);
     ui.end_row();
-    ui.label("Tooth Height");
+    ui.label(cut_craft_i18n::t!("Tooth Height"));
     let mut height = tool.tooth_height();
     if length(ui, "Tooth Height", &mut height, tool.units) {
         tool.set_tooth_height(height);
     }
     ui.end_row();
-    ui.label("Tooth Offset")
-        .on_hover_hint("From the bottom of the tool up to the tip of the tooth");
+    ui.label(cut_craft_i18n::t!("Tooth Offset"))
+        .on_hover_hint(cut_craft_i18n::t!(
+            "From the bottom of the bit up to the tip of the tooth"
+        ));
     length(ui, "Tooth Offset", &mut tool.tooth_offset, tool.units);
     ui.end_row();
 }
 
 pub(super) fn cutting(ui: &mut egui::Ui, tool: &mut Tool) {
     if tool.shape == ToolShape::Laser {
-        ui.weak(LASER_CUTTING);
+        ui.weak(cut_craft_i18n::t!(LASER_CUTTING));
         return;
     }
     egui::Grid::new("tool_cutting")
         .num_columns(2)
         .show(ui, |ui| {
-            ui.label("Pass Depth");
+            ui.label(cut_craft_i18n::t!("Pass Depth"));
             length(ui, "Pass Depth", &mut tool.pass_depth, tool.units);
             ui.end_row();
-            ui.label("Clearing Stepover").on_hover_hint(
-                "Stepover is how far the tool moves sideways between passes, as a share of \
+            ui.label(cut_craft_i18n::t!("Clearing Stepover"))
+                .on_hover_hint(cut_craft_i18n::t!(
+                    "Stepover is how far the tool moves sideways between passes, as a share of \
                  its width. Clearing (roughing) removes the bulk of the wood, in pockets, \
-                 flat bottoms and 3D roughing: a big step is faster. 40% suits most end mills",
-            );
+                 flat bottoms and 3D roughing: a big step is faster. 40% suits most end mills"
+                ));
             percent(ui, "Clearing Stepover", &mut tool.stepover);
             ui.end_row();
-            ui.label("Finishing Stepover").on_hover_hint(
-                "How far the tool moves sideways between finishing passes, which leave the \
+            ui.label(cut_craft_i18n::t!("Finishing Stepover"))
+                .on_hover_hint(cut_craft_i18n::t!(
+                    "How far the tool moves sideways between finishing passes, which leave the \
                  surface you see: 3D finishing, V-carved edges, chamfers and mouldings. A \
-                 smaller step leaves finer ridges but takes longer; 8-10% suits a ball nose",
-            );
+                 smaller step leaves finer ridges but takes longer; 8-10% suits a ball nose"
+                ));
             ui.horizontal(|ui| {
                 let mut finish = tool.finishing_stepover();
                 if percent(ui, "Finishing Stepover", &mut finish) {
                     tool.finish_stepover = finish;
                 }
                 if tool.finish_stepover <= 0.0 {
-                    ui.weak("same as clearing until changed");
+                    ui.weak(cut_craft_i18n::t!("same as clearing until changed"));
                 }
             });
             ui.end_row();
@@ -598,7 +623,7 @@ pub(super) fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
     egui::Grid::new("tool_feeds").num_columns(2).show(ui, |ui| {
         // a laser has no spindle or plunge: only how fast it moves
         if !laser {
-            ui.label("Spindle Speed");
+            ui.label(cut_craft_i18n::t!("Spindle Speed"));
             ui.add(
                 Number::new(&mut tool.spindle_speed)
                     .range(0.0..=f64::MAX)
@@ -608,7 +633,11 @@ pub(super) fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
             ui.end_row();
         }
         // the rate units beside the feed rate
-        ui.label(if laser { "Speed" } else { "Feed Rate" });
+        ui.label(if laser {
+            cut_craft_i18n::t!("Speed")
+        } else {
+            cut_craft_i18n::t!("Feed Rate")
+        });
         ui.horizontal(|ui| {
             rate(
                 ui,
@@ -624,11 +653,11 @@ pub(super) fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
                     }
                 })
                 .response
-                .on_hover_hint("Rate Units");
+                .on_hover_hint(cut_craft_i18n::t!("Rate Units"));
         });
         ui.end_row();
         if !laser {
-            ui.label("Plunge Rate");
+            ui.label(cut_craft_i18n::t!("Plunge Rate"));
             rate(ui, "Plunge Rate", &mut tool.plunge_rate, tool.rate_units);
             ui.end_row();
         }
@@ -640,6 +669,9 @@ pub(super) fn feeds(ui: &mut egui::Ui, tool: &mut Tool) {
         } else {
             (1.0, "mm", 3)
         };
-        ui.label(format!("Chip load: {:.places$} {unit}", load / per));
+        ui.label(cut_craft_i18n::tr!(
+            "tool-database-chip-load",
+            load = format!("{:.places$} {unit}", load / per)
+        ));
     }
 }

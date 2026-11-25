@@ -8,6 +8,9 @@
 //! `menu-item-save-as`), a sub-tab by its page and English name (`design-subtab-model`). A tool
 //! an add-on or a gadget brings has no key, and shows the name it gives.
 //!
+//! A tool's tooltip (what it does) is found by its id too: `tooltip-draw-circle`, in
+//! `tooltips.ftl`.
+//!
 //! Every layout, menu, Find Tool and help page asks here, so a tool is named the same way
 //! wherever it shows.
 
@@ -63,6 +66,18 @@ pub fn form_name(registry: &Registry, id: &str, english: &str) -> String {
         Some(tool) => name_of(registry, tool),
         None => tool_name(id, english),
     }
+}
+
+/// A tool's tooltip key: `tooltip-` and its id (`tooltip-draw-circle`), what it does as its
+/// tooltip and the status line say it.
+pub fn tooltip_key(id: &str) -> String {
+    key_of("tooltip", id)
+}
+
+/// What tool `id` does (`english`, as [`crate::gui::english_about`] says it), in the language
+/// in use.
+pub fn tooltip(id: &str, english: &str) -> String {
+    tr_or(&tooltip_key(id), english)
 }
 
 /// A page tab's key, from its English name (`page-tab-layers`): the side tabs, the Rail's
@@ -122,7 +137,7 @@ fn named_as_its_tool(item: &MenuItem) -> bool {
 /// A menu item's name in the language in use: its tool's name when it is named as that
 /// tool, else its own words. A recent file or a gadget shows its own name.
 pub fn menu_item_name(item: &MenuItem) -> String {
-    if item.action.starts_with("open_recent:") || item.action.starts_with("gadget_") {
+    if item.named || item.action.starts_with("open_recent:") || item.action.starts_with("gadget_") {
         return item.name.clone();
     }
     if named_as_its_tool(item) {
@@ -131,5 +146,35 @@ pub fn menu_item_name(item: &MenuItem) -> String {
     tr_or(&menu_item_key(&item.name), &item.name)
 }
 
+/// Words besides its name that Find Tool (Ctrl+K) finds a tool by, in English: the words
+/// people knew it by before (the Bit Library was the Tool Database), or call it by elsewhere.
+const ALSO_FOUND_BY: &[(&str, &[&str])] = &[(
+    "tool_database",
+    &[
+        "tool database",
+        "tool library",
+        "tooling",
+        "cutter",
+        "end mill",
+        "endmill",
+        "router bit",
+        "bits",
+    ],
+)];
+
+/// Whether Find Tool lists tool `id`, shown as `name`, for `typed`: its name or one of its
+/// other words holds what was typed, in any case.
+pub fn found_by(id: &str, name: &str, typed: &str) -> bool {
+    let typed = typed.trim().to_lowercase();
+    name.to_lowercase().contains(&typed)
+        || ALSO_FOUND_BY
+            .iter()
+            .filter(|(tool, _)| *tool == id)
+            .flat_map(|(_, words)| words.iter())
+            .any(|word| word.contains(&typed))
+}
+
+#[cfg(test)]
+mod bit_words;
 #[cfg(test)]
 mod tests;

@@ -173,6 +173,21 @@ impl Along {
     }
 }
 
+/// How fast A must turn, degrees a minute, for a bit cutting `radius` mm from the turning
+/// axis to move through the material at `feed` mm a minute: the bit's chipload kept there.
+#[must_use]
+pub fn a_rate_for(feed: f64, radius: f64) -> f64 {
+    feed / (std::f64::consts::TAU * radius.max(1e-6)) * 360.0
+}
+
+/// How near the turning axis a bit can cut at `feed` mm a minute before A, at most `max_rate`
+/// degrees a minute, can't keep up: nearer than this it cuts slower than its feed. None when
+/// the machine's top A speed isn't known (0).
+#[must_use]
+pub fn slowest_radius(feed: f64, max_rate: f64) -> Option<f64> {
+    (max_rate > 0.0).then(|| feed * 360.0 / (std::f64::consts::TAU * max_rate))
+}
+
 /// Where the tip of a bit held `across` mm off the turning axis cuts, on the unrolled
 /// material: from A (as flat `round`, mm round the surface) and the bit's height `z` (from
 /// the material's top, straight up from the axis) to the tip's own `(round, z)`, its depth
@@ -258,6 +273,20 @@ pub const TAILSTOCK_RADIUS: f64 = 20.0;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_turns_faster_nearer_the_axis_to_keep_the_feed_until_its_top_speed() {
+        // 1000 mm/min, 10 mm out: a turn is 62.8 mm, so 15.9 turns a minute
+        assert!(
+            (a_rate_for(1000.0, 10.0) - 1000.0 / (std::f64::consts::TAU * 10.0) * 360.0).abs()
+                < 1e-9
+        );
+        assert!(a_rate_for(1000.0, 5.0) > a_rate_for(1000.0, 10.0));
+        // at the slowest radius A is at exactly its top speed
+        let r = slowest_radius(1000.0, 3600.0).unwrap();
+        assert!((a_rate_for(1000.0, r) - 3600.0).abs() < 1e-6);
+        assert_eq!(slowest_radius(1000.0, 0.0), None);
+    }
 
     #[test]
     fn a_bit_held_off_the_axis_cuts_where_its_tip_reaches_and_back() {

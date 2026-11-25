@@ -72,7 +72,7 @@ pub struct Params {
     /// the bit fill in, and the foot of a steep wall slopes at the bit's taper
     #[schemars(extend("x-group" = "Carving bit"))]
     pub only_what_the_bit_can_carve: bool,
-    /// The bit you will carve it with, picked with Select… in the Tool Database: the same
+    /// The bit you will carve it with, picked with Select… in the Bit Library: the same
     /// bit the 3D Finishing toolpath uses, and that Calculate checks can reach everything
     pub tool: Tool,
     pub combine: Combine,

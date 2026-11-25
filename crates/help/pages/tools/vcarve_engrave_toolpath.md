@@ -19,7 +19,7 @@ see-also: draw_text, save_toolpaths
 
    ![Step 3](pictures/vcarve_engrave_toolpath/step-3.png)
 
-4. Check the bit is a **V-bit**. **Select…** picks one from your Tool Database; its angle sets how deep each part is carved.
+4. Check the bit is a **V-bit**. **Select…** picks one from your Bit Library; its angle sets how deep each part is carved.
 
    ![Step 4](pictures/vcarve_engrave_toolpath/step-4.png)
 
@@ -31,7 +31,7 @@ see-also: draw_text, save_toolpaths
 
    ![Step 6](pictures/vcarve_engrave_toolpath/step-6.png)
 
-V-carving needs a V-bit; pick one from the [Tool Database](help:tool_database).
+V-carving needs a V-bit; pick one from the [Bit Library](help:tool_database).
 
 Carving lots of letters or a detailed picture can take a while to calculate. The progress
 window moves on as each shape is carved, gives each clearance bit its share, and says about

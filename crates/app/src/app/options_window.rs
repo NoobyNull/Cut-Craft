@@ -295,7 +295,7 @@ impl CutCraftApp {
     pub(super) fn options_changed(
         &mut self,
         ctx: &egui::Context,
-        options: crate::options::Options,
+        mut options: crate::options::Options,
     ) {
         // the Preview tab's detail stays as it was moved, unless the default changed
         let now = self.display.detail;
@@ -309,7 +309,7 @@ impl CutCraftApp {
             if super::mac::is_mac(ctx) {
                 // a Mac's window can't change its title bar while open
                 self.status
-                    .set_message("The title bar changes next time Cut Craft starts.");
+                    .set_message(&cut_craft_i18n::tr!("status-title-bar-next-start"));
             } else {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(frame));
             }
@@ -327,6 +327,8 @@ impl CutCraftApp {
         let language =
             (options.language != self.options.language).then(|| options.language.pack.clone());
         options.apply();
+        // the window never changes the toolbars of your own: ones made while it was open stay
+        options.toolbars.clone_from(&self.options.toolbars);
         self.options = options;
         self.save_options();
         if let Some(pack) = language {

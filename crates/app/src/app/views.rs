@@ -89,6 +89,8 @@ impl CutCraftApp {
         self.units_question(ctx);
         // a save that would replace G-code from an earlier save: Replace or Archive?
         self.earlier_question(ctx);
+        // a new toolpath order that left toolpaths cutting what is left out of date
+        self.reorder_question(ctx);
         // what the checks before cutting found: save anyway?
         self.save_anyway_question(ctx);
         // Save or Send pressed in Save Toolpaths: once its window has closed
@@ -143,7 +145,7 @@ impl CutCraftApp {
             ..self.doc.job
         });
         let cell = c.finish();
-        let done = format!("Units: {name}; every length now reads in {name}, tools in their own");
+        let done = format!("Units: {name}; every length now reads in {name}, bits in their own");
         self.record(Ok(cell), &done);
     }
 
@@ -203,7 +205,7 @@ impl CutCraftApp {
             painter.text(
                 screen.center(),
                 egui::Align2::CENTER_CENTER,
-                "Drop to open or import",
+                t!("Drop to open or import"),
                 egui::TextStyle::Heading.resolve(&ctx.global_style()),
                 ctx.global_style().visuals.strong_text_color(),
             );
@@ -214,7 +216,7 @@ impl CutCraftApp {
     }
 
     /// Whether dropping `path` imports it into the job (it is not a job, a post-processor or
-    /// a tool database).
+    /// a bit library).
     pub(super) fn drop_imports(path: &std::path::Path) -> bool {
         let ext = path
             .extension()
@@ -224,7 +226,7 @@ impl CutCraftApp {
             || (files::TOOL_FILE_EXTENSIONS.contains(&ext.as_str()) && ext != "json"))
     }
 
-    /// One dropped file: a job opens; a post-processor installs; a tool database's tools are
+    /// One dropped file: a job opens; a post-processor installs; a bit library's tools are
     /// added; anything else is imported into the open job.
     pub(super) fn drop_file(&mut self, path: &std::path::Path) {
         let ext = path
@@ -238,9 +240,9 @@ impl CutCraftApp {
             }
             "pp" => self.install_post(path),
             e if files::TOOL_FILE_EXTENSIONS.contains(&e) && e != "json" => self.import_tools(path),
-            _ if self.screen != Screen::Job => self.status.set_message(&format!(
-                "Open or make a job to import {} into",
-                file_name(path)
+            _ if self.screen != Screen::Job => self.status.set_message(&cut_craft_i18n::tr!(
+                "status-open-a-job-to-import",
+                file = file_name(path).clone()
             )),
             _ => self.import_file(path),
         }
@@ -256,12 +258,14 @@ impl CutCraftApp {
                 let kept = files::config_dir()
                     .map(|d| d.join(LAST_CRASH))
                     .filter(|path| std::fs::write(path, &crash).is_ok());
-                let where_ = kept.map_or_else(String::new, |p| {
-                    format!(" Its crash log is kept in {}.", p.display())
-                });
-                self.status.set_message(&format!(
-                    "Cut Craft closed with an error last time.{where_} To send crash reports, \
-                     change Edit ▸ Options ▸ Bug Reports."
+                self.status.set_message(&kept.map_or_else(
+                    || cut_craft_i18n::tr!("status-closed-with-error"),
+                    |p| {
+                        cut_craft_i18n::tr!(
+                            "status-closed-with-error-log",
+                            path = p.display().to_string()
+                        )
+                    },
                 ));
             }
             CrashLogs::Send => {
@@ -447,6 +451,10 @@ impl CutCraftApp {
             WindowLayout::Ribbon => self.ribbon_layout(ui),
             WindowLayout::Canvas => self.canvas_layout(ui),
         }
+        // in every layout, over the drawing
+        self.floating_toolbars(ui.ctx());
+        self.toolbar_rename_window(ui.ctx());
+        self.toolbar_changes(ui.ctx());
     }
 
     /// The top bar's sheet, layer and level drop-downs: a command to apply, if one was
@@ -611,24 +619,24 @@ impl CutCraftApp {
                     (
                         "split_stacked",
                         "view/split_over_and_under.png",
-                        "2D over 3D",
+                        t!("2D over 3D"),
                         Split::Stacked,
                     ),
                     (
                         "split_side_by_side",
                         "view/split_side_by_side.png",
-                        "2D beside 3D",
+                        t!("2D beside 3D"),
                         Split::SideBySide,
                     ),
                     (
                         "split_picture",
                         "view/split_picture_in_picture.png",
-                        "One view in a corner of the other",
+                        t!("One view in a corner of the other"),
                         Split::Picture,
                     ),
                 ] {
                     let button = self
-                        .icon_button(icon, "", tip, edge)
+                        .icon_button(icon, "", &tip, edge)
                         .selected(self.split == Some(split));
                     if ui.add(button).on_hover_hint(tip).clicked() {
                         clicked = Some(id);
@@ -651,9 +659,9 @@ impl CutCraftApp {
                 ui.horizontal_centered(|ui| {
                     if self.doc.job.double_sided.is_some() {
                         let side = if self.doc.bottom_side {
-                            "Bottom Side"
+                            t!("Bottom Side")
                         } else {
-                            "Top Side"
+                            t!("Top Side")
                         };
                         if ui
                             .button(side)
@@ -735,7 +743,9 @@ impl CutCraftApp {
                     (Some(bounds), Some(area)) if bounds.size().max_element() > 0.0 => {
                         self.camera = Some(ViewTransform::fit(area, margin, bounds));
                     }
-                    _ => self.status.set_message("select something to zoom to"),
+                    _ => self
+                        .status
+                        .set_message(&cut_craft_i18n::tr!("status-select-to-zoom")),
                 }
                 return;
             }
@@ -818,8 +828,8 @@ pub(super) fn immediate_output(
 pub(super) const TICK_TO_SAVE: &str =
     "Tick each ✖ and ⚠ under Checks before cutting to say you have read it, then save";
 
-/// Save Toolpaths' tool changes: a file for each tool, the tool changer (when the machine
-/// has one), or a pause to change the tool by hand.
+/// Save Toolpaths' bit changes: a file for each tool, the tool changer (when the machine
+/// has one), or a pause to change the bit by hand.
 pub(super) fn tool_changes_section(
     ui: &mut egui::Ui,
     changes: &mut files::ToolChanges,
@@ -855,7 +865,7 @@ pub(super) fn tiling_on(tiles: usize) -> String {
     tr!("views-tiling-on", tiles = tiles)
 }
 
-/// Save Toolpaths' files: what goes in each, why there is a file for each tool, and that
+/// Save Toolpaths' files: what goes in each, why there is a file for each bit, and that
 /// each is saved once per tile while tiling is on.
 pub(super) fn files_section(
     ui: &mut egui::Ui,

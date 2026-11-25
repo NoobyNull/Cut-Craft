@@ -10,6 +10,7 @@ mod canvas_layout;
 mod check_list;
 mod command_form;
 mod commit;
+mod custom_toolbars;
 mod cutting;
 mod depth;
 mod dialog_windows;
@@ -32,8 +33,8 @@ mod tool_sections;
 #[cfg(test)]
 use tool_sections::{KNIFE_LINE, held_name, tool_line};
 use tool_sections::{
-    ListAsk, ListSlot, PickFor, ToolAsk, ToolList, bordered, clearing_section, put_listed,
-    rest_section, selector_section, shows_rest, tool_picker, tools_section, trimmed,
+    ListAsk, ListSlot, PickFor, ToolAsk, ToolList, bordered, clearing_section, locked_face_section,
+    put_listed, rest_section, selector_section, shows_rest, tool_picker, tools_section, trimmed,
 };
 mod dialogs;
 pub(crate) use dialogs::message_dialog;
@@ -50,7 +51,7 @@ mod settings;
 pub use settings::*;
 mod bit_changes;
 #[cfg(test)]
-mod hard_coded_text;
+pub(crate) mod hard_coded_text;
 mod help;
 #[cfg(test)]
 mod help_coverage;
@@ -91,6 +92,8 @@ mod surfacing;
 mod tabs;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+pub(crate) use tests::document_menus;
 mod tips;
 mod title_bar;
 mod toolpath_output;
@@ -694,6 +697,8 @@ struct CutCraftApp {
     ribbon_tab: usize,
     /// What the Canvas layout has open.
     canvas: canvas_layout::CanvasState,
+    /// What the toolbars of your own have open.
+    toolbars: custom_toolbars::ToolbarState,
     /// Where the options are saved; `None` keeps them in memory (tests).
     options_path: Option<std::path::PathBuf>,
     /// The user's own spelling words, one a line; none in tests.
@@ -751,10 +756,10 @@ struct CutCraftApp {
     tools: ToolDatabase,
     /// Where `tools` is saved; `None` keeps it in memory (tests, or a file that failed to load).
     tools_path: Option<std::path::PathBuf>,
-    /// The tool database file that could not be read at start: nothing is saved over it,
+    /// The bit library file that could not be read at start: nothing is saved over it,
     /// and every save says so.
     tools_unreadable: Option<std::path::PathBuf>,
-    /// The open Tool Database window.
+    /// The open Bit Library window.
     tool_manager: Option<cut_craft_tool_database::Manager>,
     /// The Materials Library: materials by class and hardness.
     materials: cut_craft_core::material_library::MaterialLibrary,
@@ -764,7 +769,7 @@ struct CutCraftApp {
     materials_unreadable: Option<std::path::PathBuf>,
     /// The open Materials Library window.
     materials_window: Option<cut_craft_tool_database::materials::MaterialsWindow>,
-    /// What the open Select Tool picks for: a tool in one of the form's lists, or a tool
+    /// What the open Select Bit picks for: a tool in one of the form's lists, or a tool
     /// changer holder; `None` picks the form's own tool.
     picking: Option<PickFor>,
     /// A Calculate waiting on the deeper-than-the-material warning.
@@ -773,6 +778,9 @@ struct CutCraftApp {
     units_ask: Option<units_ask::UnitsAsk>,
     /// Save Toolpaths held for the question about G-code an earlier save left there.
     earlier_ask: Option<EarlierAsk>,
+    /// The toolpaths a new order left out of date, as they cut only what is above them:
+    /// waiting on Put it back or Keep the new order.
+    reorder_ask: Option<Vec<String>>,
     /// View G-code's window, while open.
     gcode_view: Option<gcode_view::GcodeView>,
     /// Save Toolpaths held for the question about what the checks before cutting found.
@@ -1314,7 +1322,7 @@ fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &m
         if response.hovered()
             && let Some(about) = gui::about(&item.action)
         {
-            cut_craft_bug_report::hint::hint(ui.ctx(), about);
+            cut_craft_bug_report::hint::hint(ui.ctx(), &about);
         }
         if !available {
             response = response.on_disabled_hover_text((menus.why)(&item.action));

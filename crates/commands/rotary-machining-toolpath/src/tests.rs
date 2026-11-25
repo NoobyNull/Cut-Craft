@@ -1,7 +1,14 @@
 use super::*;
+use cut_craft_core::component::placed_model;
 use cut_craft_core::component::{Combine, Component};
+use cut_craft_core::document::Along;
 use cut_craft_core::document::Job;
+use cut_craft_core::geometry::Point;
+use cut_craft_core::glam::DVec3;
+use cut_craft_core::rotary_axis;
 use cut_craft_core::toolpath::MoveKind;
+use cut_craft_rotary::Mesh;
+use cut_craft_rotary_carving::{GRAZE, MARK_DEPTH, Turned};
 
 /// A rotary job 40 mm across, 60 mm long along X, holding a part `radius(x)` from the
 /// axis all the way round (its top at the material's surface).
@@ -841,7 +848,7 @@ fn how_near_the_tailstock_the_model_ends_is_said_the_same_wherever_x0_y0_is() {
 
 #[test]
 fn what_is_left_rough_is_kept_with_the_toolpath_and_a_guessed_stick_out_is_said() {
-    // a bit whose stick-out the Tool Database doesn't know: 25 mm is taken, too short to
+    // a bit whose stick-out the Bit Library doesn't know: 25 mm is taken, too short to
     // get the nut down beside the box
     let unknown = Tool {
         stickout: 0.0,
@@ -862,7 +869,7 @@ fn what_is_left_rough_is_kept_with_the_toolpath_and_a_guessed_stick_out_is_said(
     );
     assert!(
         kept.iter().any(|n| n.contains(
-            "The Tool Database doesn't say how far this bit sticks out of the collet, so 25 mm \
+            "The Bit Library doesn't say how far this bit sticks out of the collet, so 25 mm \
              was taken"
         )),
         "{kept:?}"

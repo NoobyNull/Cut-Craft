@@ -838,7 +838,7 @@ fn the_tabs_read_in_one_line_on_the_form() {
     assert_eq!(tabs::summary(Tabs::None, tab, true, 0, mm), None);
     assert_eq!(
         tabs::summary(Tabs::Flat, tab, true, 0, mm).unwrap(),
-        "12.7 mm long, 6.35 mm thick (from the tool), about one every 150 mm, 3 or more a shape (fewer if small)"
+        "12.7 mm long, 6.35 mm thick (from the bit), about one every 150 mm, 3 or more a shape (fewer if small)"
     );
     let by_number = TabSettings {
         spacing: TabSpacing::ConstantNumber,
@@ -882,11 +882,11 @@ fn the_profile_form_keeps_tab_and_tool_settings_in_their_windows() {
     ] {
         assert!(h.text_at(hidden).is_none(), "{hidden} is in a window");
     }
-    // Select… opens the Tool Database to pick in, on the form's tool
+    // Select… opens the Bit Library to pick in, on the form's tool
     h.click(h.text_at("Select…").unwrap(), Modifiers::NONE);
     h.frame(vec![]);
     h.frame(vec![]);
-    let manager = h.app.tool_manager.as_mut().expect("Select Tool");
+    let manager = h.app.tool_manager.as_mut().expect("Select Bit");
     assert!(manager.selecting);
     assert_eq!(manager.shown_tool(), Some("3 mm End Mill"));
     let other = manager
@@ -898,7 +898,7 @@ fn the_profile_form_keeps_tab_and_tool_settings_in_their_windows() {
     manager.pick = Some(cut_craft_tool_database::Pick::Tool(other));
     h.frame(vec![]);
     h.frame(vec![]);
-    assert!(h.text_at("Select Tool").is_some());
+    assert!(h.text_at("Select Bit").is_some());
     let select = *h.texts_at("Select").last().expect("Select, in place of OK");
     h.click(select, Modifiers::NONE);
     h.frame(vec![]);

@@ -1,6 +1,6 @@
-//! Inlay Toolpath: a part and the cavity it fits, cut with one tool. Every corner of the
-//! shapes is rounded to the tool's radius first, so the part's outside corners match the
-//! cavity's, which the tool cannot cut sharp. An insert or hole cut right through the
+//! Inlay Toolpath: a part and the cavity it fits, cut with one bit. Every corner of the
+//! shapes is rounded to the bit's radius first, so the part's outside corners match the
+//! cavity's, which the bit cannot cut sharp. An insert or hole cut right through the
 //! material has no tabs to hold it, so the form (and the checks before cutting) warn in red
 //! that it comes loose: hold it down, or leave a thin skin to cut off by hand.
 
@@ -64,7 +64,7 @@ pub struct Params {
     #[schemars(extend("x-group" = "Steps"))]
     #[schemars(extend("x-dim" = "O"))]
     pub allowance: f64,
-    /// The same tool for both halves
+    /// The same bit for both halves
     pub tool: Tool,
 }
 
@@ -112,7 +112,7 @@ impl Params {
             .collect()
     }
 
-    /// Rings stepping in from `outline` (already a tool radius inside the edge) until
+    /// Rings stepping in from `outline` (already a bit radius inside the edge) until
     /// nothing is left, middle first, at each pass.
     fn clear(&self, outline: &[Path], depth: f64, safe: f64) -> Vec<Move> {
         let step = self.tool.stepover * self.tool.diameter;
@@ -154,11 +154,11 @@ impl Command for InlayToolpath {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("cut depth", p.cut_depth)?;
-        ensure_positive("tool diameter", p.tool.diameter)?;
+        ensure_positive("bit diameter", p.tool.diameter)?;
         ensure_positive("pass depth", p.tool.pass_depth)?;
         if !(p.tool.stepover > 0.0 && p.tool.stepover <= 1.0) {
             return Err(CommandError::InvalidParams(
-                "set the tool's clearing stepover to more than 0% and at most 100% in the Tool Database".into(),
+                "set the bit's clearing stepover to more than 0% and at most 100% in the Bit Library".into(),
             ));
         }
         if p.inlay_type == InlayType::MaleStepped

@@ -37,7 +37,7 @@ pub struct Params {
     pub depth: f64,
     /// Peck drilling goes one pass depth deeper each peck; pick a bit the size of the holes
     pub tool: Tool,
-    /// Drill in pecks of the tool's pass depth, rising between them; off drills straight down
+    /// Drill in pecks of the bit's pass depth, rising between them; off drills straight down
     #[serde(default = "yes")]
     #[schemars(title = "Use Peck Drilling", extend("x-group" = "Peck Drilling"))]
     pub peck: bool,

@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-25
 see-also: checks_before_cutting, rotary_firmware, job_setup, rotary_machining_toolpath
 ---
 
@@ -26,8 +26,10 @@ up in **Machine ▸ Machine Configuration ▸ Rotary (4th axis)**:
 - The material has **room to turn**: a square's corners or a board's edges swing out further
   than its top, and must clear the spoilboard below (**Axis height**) and the bit lifted all the
   way up (**Room above**). See [Room to turn](help:rotary_firmware).
-- No toolpath **turns A with the bit lower** than the material swings, and none lifts the bit
-  higher than Z can go.
+- **A turns clear of the corners.** Whenever a toolpath turns A with the bit lower than a
+  square's corners or a board's edges swing, the saved file lifts the bit clear first, turns A,
+  and comes back down, and the turning preview shows it. The check warns only when that lift, or
+  any other, is higher than Z can go.
 
 ## Why it matters
 
@@ -53,9 +55,11 @@ lost. A registration mark lets you line the part up again after a stop.
    **Taken out**, or use smaller material. Measure **Axis height** and **Room above** first if
    they are 0.
 6. If a toolpath turns A too low, raise **Clearance (Z1)** in Job Setup to the height the
-   warning gives, and calculate the toolpath again.
-7. For a registration mark, tick **Registration mark** in 4-Axis Rotary Machining, or pencil a
-   line along the material at A=0 before you start.
+   warning gives, and calculate the toolpath again. If instead the warning says the file's
+   lift is higher than Z can go, raising Z1 makes that lift higher still: use smaller
+   material, or lower **Clearance (Z1)** where the bit still clears the material.
+7. For a registration mark, tick **Registration mark** in Rotary Finishing, or pencil a line
+   along the material at A=0 before you start.
 
 This is a **warning**: you can still save, once you have checked.
 

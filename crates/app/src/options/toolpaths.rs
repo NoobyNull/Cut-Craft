@@ -30,7 +30,8 @@ pub struct ToolpathSettings {
     #[serde(default = "tolerance")]
     #[schemars(title = "2D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0, max = 0.1))]
     pub tolerance_2d: f64,
-    /// The same for 3D roughing, finishing, texture, moulding and the like
+    /// The same for 3D roughing, finishing, texture, moulding, rotary carving and turning, and
+    /// the like. A rotary toolpath's moves keep where the bit is held across the turning axis
     #[serde(default = "tolerance")]
     #[schemars(title = "3D toolpath tolerance", extend("x-unit" = "mm"), range(min = 0, max = 0.1))]
     pub tolerance_3d: f64,
@@ -39,7 +40,7 @@ pub struct ToolpathSettings {
     #[schemars(title = "V-Carve (V-bit carving) toolpath tolerance", extend("x-unit" = "mm"), range(min = 0, max = 0.1))]
     pub tolerance_vcarve: f64,
     /// How many times faster than the machine a toolpath preview plays when it starts: 1
-    /// plays each move at its tool's feed or plunge rate, rapids at the rapid rate; the
+    /// plays each move at its bit's feed or plunge rate, rapids at the rapid rate; the
     /// slider over the preview changes it while it plays
     #[serde(default = "preview_speed")]
     #[schemars(extend("x-unit" = "×"), range(min = 0.25, max = 1000))]
@@ -50,7 +51,7 @@ pub struct ToolpathSettings {
     #[schemars(title = "Show keep-out zone labels")]
     pub keep_out_labels: bool,
     /// Off (safest): a toolpath that would cut into a keep-out zone, such as a clamp, is not
-    /// made. On: it is made with the part under the zone left uncut, the tool lifting over
+    /// made. On: it is made with the part under the zone left uncut, the bit lifting over
     /// the zone, as if the zone were cut out of whatever is under it. Either way, moves
     /// across a zone go round it. Laser and drill bank toolpaths are never clipped: move the
     /// part or the zone for those
@@ -76,6 +77,12 @@ pub struct ToolpathSettings {
     #[serde(default = "on")]
     #[schemars(title = "Bit name in multiple file names")]
     pub bit_in_file_names: bool,
+    /// Off (the usual): each rotary toolpath cuts only what the toolpaths above it in the
+    /// list leave of the blank. On: each cuts the whole blank, as if nothing were above it,
+    /// and you decide what it cuts with its Start, End and allowance
+    #[serde(default)]
+    #[schemars(title = "Advanced rotary mode")]
+    pub advanced_rotary: bool,
 }
 
 /// Two minutes to stop, change a bit by hand and zero it again.
@@ -138,15 +145,12 @@ impl ToolpathSettings {
         &self,
         doc: &cut_craft_core::document::Document,
     ) -> cut_craft_core::document::Document {
-        use cut_craft_core::simplify::{family, simplify};
+        use cut_craft_core::simplify::family;
         let mut doc = doc.clone();
         for toolpath in doc.toolpaths.values_mut() {
-            // a laser's power goes move by move, and so does how far a rotary toolpath holds
-            // the bit off the turning axis, so their moves stay as they are (thinning them
-            // alone would pair each move with another move's power or place across the axis)
-            if toolpath.power.is_empty() && toolpath.across.is_empty() {
-                toolpath.moves = simplify(&toolpath.moves, self.tolerance(family(toolpath)));
-            }
+            // a laser's power and a rotary toolpath's place across the axis are thinned with
+            // their moves, so each move keeps its own
+            *toolpath = toolpath.thinned(self.tolerance(family(toolpath)));
         }
         doc
     }

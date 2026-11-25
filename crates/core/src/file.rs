@@ -142,7 +142,10 @@ pub fn load_job(bytes: &[u8]) -> Result<Document, LoadError> {
     }
     let loaded: Loaded =
         serde_json::from_slice(bytes).map_err(|e| LoadError::Damaged(e.to_string()))?;
-    Ok(loaded.document)
+    let mut doc = loaded.document;
+    // 4-Axis Rotary Machining's strategies have toolpaths of their own now
+    crate::rotary_upgrade::upgrade(&mut doc);
+    Ok(doc)
 }
 
 /// [`load_job`], with the settings in the file this build does not know (a newer version

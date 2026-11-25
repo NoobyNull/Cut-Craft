@@ -205,7 +205,7 @@ pub type DrawTool<'a> = dyn Fn(&mut egui::Ui, &str, &mut Value) + 'a;
 /// they changed. See [`Look::group_end`].
 pub type GroupEnd<'a> = dyn Fn(&mut egui::Ui, &str, &mut Value) -> bool + 'a;
 
-/// The fields that are lists of Tool Database tools, drawn by [`Look::tool`] as the form's
+/// The fields that are lists of Bit Library tools, drawn by [`Look::tool`] as the form's
 /// own tool is.
 pub const TOOL_LISTS: [&str; 3] = ["tools", "clearance_tools", "bits_before"];
 
@@ -216,8 +216,8 @@ pub struct Look<'a> {
     pub picture: &'a dyn Fn(&str) -> Option<egui::Image<'static>>,
     /// The material's size in the units shown, for sums typed into number fields (W, H, T).
     pub material: cut_craft_core::calc::Values,
-    /// Draws a `tool` field, or a list of tools ([`TOOL_LISTS`]), in its place (the Tool
-    /// Database's tools, which the form does not edit), given the field's key and the
+    /// Draws a `tool` field, or a list of tools ([`TOOL_LISTS`]), in its place (the Bit
+    /// Library's tools, which the form does not edit), given the field's key and the
     /// parameters holding it; `None` leaves them out.
     pub tool: Option<&'a DrawTool<'a>>,
     /// Draws more at the foot of an `x-group` block, given its name (Profile's Edit Tabs…
@@ -1019,7 +1019,7 @@ fn print_form_blocks() {
             } else if let Some(t) = &f.tab {
                 row("tab", t, None);
             } else if f.key == "tool" {
-                row("tool", "Tool", None);
+                row("tool", "Bit", None);
             } else {
                 row("loose", "(fields outside a block)", None);
             }

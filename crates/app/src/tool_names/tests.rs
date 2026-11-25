@@ -64,8 +64,9 @@ fn every_page_tab() -> Vec<&'static str> {
     names
 }
 
-/// Every menu item the menu bar shows, with and without a job, and the right-click menus of a
-/// tool and of a sub-tab.
+/// Every menu item the menu bar shows, with and without a job, the right-click menus of a
+/// tool and of a sub-tab, and those of a job's toolpaths, layers, sheets, levels, components
+/// and groups.
 fn every_menu_item() -> Vec<String> {
     let menus = MenuSystem::new();
     let mut items: Vec<gui::MenuItem> = Vec::new();
@@ -93,8 +94,16 @@ fn every_menu_item() -> Vec<String> {
         items.extend(set.menu(name, &[]));
         items.extend(set.menu(name, &[name.to_owned()]));
     }
+    // toolbars of your own, with none made yet (one's own name is its own)
+    let item = crate::custom_toolbars::Item::Tool("draw_circle".to_owned());
+    items.push(crate::custom_toolbars::add_menu(&[], &item));
+    items.extend(crate::custom_toolbars::item_menu(&[], 0, 0));
+    let (document, own) = crate::app::document_menus();
+    items.extend(document);
     let mut names = Vec::new();
     menu_item_names(&items, &mut names);
+    // the job's own names (a layer's, a sheet's) are the person's words
+    names.retain(|n| !own.contains(n));
     names
 }
 
@@ -109,7 +118,8 @@ fn menu_item_names(items: &[gui::MenuItem], out: &mut Vec<String>) {
         tools.contains(&item.action.as_str()) && english_name(&registry, &item.action) == item.name
     };
     for item in items {
-        if !item.name.is_empty() && !named_as_tool(item) && !out.contains(&item.name) {
+        if !item.name.is_empty() && !item.named && !named_as_tool(item) && !out.contains(&item.name)
+        {
             out.push(item.name.clone());
         }
         menu_item_names(&item.children, out);
@@ -141,6 +151,35 @@ fn every_tool_has_its_name_in_english() {
         .filter_map(|id| mismatch(&tool_key(id), &english_name(&registry, id)))
         .collect();
     check(&problems, "tools.ftl");
+}
+
+/// Every id that says what it does: the hints, the command crates, the built-in tools and the
+/// tool box variants, each once.
+fn every_tooltip() -> Vec<(&'static str, &'static str)> {
+    let mut ids: Vec<&'static str> = crate::hints::HINTS.iter().map(|(id, _)| *id).collect();
+    ids.extend(gui::command_ids());
+    ids.extend(gui::BUILT_IN_ABOUTS.iter().map(|(id, _, _)| *id));
+    ids.extend(crate::flyout::VARIANTS.iter().map(|v| v.id));
+    ids.extend(every_tool());
+    let mut out: Vec<(&'static str, &'static str)> = vec![];
+    for id in ids {
+        if out.iter().any(|(i, _)| *i == id) {
+            continue;
+        }
+        if let Some(about) = gui::english_about(id) {
+            out.push((id, about));
+        }
+    }
+    out
+}
+
+#[test]
+fn every_tooltip_has_its_words_in_english() {
+    let problems: Vec<String> = every_tooltip()
+        .into_iter()
+        .filter_map(|(id, about)| mismatch(&tooltip_key(id), about))
+        .collect();
+    check(&problems, "tooltips.ftl");
 }
 
 #[test]
@@ -193,6 +232,10 @@ fn no_english_name_is_left_over() {
     let groups: Vec<String> = every_group().into_iter().map(group_key).collect();
     let tabs: Vec<String> = every_page_tab().into_iter().map(page_tab_key).collect();
     let items: Vec<String> = every_menu_item().iter().map(|n| menu_item_key(n)).collect();
+    let tooltips: Vec<String> = every_tooltip()
+        .into_iter()
+        .map(|(id, _)| tooltip_key(id))
+        .collect();
     let subtabs: Vec<String> = [
         (Page::Design, gui::DESIGN),
         (Page::Toolpaths, gui::TOOLPATHS),
@@ -202,7 +245,7 @@ fn no_english_name_is_left_over() {
     .collect();
     let known = |key: &str| {
         let message = key.split('.').next().unwrap_or(key);
-        [&tools, &groups, &tabs, &items, &subtabs]
+        [&tools, &groups, &tabs, &items, &subtabs, &tooltips]
             .iter()
             .any(|keys| keys.iter().any(|k| k == message))
     };
@@ -217,6 +260,7 @@ fn no_english_name_is_left_over() {
                 "menu-item-",
                 "design-subtab-",
                 "toolpaths-subtab-",
+                "tooltip-",
             ]
             .iter()
             .any(|p| k.starts_with(p))
@@ -293,6 +337,16 @@ fn write_english_names() {
         let _ = writeln!(items, "{} = {name}", menu_item_key(&name));
     }
     std::fs::write(dir.join("menu-items.ftl"), items).unwrap();
+    let mut tips = String::from(TOOLTIPS_HEADER);
+    for (id, about) in every_tooltip() {
+        let _ = writeln!(
+            tips,
+            "{} ={}",
+            tooltip_key(id),
+            cut_craft_i18n::ftl_value(about)
+        );
+    }
+    std::fs::write(dir.join("tooltips.ftl"), tips).unwrap();
 }
 
 const TOOLS_HEADER: &str = "\
@@ -310,6 +364,11 @@ const GROUPS_HEADER: &str = "\
 const SUBTABS_HEADER: &str = "\
 # The Design and Toolpaths pages' sub-tabs (the Ribbon and Classic layouts' rows of tabs over
 # the tools), each with its tooltip (.hint): what its tools are for.
+
+";
+const TOOLTIPS_HEADER: &str = "\
+# What each tool does: its tooltip, and the status line while it is pointed at. A tooltip's
+# key is `tooltip-` and the tool's id, as its name's is `tools-` and its id.
 
 ";
 const MENU_ITEMS_HEADER: &str = "\

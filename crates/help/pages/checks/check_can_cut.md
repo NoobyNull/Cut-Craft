@@ -23,7 +23,7 @@ so the bit is dragged through the wood without spinning and snaps.
 - **No moves** (⚠): the toolpath is left out of the files, and the status bar names it
   once saved. Recalculate it, or untick it in the toolpath list. If nothing is left to
   cut, nothing is saved and an earlier save is kept as it was.
-- **No feed, plunge rate or spindle speed**: open the toolpath, and set them in its tool
-  settings, or pick the bit again with **Select…** to bring the Tool Database's values.
+- **No feed, plunge rate or spindle speed**: open the toolpath, and set them in its bit
+  settings, or pick the bit again with **Select…** to bring the Bit Library's values.
 
 See also [Checks before cutting](help:checks_before_cutting).

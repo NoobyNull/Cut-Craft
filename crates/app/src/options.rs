@@ -135,6 +135,10 @@ pub struct Options {
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[schemars(skip)]
     pub ribbon_pins: std::collections::BTreeMap<String, bool>,
+    /// Toolbars of your own (right-click a tool or group ▸ Add to Toolbar), in order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub toolbars: Vec<crate::custom_toolbars::Toolbar>,
 }
 
 /// Each tool page's favourite tools, in the order shown, and whether it shows only those.
@@ -206,6 +210,7 @@ impl Default for Options {
                 change_by_changer: change_by_changer(),
                 file_name_underscores: false,
                 bit_in_file_names: true,
+                advanced_rotary: false,
             },
             language: Language::default(),
             performance: Performance::default(),
@@ -246,6 +251,7 @@ impl Default for Options {
             toolpath_sections: vec![],
             flyout_faces: crate::flyout::Faces::new(),
             ribbon_pins: std::collections::BTreeMap::new(),
+            toolbars: Vec::new(),
         }
     }
 }

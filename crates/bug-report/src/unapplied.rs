@@ -34,19 +34,21 @@ pub enum Answer {
 pub fn note(ui: &mut egui::Ui, dirty: bool) {
     if dirty {
         ui.colored_label(ui.visuals().warn_fg_color, NOT_APPLIED)
-            .on_hover_text(
-                "Your changes take effect when you press Apply. Cancel throws them away.",
-            );
+            .on_hover_text(cut_craft_i18n::t!(
+                "Your changes take effect when you press Apply. Cancel throws them away."
+            ));
     } else {
-        ui.weak(ALL_APPLIED);
+        ui.weak(cut_craft_i18n::t!(ALL_APPLIED));
     }
 }
 
 /// Apply, greyed out until something changes.
 pub fn apply_button(ui: &mut egui::Ui, dirty: bool) -> bool {
-    ui.add_enabled(dirty, egui::Button::new("Apply"))
-        .on_hover_text("Use the changes now and keep this window open")
-        .on_disabled_hover_text("Nothing has changed yet")
+    ui.add_enabled(dirty, egui::Button::new(cut_craft_i18n::t!("Apply")))
+        .on_hover_text(cut_craft_i18n::t!(
+            "Use the changes now and keep this window open"
+        ))
+        .on_disabled_hover_text(cut_craft_i18n::t!("Nothing has changed yet"))
         .clicked()
 }
 
@@ -61,17 +63,19 @@ pub fn footer(ui: &mut egui::Ui, dirty: bool) -> Option<Button> {
                 pressed = Some(Button::Apply);
             }
             if ui
-                .button("Cancel")
-                .on_hover_text("Throw away the changes not applied yet and close")
+                .button(cut_craft_i18n::t!("Cancel"))
+                .on_hover_text(cut_craft_i18n::t!(
+                    "Throw away the changes not applied yet and close"
+                ))
                 .clicked()
             {
                 pressed = Some(Button::Cancel);
             }
             if ui
-                .button("Close")
-                .on_hover_text(
-                    "Close this window; if some changes aren't applied yet, it asks first",
-                )
+                .button(cut_craft_i18n::t!("Close"))
+                .on_hover_text(cut_craft_i18n::t!(
+                    "Close this window; if some changes aren't applied yet, it asks first"
+                ))
                 .clicked()
             {
                 pressed = Some(Button::Close);
@@ -101,27 +105,33 @@ pub fn question(ctx: &egui::Context, salt: &str) -> Option<Answer> {
     let mut answer = None;
     let shown = egui::Modal::new(egui::Id::unique(salt)).show(ctx, |ui| {
         ui.set_width(ui.spacing().interact_size.x * 9.0);
-        ui.heading(ASK);
-        ui.label("You changed some settings but haven't pressed Apply.");
+        ui.heading(cut_craft_i18n::t!(ASK));
+        ui.label(cut_craft_i18n::t!(
+            "You changed some settings but haven't pressed Apply."
+        ));
         ui.separator();
         ui.horizontal(|ui| {
             if ui
-                .button("Apply and Close")
-                .on_hover_text("Use the changes, keep them, and close")
+                .button(cut_craft_i18n::t!("Apply and Close"))
+                .on_hover_text(cut_craft_i18n::t!("Use the changes, keep them, and close"))
                 .clicked()
             {
                 answer = Some(Answer::ApplyAndClose);
             }
             if ui
-                .button("Discard Changes")
-                .on_hover_text("Throw the changes away and close: the settings stay as they were")
+                .button(cut_craft_i18n::t!("Discard Changes"))
+                .on_hover_text(cut_craft_i18n::t!(
+                    "Throw the changes away and close: the settings stay as they were"
+                ))
                 .clicked()
             {
                 answer = Some(Answer::Discard);
             }
             if ui
-                .button("Keep Editing")
-                .on_hover_text("Go back to the settings without closing")
+                .button(cut_craft_i18n::t!("Keep Editing"))
+                .on_hover_text(cut_craft_i18n::t!(
+                    "Go back to the settings without closing"
+                ))
                 .clicked()
             {
                 answer = Some(Answer::KeepEditing);

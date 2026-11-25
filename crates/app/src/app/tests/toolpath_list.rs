@@ -237,7 +237,7 @@ fn the_toolpath_list_stays_under_every_toolpaths_tab() {
             .unwrap()
     };
     // Make opens first, the job and its tools over the tabs, the list under them
-    assert!(h.text_at("Job and Tools").is_some());
+    assert!(h.text_at("Job and Bits").is_some());
     assert!(h.text_at("Create a toolpath: pick how to cut").is_some());
     assert!(h.text_at("Toolpath List").is_some());
     assert!(
@@ -651,4 +651,77 @@ fn group_with_a_group_picked_puts_it_inside_a_new_group() {
     let ungroup = h.text_at("Ungroup").unwrap();
     h.click(ungroup, Modifiers::NONE);
     assert_eq!(h.app.doc.toolpath_group_parent("Holes"), None);
+}
+
+/// The named toolpaths, the Cut Out a Rotary Roughing (it cuts only what is above it), each
+/// cutting differently.
+fn roughing_last() -> Harness {
+    let mut h = named_toolpaths();
+    let mut c = Change::builder(&h.app.doc);
+    for id in 1..=3u64 {
+        let mut t = h.app.doc.toolpaths[&EntityId(id)].clone();
+        t.moves = vec![cut_craft_core::toolpath::Move {
+            kind: cut_craft_core::toolpath::MoveKind::Cut,
+            #[expect(clippy::cast_precision_loss, reason = "a small id")]
+            to: cut_craft_core::glam::DVec3::new(0.0, 0.0, -(id as f64)),
+        }];
+        if id == 3 {
+            t.strategy = "rotary_roughing_toolpath".into();
+        }
+        c.replace_toolpath(EntityId(id), t);
+    }
+    h.app.doc.apply(&c.finish()).unwrap();
+    h.frame(vec![]);
+    h
+}
+
+fn reorder_first_two(h: &mut Harness) {
+    h.app.arrange(Some(crate::toolpath_order::Arranged {
+        order: vec![EntityId(2), EntityId(1), EntityId(3)],
+        groups: vec![],
+        parents: vec![],
+    }));
+    h.frame(vec![]);
+    h.frame(vec![]);
+}
+
+#[test]
+fn a_new_order_that_leaves_a_roughing_out_of_date_offers_to_put_it_back() {
+    let mut h = roughing_last();
+    reorder_first_two(&mut h);
+    assert_eq!(toolpath_names(&h), ["Drill", "Pocket", "Cut Out"]);
+    assert!(h.app.doc.toolpaths[&EntityId(3)].stale);
+    assert!(
+        h.text_at("Out of date after the new order").is_some(),
+        "asked"
+    );
+    let back = h.text_at("Put it back").expect("the button");
+    h.click(back, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(toolpath_names(&h), ["Pocket", "Drill", "Cut Out"]);
+    assert!(!h.app.doc.toolpaths[&EntityId(3)].stale, "up to date again");
+    assert!(h.text_at("Out of date after the new order").is_none());
+    // kept: it stays out of date, nothing more asked
+    reorder_first_two(&mut h);
+    let keep = h.text_at("Keep the new order").expect("the button");
+    h.click(keep, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(toolpath_names(&h), ["Drill", "Pocket", "Cut Out"]);
+    assert!(h.app.doc.toolpaths[&EntityId(3)].stale);
+    assert!(h.text_at("Out of date after the new order").is_none());
+}
+
+#[test]
+fn the_advanced_rotary_hint_opens_options_with_the_setting_ringed() {
+    let mut h = named_toolpaths();
+    h.app.invoke(&h.ctx, "advanced_rotary_mode");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.app.options_window);
+    assert!(crate::marks::spotlit(&h.ctx, "field:advanced_rotary"));
+    assert!(h.text_at("Advanced rotary mode").is_some(), "on its page");
+    // Options opened the usual way rings nothing
+    h.app.options_window = false;
+    h.app.invoke(&h.ctx, "options");
+    assert!(!crate::marks::spotlit(&h.ctx, "field:advanced_rotary"));
 }

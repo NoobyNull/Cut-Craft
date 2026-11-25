@@ -168,7 +168,7 @@ fn rest_machining_sizes_show_in_inches_in_an_inch_job() {
     });
     assert!(shows_number(&texts, "0.100", " in"), "{texts:?}");
     assert!(shows_number(&texts, "0.500", " in"), "{texts:?}");
-    // the bit's line too, though the bit is kept in mm in the Tool Database
+    // the bit's line too, though the bit is kept in mm in the Bit Library
     assert!(
         texts
             .iter()

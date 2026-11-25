@@ -1,6 +1,6 @@
 //! The Materials Library: the materials jobs are cut from, each in a class
 //! ([`MaterialClass`]) and with how hard it is, so a bit's feeds for a class can be placed
-//! for each material by its hardness. Kept like the Tool Database: a starter list, and the
+//! for each material by its hardness. Kept like the Bit Library: a starter list, and the
 //! user's own materials added to it.
 
 use crate::material_class::MaterialClass;

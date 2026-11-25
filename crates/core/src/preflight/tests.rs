@@ -205,14 +205,10 @@ fn a_board_on_the_rotary_must_clear_the_spoilboard_the_bit_and_the_rapids_as_it_
             .map(|f| f.message)
             .collect()
     };
-    // not measured: asked to measure, and the low turn is warned
+    // not measured: asked to measure; the low turn is lifted clear by the file itself
     let found = said(RotaryAxis::default(), &flip);
-    assert_eq!(found.len(), 2, "{found:?}");
+    assert_eq!(found.len(), 1, "{found:?}");
     assert!(found[0].contains("Measure the axis height"), "{found:?}");
-    assert!(
-        found[1].contains("turns A with the bit 15.0 mm") && found[1].contains("Clearance (Z1)"),
-        "{found:?}"
-    );
     // 60 above an 18 mm spoilboard: taking the spoilboard out makes room
     let low = RotaryAxis {
         axis_height: 60.0,
@@ -257,6 +253,30 @@ fn a_board_on_the_rotary_must_clear_the_spoilboard_the_bit_and_the_rapids_as_it_
         ..out
     };
     assert_eq!(said(roomy, &clear), Vec::<String>::new());
+    // left low, the file lifts it: room for that is all that matters
+    assert_eq!(said(roomy, &flip), Vec::<String>::new());
+    let tight = RotaryAxis {
+        room_above: 78.0,
+        ..out
+    };
+    assert!(
+        said(tight, &flip)
+            .iter()
+            .any(|m| m.contains("the file lifts the bit") && m.contains("higher than Z")),
+        "{:?}",
+        said(tight, &flip)
+    );
+    // held off the axis, a rapid that only changes how far across turns A too
+    let mut sideways = flip.clone();
+    sideways.moves[4].to.y = 0.0;
+    sideways.across = vec![0.0, 0.0, 0.0, 0.0, 3.0];
+    assert!(
+        said(tight, &sideways)
+            .iter()
+            .any(|m| m.contains("the file lifts the bit")),
+        "{:?}",
+        said(tight, &sideways)
+    );
     // and lifted higher than Z can go
     let cramped = RotaryAxis {
         room_above: 77.0,
@@ -458,7 +478,7 @@ fn two_bits_with_one_tool_number_are_called_out_but_hand_changed_ones_are_not() 
     assert!(
         numbers[0]
             .message
-            .starts_with("Tool number 3 is given to both 6 mm End Mill and 60° V-Bit"),
+            .starts_with("Bit number 3 is given to both 6 mm End Mill and 60° V-Bit"),
         "{}",
         numbers[0].message
     );
@@ -500,9 +520,9 @@ fn a_generic_bit_or_one_not_in_the_tool_database_is_called_out() {
     assert!(generic[0].contains("is a generic bit"), "{}", generic[0]);
     let found = check(&job(), &[&slot], &with_library(vec![]));
     assert!(
-        found.iter().any(
-            |f| f.check == Check::GenericTool && f.message.contains("not in the Tool Database")
-        ),
+        found
+            .iter()
+            .any(|f| f.check == Check::GenericTool && f.message.contains("not in the Bit Library")),
         "{found:?}"
     );
     // not compared at all: nothing said, and the list says why
@@ -920,7 +940,7 @@ fn the_machine_limits_are_checked() {
             .iter()
             .any(|m| m.contains("not loaded in the tool changer"))
     );
-    // a tool deleted from the Tool Database cannot be loaded: the advice says what to do
+    // a tool deleted from the Bit Library cannot be loaded: the advice says what to do
     assert!(
         warnings
             .iter()

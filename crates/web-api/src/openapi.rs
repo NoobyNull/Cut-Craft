@@ -331,7 +331,7 @@ fn more_paths(
          Toolpath Summary works it out, and what to look at before cutting it (out of \
          date, entries made another way, what the checks before cutting found). Each time \
          counts every move at the machine's speeds and accelerations, getting to it and its \
-         tool change included; the total is the whole job's, the trip back home included.",
+         bit change included; the total is the whole job's, the trip back home included.",
             "The toolpaths",
         ),
     );

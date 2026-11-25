@@ -538,7 +538,7 @@ fn save_anyway_errors(app: &mut CutCraftApp, _: &egui::Context) {
         .unwrap_or_else(|| app.default_save_form());
     app.gcode_view = None;
     let wont_run = "Profile: End Mill has no feed rate, so the machine would not move while \
-                    cutting. Set the feed rate in the toolpath's tool settings";
+                    cutting. Set the feed rate in the toolpath's bit settings";
     let crash = "Pocket: a rapid move at X 40 Y 20 goes 2.0 mm into the material. Raise the \
                  clearance (Z1) in Job Setup, or recalculate the toolpath";
     let warning = "Pocket is out of date: recalculate it so it cuts what the design shows now";
@@ -572,10 +572,10 @@ fn machine_damage(app: &mut CutCraftApp, _: &egui::Context) {
     }
 }
 
-/// The Tool Database: a bit given a tool number another bit has.
+/// The Bit Library: a bit given a bit number another bit has.
 fn tool_number_taken(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.save_form = None;
-    // nothing pinned over the Tool Database's window
+    // nothing pinned over the Bit Library's window
     app.pages.set_pinned(super::Page::Toolpaths, false);
     if let Some(first) = app.tools.tools.first_mut() {
         first.number = 2;
@@ -900,7 +900,7 @@ fn toolpaths(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.framing = crate::view3d::Framing::default().zoomed_about(egui::Vec2::ZERO, ZOOM_3D);
 }
 
-/// The Tool Database, a tool picked.
+/// The Bit Library, a tool picked.
 fn tool_database(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.invoke(ctx, "reset_preview");
     app.view = View::TwoD;

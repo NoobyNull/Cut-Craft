@@ -12,3 +12,4 @@ shortcuts-page-take-this-shortcut-away = Take this shortcut away
 shortcuts-page-then-press-the-key-or = Then press the key or mouse button to use
 shortcuts-page-an-action-or-a-shortcut = an action or a shortcut, such as Pan or Ctrl+Z
 shortcuts-page-none = none
+shortcuts-page-already-runs = ⚠ { $keys } already runs { $action }. Move it here, so it runs this instead?

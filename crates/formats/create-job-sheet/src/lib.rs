@@ -87,7 +87,7 @@ pub struct Setup {
     /// When the sheet was made, as it is printed.
     pub printed: String,
     /// What the run times go by: the rapid rate, the machine's speeds, accelerations and
-    /// cornering, and the tool change times.
+    /// cornering, and the bit change times.
     pub motion: cut_craft_core::cut_time::Motion,
     /// The Toolpath Summary's run time scale factor (1 for none).
     pub scale: f64,
@@ -281,7 +281,7 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
     let tools = cut_craft_post::tools_and_numbers(&visible, &setup.slots);
     let number = |name: &str| tools.iter().find(|(t, _)| t == name).map_or(0, |&(_, n)| n);
     let has_changer = !setup.slots.is_empty();
-    let slot_heading = if has_changer { "Slot" } else { "Tool number" };
+    let slot_heading = if has_changer { "Slot" } else { "Bit number" };
     // on a machine with a tool changer, its slot or a change by hand; else the post's T
     let slot = |n: u32| match (has_changer, n) {
         (false, n) => format!("T{n}"),
@@ -328,7 +328,7 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
     let _ = write!(
         h,
         "<tr><th>Toolpaths</th><td>{}</td></tr><tr><th>Tools</th><td>{}</td></tr>\
-         <tr><th>Tool changes</th><td>{changes}</td></tr><tr><th>Total run time</th><td>{}</td></tr></table>",
+         <tr><th>Bit changes</th><td>{changes}</td></tr><tr><th>Total run time</th><td>{}</td></tr></table>",
         visible.len(),
         tools.len(),
         hms(total),
@@ -336,7 +336,7 @@ pub fn sheet_for(doc: &Document, style: &Style, setup: &Setup) -> Result<String,
     if !tools.is_empty() {
         let _ = write!(
             h,
-            "<h2>Tools</h2><table><tr><th>{slot_heading}</th><th>Tool</th><th>Diameter</th>\
+            "<h2>Bits</h2><table><tr><th>{slot_heading}</th><th>Tool</th><th>Diameter</th>\
              <th>Toolpaths</th><th>Run time</th></tr>"
         );
         for (name, n) in &tools {
@@ -728,20 +728,20 @@ mod tests {
             "<th>Toolpath files</th><td>Sign_T1.nc<br>Sign_T2.nc <span class=\"missing\">NO LOCAL FILE</span></td>",
             "<th>Printed</th><td>2026-11-05 09:30</td>",
             "<th>Total run time</th>",
-            "<h2>Tools</h2>",
+            "<h2>Bits</h2>",
             "<th>Slot</th>",
             // the V-bit is in slot 2; the first tool is not in the changer: by hand
             "<td>2</td><td>60° V-Bit</td>",
             "<td>By hand</td>",
-            "<th>Tool changes</th><td>1</td>",
+            "<th>Bit changes</th><td>1</td>",
             "<th>Slot</th><td>2</td>",
             "@media print",
         ] {
             assert!(html.contains(part), "missing {part}");
         }
-        // without a tool changer the column is the tool number, in the order used
+        // without a tool changer the column is the bit number, in the order used
         let plain = sheet_for(&doc, &Style::default(), &Setup::default()).unwrap();
-        assert!(plain.contains("<th>Tool number</th>") && plain.contains("<td>T2</td>"));
+        assert!(plain.contains("<th>Bit number</th>") && plain.contains("<td>T2</td>"));
         assert!(
             !plain.contains("<th>Machine</th>"),
             "nothing to say: no row"

@@ -447,7 +447,7 @@ fn saved_files_are_named_per_toolpath_and_need_a_tool_changing_post_for_two_tool
     );
     let one = one.unwrap();
     assert_eq!(one[0].0, path);
-    // a post without tool changes refuses a file mixing end mill and V-bit
+    // a post without bit changes refuses a file mixing end mill and V-bit
     let no_changes = Post::parse(
         "POST_NAME = \"Plain (*.nc)\"\nFILE_EXTENSION = \"nc\"\nUNITS = \"MM\"\n\
              begin HEADER\n\"G21\"\nbegin RAPID_MOVE\n\"G0 [X] [Y] [Z]\"\n\

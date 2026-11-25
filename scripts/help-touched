@@ -10,7 +10,7 @@
 #                                      crate makes (each `const ID` in its src/lib.rs)
 #   any other crates/<crate>/src/...   at least one page under crates/help/pages/ (the ones
 #                                      that cover what changed: Contents, Design, a tool...)
-# Left out: tests (tests.rs, tests/, benches/), build.rs, Cargo files, and the help crate
+# Left out: tests (tests.rs, *_tests.rs, tests/, benches/), build.rs, Cargo files, and the help crate
 # itself. Exits 1 with a list of the pages to change; CI runs it on every pull request.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -40,7 +40,7 @@ general=""          # a change asking for any page
 for p in "${changed[@]}"; do
   [[ $p == *.rs ]] || continue
   case $p in
-    */tests.rs | */tests/* | */benches/* | */build.rs | crates/help/*) continue ;;
+    */tests.rs | *_tests.rs | */tests/* | */benches/* | */build.rs | crates/help/*) continue ;;
   esac
   if [[ $p =~ ^crates/commands/([^/]+)/ ]]; then
     lib="crates/commands/${BASH_REMATCH[1]}/src/lib.rs"

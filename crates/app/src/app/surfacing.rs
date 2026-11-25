@@ -20,7 +20,7 @@ pub(super) const SPOILBOARD_WARNING: &str = "This cuts your spoilboard, not your
 
 /// Said under the tool when a Surfacing Toolpath cuts with a bit that isn't a surfacing bit.
 pub(super) const NOT_A_SURFACING_BIT: &str = "Not a surfacing bit: it works, but a wide \
-    surfacing bit (Tool Type Surfacing Bit) flattens in fewer rows";
+    surfacing bit (Bit Type Surfacing Bit) flattens in fewer rows";
 
 /// Whether a form's `params` flatten with `tool` that isn't a surfacing bit.
 pub(super) fn wants_surfacing_bit(params: &Value, tool: &cut_craft_core::toolpath::Tool) -> bool {
@@ -94,7 +94,7 @@ fn area_end(ui: &mut egui::Ui, params: &mut Value, stock: Stock) -> bool {
             egui::Frame::group(ui.style())
                 .stroke(egui::Stroke::new(1.5, red))
                 .show(ui, |ui| {
-                    ui.colored_label(red, format!("⚠ {SPOILBOARD_WARNING}"));
+                    ui.colored_label(red, format!("⚠ {}", t!(SPOILBOARD_WARNING)));
                 });
             if stock.bed[0] <= 0.0 {
                 ui.weak(tr!("surfacing-your-machine-s-bed-size"));
@@ -103,7 +103,7 @@ fn area_end(ui: &mut egui::Ui, params: &mut Value, stock: Stock) -> bool {
         "selected_vectors" if !stock.closed => {
             ui.colored_label(
                 ui.visuals().warn_fg_color,
-                "Select the closed outline of what to flatten",
+                t!("Select the closed outline of what to flatten"),
             );
         }
         _ => {}

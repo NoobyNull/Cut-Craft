@@ -134,7 +134,7 @@ pub const TOOLPATH_SUBTABS: &[SubTab] = &[
 
 /// The groups the Toolpaths page shows over its sub-tabs whichever is open: the material
 /// and the bits, wanted at any stage.
-pub const TOOLPATH_ALWAYS_SHOWN: &[&str] = &["Job and Tools"];
+pub const TOOLPATH_ALWAYS_SHOWN: &[&str] = &["Job and Bits"];
 
 /// Moving a Toolpaths sub-tab between the tab row and a section of its own, as
 /// [`SUBTAB_PLACE`] does for the Design page's.
@@ -322,7 +322,7 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
     (
         "save_selected_toolpath_as_template",
         "Save Toolpath as Template",
-        "Save the selected toolpath's settings and tools, to make the same cut on another job",
+        "Save the selected toolpath's settings and bits, to make the same cut on another job",
     ),
     (
         "save_all_visible_toolpaths_as_template",
@@ -333,14 +333,14 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
     (
         "create_job_sheet",
         "Save Job Sheet",
-        "Save a page for the machine: the job, the material, each toolpath's tool and how long \
+        "Save a page for the machine: the job, the material, each toolpath's bit and how long \
          it takes",
     ),
     (
         "print_job_sheet",
         "Print Job Sheet",
         "Open the job sheet in the web browser to print it: the job, the material, each \
-         toolpath's tool and how long it takes",
+         toolpath's bit and how long it takes",
     ),
     (
         "part_labels",
@@ -352,6 +352,12 @@ pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
         "Clearing Settings",
         "How adaptive and trochoidal clearing cut in this job: the light step, the loops, \
          and whether rows and loops keep climb on the way back",
+    ),
+    (
+        "advanced_rotary_mode",
+        "Turn On Advanced Rotary Mode",
+        "Open Options at Advanced rotary mode: each rotary toolpath then cuts the whole blank, \
+         not only what the toolpaths above it leave",
     ),
     (
         "cut_list",
@@ -399,7 +405,18 @@ pub fn built_in_label(id: &str) -> Option<&'static str> {
         .iter()
         .find(|(i, _, _)| *i == id)
         .map(|(_, label, _)| *label)
+        .or_else(|| {
+            RENAMED
+                .iter()
+                .find(|(i, _)| *i == id)
+                .map(|(_, label)| *label)
+        })
 }
+
+/// Built-in tools whose names are no longer their ids in words: the Tool Database is the Bit
+/// Library, as a cutter is a bit (CONTRIBUTING.md, Tools and bits). Ids stay, so saved
+/// favourites, shortcuts and counts keep working.
+const RENAMED: &[(&str, &str)] = &[("tool_database", "Bit Library")];
 
 impl Toolbar {
     /// Every group the Design page can show: the drawing then the modeling tools.
@@ -492,8 +509,15 @@ pub fn command_ids() -> impl Iterator<Item = &'static str> {
     abouts::ABOUTS.iter().map(|(id, _)| *id)
 }
 
-/// What command `id` does (its crate's first sentence), for its tooltip and the status bar.
-pub fn about(id: &str) -> Option<&'static str> {
+/// What command `id` does (its crate's first sentence), for its tooltip and the status bar,
+/// in the language in use. See [`crate::tool_names::tooltip`].
+pub fn about(id: &str) -> Option<String> {
+    english_about(id).map(|english| crate::tool_names::tooltip(id, english))
+}
+
+/// What command `id` does, in the code's English: its hint, its crate's first sentence, a
+/// built-in tool's description or a tool box variant's hint.
+pub fn english_about(id: &str) -> Option<&'static str> {
     // the hints first: a crate holding several commands says one thing for all of them
     crate::hints::hint(id)
         .or_else(|| {
@@ -521,7 +545,7 @@ pub fn intro(id: &str, label: &str) -> Option<String> {
                 .find(|(command, _)| *command == id)
                 .map(|(_, docs)| *docs)
         })
-        .or_else(|| about(id))?;
+        .or_else(|| english_about(id))?;
     let body = docs
         .strip_prefix(label)
         .and_then(|rest| rest.strip_prefix(':'))
@@ -722,6 +746,7 @@ impl MenuSystem {
                 &l.name,
                 &cmd_move_to_layer::Params { layer: l.id },
             )
+            .named()
         });
         let mut menu: Vec<MenuItem> = under
             .iter()
@@ -730,6 +755,7 @@ impl MenuSystem {
                 let pick = format!("{SELECT_COMPONENT}{}", id.0);
                 Some(
                     MenuItem::with_action(name, &pick)
+                        .named()
                         .checked(doc.selected_components.contains(id)),
                 )
             })
@@ -800,6 +826,7 @@ impl MenuSystem {
                 &l.name,
                 &cmd_move_to_layer::Params { layer: l.id },
             )
+            .named()
         });
         vec![
             edit("Undo"),
@@ -974,6 +1001,8 @@ pub struct MenuItem {
     pub children: Vec<MenuItem>,
     /// Its picture, an icon path, where the menu has one (the combine modes).
     pub icon: Option<String>,
+    /// Named by the user (a sheet or a level): shown as written in every language.
+    pub named: bool,
 }
 
 impl MenuItem {
@@ -993,6 +1022,16 @@ impl MenuItem {
             is_checked: false,
             children: vec![],
             icon: None,
+            named: false,
+        }
+    }
+
+    /// Named by the user (a sheet or a level), so its name is never translated.
+    #[must_use]
+    pub fn named(self) -> Self {
+        Self {
+            named: true,
+            ..self
         }
     }
 
@@ -1125,7 +1164,7 @@ mod menu_tests {
         let registry = crate::commands::registry();
         for group in super::toolpath_groups() {
             if [
-                "Job and Tools",
+                "Job and Bits",
                 "Reports",
                 "Save for the Machine",
                 "Paperwork for the Job",

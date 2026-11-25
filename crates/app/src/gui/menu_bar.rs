@@ -227,7 +227,7 @@ impl MenuSystem {
                     "Machine",
                     vec![
                         i("Machine Configuration..."),
-                        i("Tool Changer..."),
+                        MenuItem::with_action("Tool Changer (ATC)...", "tool_changer"),
                         i("Machine Files..."),
                         sep(),
                         i("Add Machine..."),
@@ -286,9 +286,10 @@ impl MenuSystem {
                         a("Save Cut List...", "cut_list"),
                         sep(),
                         a("Clearing Settings...", "clearing_settings"),
+                        a("Turn On Advanced Rotary Mode...", "advanced_rotary_mode"),
                         a("Preview Colors...", "materials"),
                         sep(),
-                        i("Tool Database..."),
+                        MenuItem::with_action("Bit Library...", "tool_database"),
                     ],
                 ),
                 menu(
@@ -410,7 +411,10 @@ impl MenuSystem {
                 menu("Edit", vec![i("Options")]),
                 same("Machine"),
                 // Materials colours a job, so it is in the job's Toolpaths menu only
-                menu("Toolpaths", vec![i("Tool Database...")]),
+                menu(
+                    "Toolpaths",
+                    vec![MenuItem::with_action("Bit Library...", "tool_database")],
+                ),
                 same("Gadgets"),
                 same("Help"),
             ],

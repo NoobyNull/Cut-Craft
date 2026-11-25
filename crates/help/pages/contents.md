@@ -58,6 +58,8 @@ a CNC machine cuts them with.
   [Rail](help:layout_rail), [Canvas](help:layout_canvas) or [Classic](help:layout_classic),
   and how to switch.
 - [Favourites](help:favourites): the tools you use most, kept at hand.
+- [Toolbars of your own](help:toolbars): your own named toolbars of tools and groups,
+  in every layout or floating over the drawing.
 - [Saving and opening jobs](help:saving_jobs): Increment and Save, the recovery copy, and
   a job that won't open.
 - [Colors on screen](help:colors_on_screen): color-blind friendly colors, or your own.
@@ -69,7 +71,7 @@ a CNC machine cuts them with.
 
 ## Windows that open beside Cut Craft
 
-Some tools open in a window of their own: Did You Know?, Options, the Tool Database,
+Some tools open in a window of their own: Did You Know?, Options, the Bit Library,
 Machine Configuration, View G-code, Report a Bug and others. Each one stays in front of
 Cut Craft's main window until you close it, so clicking the main window never hides it.
 You can still use the main window while it is open. It does not cover other programs,

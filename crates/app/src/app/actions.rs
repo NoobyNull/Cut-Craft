@@ -51,9 +51,9 @@ impl CutCraftApp {
         menus.add_gadgets(&gadgets.built_in, &items);
         let mut status = gui::StatusBar::new();
         if !gadgets.problems.is_empty() {
-            status.set_message(&format!(
-                "Some gadgets could not be loaded: {}",
-                gadgets.problems.join("; ")
+            status.set_message(&cut_craft_i18n::tr!(
+                "status-gadgets-not-loaded",
+                problems = gadgets.problems.join("; ")
             ));
         }
         Self {
@@ -99,6 +99,7 @@ impl CutCraftApp {
             buttons_across: std::cell::Cell::new(0.0),
             ribbon_tab: 0,
             canvas: super::canvas_layout::CanvasState::default(),
+            toolbars: super::custom_toolbars::ToolbarState::default(),
             options_path: None,
             words_path: None,
             job_times_path: None,
@@ -144,6 +145,7 @@ impl CutCraftApp {
             deep_cut: None,
             units_ask: None,
             earlier_ask: None,
+            reorder_ask: None,
             gcode_view: None,
             save_anyway: None,
             checks_accepted: Vec::new(),
@@ -325,6 +327,11 @@ impl CutCraftApp {
                 .is_some_and(|s| s.find(self.job_folder()).is_some()),
             id if id.starts_with(SELECT_LEVEL) || id.starts_with(gui::SELECT_COMPONENT) => true,
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => true,
+            id if id.starts_with(crate::custom_toolbars::ACTION)
+                || id.starts_with(crate::custom_toolbars::RENAME) =>
+            {
+                true
+            }
             id if id.starts_with(gui::SUBTAB_PLACE)
                 || id.starts_with(gui::TOOLPATH_SUBTAB_PLACE)
                 || id.starts_with(gui::FOLD_TOOL_GROUPS) =>
@@ -501,12 +508,14 @@ impl CutCraftApp {
         match id {
             "undo" => {
                 if self.history.undo(&mut self.doc) {
-                    self.status.set_message("Undone");
+                    self.status
+                        .set_message(&cut_craft_i18n::tr!("status-undone"));
                 }
             }
             "redo" => {
                 if self.history.redo(&mut self.doc) {
-                    self.status.set_message("Redone");
+                    self.status
+                        .set_message(&cut_craft_i18n::tr!("status-redone"));
                 }
             }
             // closing goes through the close request, which checks for unsaved work
@@ -622,7 +631,7 @@ impl CutCraftApp {
                 }
                 None => self
                     .status
-                    .set_message("No machine yet: add one in Machine ▸ Machine Configuration"),
+                    .set_message(&cut_craft_i18n::tr!("status-no-machine-yet")),
             },
             "add_machine" => {
                 self.machine_window =
@@ -698,7 +707,16 @@ impl CutCraftApp {
             }
             "keyboard_shortcuts" | "credits" | "toolpath_summary" | "about_cut_craft"
             | "help_contents" | "snap_options" => self.open_window(id),
-            "options" => self.options_window = true,
+            "options" => {
+                crate::marks::clear_spotlight(ctx);
+                self.options_window = true;
+            }
+            // the toolpaths menu's hint: Options at Advanced rotary mode, ringed
+            "advanced_rotary_mode" => {
+                self.options_goto = Some("toolpaths");
+                crate::marks::spotlight(ctx, "field:advanced_rotary");
+                self.options_window = true;
+            }
             // F1: the open form's help page, else the contents
             "tool_help" => {
                 let topic = self.form.as_ref().map_or("contents", |f| {
@@ -808,7 +826,8 @@ impl CutCraftApp {
                     // made before Swap Sides: turned over to the side the job is on now
                     self.preview_side = side;
                     self.follow_side();
-                    self.status.set_message("Undid the last preview");
+                    self.status
+                        .set_message(&cut_craft_i18n::tr!("status-undid-last-preview"));
                 }
             }
             "reset_preview" => {
@@ -825,7 +844,7 @@ impl CutCraftApp {
                 // the Preview tab's detail goes back to Options' default
                 self.display.detail = self.options.performance.preview_detail.min(100);
                 self.status
-                    .set_message("Preview reset: Undo Last Preview brings it back");
+                    .set_message(&cut_craft_i18n::tr!("status-preview-reset"));
             }
             id if id.starts_with("open_recent:") => {
                 if let Ok(index) = id["open_recent:".len()..].parse() {
@@ -856,6 +875,11 @@ impl CutCraftApp {
             id if id.starts_with(gui::SAVE_BRUSH) => self.save_brush(id),
             id if id.starts_with(gui::FAVOURITE) || id.starts_with(gui::FAVOURITES_ONLY) => {
                 self.favourites_action(id);
+            }
+            id if id.starts_with(crate::custom_toolbars::ACTION)
+                || id.starts_with(crate::custom_toolbars::RENAME) =>
+            {
+                self.toolbar_action(id);
             }
             id if id.starts_with(gui::FOLD_TOOL_GROUPS) => {
                 self.options.general.fold_tool_groups = id.ends_with("true");
@@ -1030,8 +1054,10 @@ impl CutCraftApp {
         let k = self.doc.components.get(&id).ok_or("no such component")?;
         let bytes = fmt_export_as_3d_clipart::clip_bytes(k).map_err(|e| e.to_string())?;
         std::fs::write(path, bytes).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
-        self.status
-            .set_message(&format!("Saved sculpting brush {}", path.display()));
+        self.status.set_message(&cut_craft_i18n::tr!(
+            "status-saved-brush",
+            path = path.display().to_string()
+        ));
         Ok(())
     }
 
@@ -1121,9 +1147,9 @@ impl CutCraftApp {
             self.apply_live();
         }
         if changed {
-            self.status.set_message(&format!(
-                "Warning: {} has changed since it was imported; imported again as it is now",
-                path.display()
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-import-changed",
+                path = path.display().to_string()
             ));
         }
     }
@@ -1223,7 +1249,10 @@ impl CutCraftApp {
                 "toolpath": id, "name": name, "visible": t.visible, "notes": notes
             });
             match self.apply("toolpath_properties", &params) {
-                Ok(()) => self.status.set_message(&format!("Notes kept with {name}")),
+                Ok(()) => self.status.set_message(&cut_craft_i18n::tr!(
+                    "status-notes-kept",
+                    name = name.clone()
+                )),
                 Err(e) => self.status.set_message(&e),
             }
         }

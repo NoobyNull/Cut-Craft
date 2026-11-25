@@ -215,7 +215,7 @@ pub(super) fn toolpath_groups() -> Vec<ToolGroup> {
     vec![
         // over the sub-tabs: what every toolpath is cut from and with
         group(
-            "Job and Tools",
+            "Job and Bits",
             &[
                 "material_setup",
                 "materials",
@@ -270,6 +270,10 @@ pub(super) fn toolpath_groups() -> Vec<ToolGroup> {
                 "3d_finishing_toolpath",
                 "3d_pencil_toolpath",
                 "rounding_toolpath",
+                "rotary_roughing_toolpath",
+                "rotary_finishing_toolpath",
+                "rotary_locked_angles_toolpath",
+                "rotary_details_toolpath",
                 "rotary_machining_toolpath",
                 "rotary_lathe_toolpath",
             ],

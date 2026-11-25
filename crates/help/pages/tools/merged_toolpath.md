@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-25
 see-also: array_copy_toolpath, profile_toolpath
 ---
 
@@ -28,3 +28,9 @@ see-also: array_copy_toolpath, profile_toolpath
    ![Step 5](pictures/merged_toolpath/step-5.png)
 
 Ungroup takes a merged toolpath apart again. When it looks right in the preview, [save it for your machine](help:save_toolpaths).
+
+Only toolpaths that use the same bit merge, and the merged toolpath cuts with the first one's feeds and speed.
+
+Drill bank toolpaths, and rotary toolpaths that hold the bit off the turning axis (Off centre
+or Follows the surface finishes, and flat cuts on a locked face), don't merge: their moves only
+work in their own order.
