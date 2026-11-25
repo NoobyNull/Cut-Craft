@@ -165,8 +165,11 @@ impl CutCraftApp {
             Some(Picked::AddFolder) => self.invoke(ui.ctx(), "add_clipart_folder"),
             Some(Picked::ShowFolder(folder)) => {
                 if let Err(e) = files::show_folder(&folder) {
-                    self.status
-                        .set_message(&format!("Couldn't show {}: {e}", folder.display()));
+                    self.status.set_message(&cut_craft_i18n::tr!(
+                        "status-could-not-show",
+                        path = folder.display().to_string(),
+                        error = e.to_string()
+                    ));
                 }
             }
             Some(Picked::Import(path)) => self.add_from_library(vec![path], None),
@@ -213,9 +216,9 @@ impl CutCraftApp {
                     self.import_file(&path);
                 }
             } else {
-                self.status.set_message(&format!(
-                    "Couldn't add {}: the file isn't there any more.",
-                    path.display()
+                self.status.set_message(&cut_craft_i18n::tr!(
+                    "status-file-gone",
+                    path = path.display().to_string()
                 ));
             }
         }
