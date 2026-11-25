@@ -188,6 +188,10 @@ const NOTHING_LEFT: &str = "Nothing is left to finish between Start and End: the
     above this one already take the material down to the model. Move this toolpath further up \
     the list, or leave it out.";
 
+/// Why the registration mark was left out, when the machining limit doesn't reach it.
+const MARK_OUTSIDE: &str = "The registration mark wasn't cut: A=0 just past End is outside the \
+    machining limit. Grow the limit to take it in, or pencil a line on the material at A=0.";
+
 /// How far across the bit is held for each run over the whole part.
 fn held(p: &Params) -> Vec<f64> {
     match (p.held, p.sides) {
@@ -251,13 +255,21 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
         kept.push(kept_off_note(&around, &finished.kept_off, carving.units));
     }
     let mut passes = finished.passes;
-    if passes.is_empty() {
+    // nothing cut and nothing kept off: the toolpaths above already took it all
+    if passes.is_empty() && finished.kept_off.is_empty() {
         notes.push(NOTHING_LEFT.to_owned());
     }
     if p.registration_mark {
         // just past the end of the finish
         let along = (carving.end + tool.diameter).min(carving.length);
         match mark(&work, &mark_head, along) {
+            Ok(mark)
+                if work
+                    .limit
+                    .is_some_and(|l| !mark.iter().all(|p| l.holds_point(carving.along_x, p))) =>
+            {
+                notes.push(MARK_OUTSIDE.to_owned());
+            }
             Ok(mark) => passes.push((mark, false)),
             Err(why) => notes.push(why),
         }

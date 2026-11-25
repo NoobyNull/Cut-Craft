@@ -458,6 +458,14 @@ impl Work<'_> {
                     if !clear.allows(pose) {
                         continue;
                     }
+                    // outside the machining limit it won't be cut: it can't win an angle
+                    let point = (self.point(along(i), round, tip - radius), across(line));
+                    if self
+                        .limit
+                        .is_some_and(|l| !l.holds_point(self.along_x, &point))
+                    {
+                        continue;
+                    }
                     // looked for with the bit grown by the check's margin all round
                     let looking = Pose {
                         height: pose.height - check.margin,

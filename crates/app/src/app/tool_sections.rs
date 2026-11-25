@@ -639,7 +639,8 @@ pub(super) fn locked_face_section(ui: &mut egui::Ui, params: &mut Value) {
                 ui.horizontal(|ui| {
                     ui.label(tr!("locked-face-angle"));
                     ui.add(
-                        egui::DragValue::new(angle)
+                        cut_craft_bug_report::number::Number::new(angle)
+                            .name(tr!("locked-face-angle"))
                             .range(-360.0..=360.0)
                             .suffix("°"),
                     );

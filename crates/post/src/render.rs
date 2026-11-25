@@ -144,7 +144,7 @@ impl Post {
                 if let (Some(b), Some(hit)) = (bank, hit) {
                     out.drop_drills(&mut v, &b.bank, &hit.drills, by_pattern, &mut down);
                 }
-                let mut steps = self.steps(&part, &doc.job, at);
+                let mut steps = self.steps(&part, &doc.job, at, held);
                 if let Some(w) = winding.as_mut() {
                     steps = w.plan(steps, at);
                 }
@@ -450,10 +450,17 @@ impl Post {
         })
     }
 
-    /// The moves of `toolpath`, starting from `at`, as they are written: a plunge from above
-    /// the job's Plunge (Z2) gap goes down to it at the rapid rate first, and runs of cuts
-    /// become arcs where the post can write them.
-    pub(super) fn steps(&self, toolpath: &Toolpath, job: &Job, mut at: DVec3) -> Vec<Step> {
+    /// The moves of `toolpath`, starting from `at` with the bit held `held_across` off the
+    /// turning axis, as they are written: a plunge from above the job's Plunge (Z2) gap goes
+    /// down to it at the rapid rate first, and runs of cuts become arcs where the post can
+    /// write them.
+    pub(super) fn steps(
+        &self,
+        toolpath: &Toolpath,
+        job: &Job,
+        mut at: DVec3,
+        mut held_across: f64,
+    ) -> Vec<Step> {
         let gap = job.plunge_gap();
         // a bit held off the turning axis: its moves are where its tip cuts, written as where A
         // turns to and how high the bit is
@@ -474,8 +481,6 @@ impl Post {
         // (kind, to, laser power, across)
         let mut lines = Vec::with_capacity(toolpath.moves.len());
         let mut from = at;
-        // how far across the bit is held where it is now
-        let mut held_across = 0.0;
         for (i, m) in toolpath.moves.iter().enumerate() {
             let across = toolpath.across.get(i).copied().unwrap_or(0.0);
             let mut to = m.to;

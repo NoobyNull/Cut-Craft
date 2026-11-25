@@ -35,6 +35,11 @@ impl LockedFace {
     }
 }
 
+/// Why a drill bank's toolpath can't be cut on a locked face: the post puts its holes where
+/// the drills are, not where the moves go.
+const DRILL_BANK: &str = "a drill bank's holes go where its drills are: Flat on a locked face \
+    is only for toolpaths the bit cuts itself";
+
 /// Why a toolpath that already holds the bit off the axis can't be cut on a locked face.
 const ROTARY_OWN: &str = "this toolpath already turns A as it cuts: Flat on a locked face is \
     only for flat toolpaths";
@@ -56,6 +61,9 @@ pub fn apply(
     if !toolpath.across.is_empty() {
         return Err(CommandError::InvalidParams(ROTARY_OWN.into()));
     }
+    if toolpath.drill_bank.is_some() {
+        return Err(CommandError::InvalidParams(DRILL_BANK.into()));
+    }
     let radius = rotary.diameter / 2.0;
     if radius <= 0.0 || toolpath.moves.is_empty() {
         return Ok(());
@@ -72,6 +80,15 @@ pub fn apply(
     let height = face_height(rotary.blank, rotary.diameter, angle);
     let face_round = radius * angle;
     let mut across = Vec::with_capacity(toolpath.moves.len());
+    if let Some(deepest) = toolpath.moves.iter().map(|m| m.to.z).reduce(f64::min)
+        && height + deepest < 0.0
+    {
+        return Err(CommandError::InvalidParams(format!(
+            "Flat on a locked face: this toolpath goes {:.1} mm deep, past the turning axis \
+             ({height:.1} mm under the face). Cut less deep",
+            -deepest
+        )));
+    }
     for m in &mut toolpath.moves {
         let off = round_of(m.to) - face_round;
         // how high the bit is, from the material's top straight over the axis
@@ -140,10 +157,13 @@ fn facing(blank: Blank, angle: f64) -> f64 {
 
 /// How far from the turning axis the material reaches straight up at `angle`, for a blank
 /// `diameter` across at A=0: a round blank's radius, a square's half side, a board's half
-/// thickness (A=0 and 180) or half width (90 and 270).
+/// thickness (A=0 and 180) or half width (90 and 270); turned part way, a square or a board
+/// reaches as high as its furthest corner.
 fn face_height(blank: Blank, diameter: f64, angle: f64) -> f64 {
     match blank {
-        Blank::Round | Blank::Square => diameter / 2.0,
+        Blank::Round => diameter / 2.0,
+        // a square turned part way is as high as its furthest corner, as a board is
+        Blank::Square => face_height(Blank::Board { width: diameter }, diameter, angle),
         Blank::Board { width } => {
             let (sin, cos) = angle.sin_cos();
             // a board turned part way is as high as its furthest corner

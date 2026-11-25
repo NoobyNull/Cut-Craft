@@ -26,9 +26,8 @@ pub fn family(toolpath: &Toolpath) -> Family {
                 | "moulding_toolpath"
                 | "rounding_toolpath"
                 | "sketch_carving_toolpath"
-                | "rotary_machining_toolpath"
-                | "rotary_lathe_toolpath"
         )
+        || s.starts_with("rotary_")
     {
         Family::ThreeD
     } else {
@@ -78,8 +77,7 @@ impl Toolpath {
 }
 
 /// The indices of the moves thinning keeps: every move but a cut, and of each run of cuts at
-/// one power the points Douglas–Peucker keeps, with how far across the axis each is held
-/// counted as a fourth direction. `across` and `power` are empty or one a move.
+/// one power and held at one place across the axis the points Douglas–Peucker keeps. `across` and `power` are empty or one a move.
 fn kept_moves(moves: &[Move], across: &[f64], power: &[f64], tolerance: f64) -> Vec<usize> {
     let at = |v: &[f64], i: usize| v.get(i).copied().unwrap_or(0.0);
     let mut out = Vec::with_capacity(moves.len());
@@ -90,11 +88,17 @@ fn kept_moves(moves: &[Move], across: &[f64], power: &[f64], tolerance: f64) -> 
             i += 1;
             continue;
         }
-        let lit = at(power, i);
+        let (lit, held) = (at(power, i), at(across, i));
+        // a run is held at one place across the axis too: the post turns a move that changes
+        // it into A and Z, which a straight line between kept points doesn't follow
         let end = moves[i..]
             .iter()
             .enumerate()
-            .position(|(k, m)| m.kind != MoveKind::Cut || at(power, i + k) != lit)
+            .position(|(k, m)| {
+                m.kind != MoveKind::Cut
+                    || at(power, i + k) != lit
+                    || (at(across, i + k) - held).abs() > 1e-9
+            })
             .map_or(moves.len(), |n| i + n);
         // the run starts where the move before it left the tool
         let from = out[out.len() - 1];
@@ -236,7 +240,9 @@ mod tests {
         let same = with(line.clone(), vec![2.0; 5], vec![]).thinned(0.01);
         assert_eq!(same.moves.len(), 2);
         assert_eq!(same.across, [2.0, 2.0]);
-        // the bit moves across and back, turning at the middle: that stays, with where it was held
+        // the bit moves across as it goes: every point stays, with where it was held, as the
+        // post turns each into A and Z and a straight line between fewer of them wouldn't
+        // follow the cut (held -10, 0 and 10 at radius 15, the middle is 3.8 mm higher)
         let moved = with(line.clone(), vec![0.0, 1.5, 3.0, 1.5, 0.0], vec![]).thinned(0.01);
         let kept: Vec<(f64, f64)> = moved
             .moves
@@ -244,7 +250,10 @@ mod tests {
             .zip(&moved.across)
             .map(|(m, &a)| (m.to.x, a))
             .collect();
-        assert_eq!(kept, [(0.0, 0.0), (2.0, 3.0), (4.0, 0.0)]);
+        assert_eq!(
+            kept,
+            [(0.0, 0.0), (1.0, 1.5), (2.0, 3.0), (3.0, 1.5), (4.0, 0.0)]
+        );
         // a laser's power changing part way: the move before the change ends where it did, and
         // the lit run after it is thinned on its own
         let lit = with(line.clone(), vec![], vec![50.0, 50.0, 80.0, 80.0, 80.0]).thinned(0.01);
@@ -262,7 +271,14 @@ mod tests {
 
     #[test]
     fn rotary_carving_and_lathe_toolpaths_take_the_3d_tolerance() {
-        for strategy in ["rotary_machining_toolpath", "rotary_lathe_toolpath"] {
+        for strategy in [
+            "rotary_machining_toolpath",
+            "rotary_lathe_toolpath",
+            "rotary_roughing_toolpath",
+            "rotary_finishing_toolpath",
+            "rotary_locked_angles_toolpath",
+            "rotary_details_toolpath",
+        ] {
             let t = Toolpath {
                 strategy: strategy.into(),
                 ..with(vec![], vec![], vec![])

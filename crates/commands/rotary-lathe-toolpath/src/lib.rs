@@ -470,16 +470,29 @@ fn turned(
 }
 
 /// Where along the part the lathe cuts, from the job's start: Start to End (a bit's width
-/// round Start for Part off), kept within how far along a machining limit reaches. The lathe
-/// turns all the way round, so only that counts.
+/// round Start for Part off), kept within how far along a machining limit reaches, from its
+/// first outline's start to its last one's end. The lathe turns all the way round, so only
+/// that counts.
+///
+/// # Errors
+/// When the limit can't be made, or Part off's groove is outside it.
 fn span_along(
     doc: &Document,
     p: &Params,
     length: f64,
     reach: f64,
 ) -> Result<(f64, f64), CommandError> {
+    let limit = cut_craft_rotary_carving::Limit::of(
+        doc,
+        p.machining_boundary,
+        p.machining_boundary_offset,
+        &p.boundary_level,
+    )?;
     if p.operation == Operation::PartOff {
         let at = p.start.clamp(0.0, length);
+        if limit.is_some_and(|l| at < l.from || at > l.to) {
+            return Err(CommandError::InvalidParams(PART_OFF_OUTSIDE.into()));
+        }
         return Ok((at - reach, at + reach));
     }
     let end = if p.end > 0.0 {
@@ -488,17 +501,15 @@ fn span_along(
         length
     };
     let start = p.start.clamp(0.0, length);
-    let limit = cut_craft_rotary_carving::Limit::of(
-        doc,
-        p.machining_boundary,
-        p.machining_boundary_offset,
-        &p.boundary_level,
-    )?;
     Ok(match limit {
         Some(l) => (start.max(l.from), end.min(l.to)),
         None => (start, end),
     })
 }
+
+/// Why Part off is refused outside its machining limit.
+const PART_OFF_OUTSIDE: &str = "Part off's Start is outside the machining limit: move Start to \
+    where the limit reaches along the part, or pick Material as the limit.";
 
 /// The toolpath made of `moves`.
 fn made(
@@ -1054,6 +1065,17 @@ mod tests {
             assert!((30.0 - 1e-6..=60.0 + 1e-6).contains(&c.x), "{c:?}");
         }
         assert!(cuts.iter().any(|c| c.y > 100.0), "all the way round");
+        // parting off outside it is refused, not grooved round anyway
+        let off = Params {
+            operation: Operation::PartOff,
+            start: 10.0,
+            ..p
+        };
+        let err = turned(&doc, &off).unwrap_err();
+        assert!(
+            err.to_string().contains("outside the machining limit"),
+            "{err}"
+        );
     }
 
     #[test]

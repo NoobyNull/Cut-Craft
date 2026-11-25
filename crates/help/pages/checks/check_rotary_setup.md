@@ -55,9 +55,11 @@ lost. A registration mark lets you line the part up again after a stop.
    **Taken out**, or use smaller material. Measure **Axis height** and **Room above** first if
    they are 0.
 6. If a toolpath turns A too low, raise **Clearance (Z1)** in Job Setup to the height the
-   warning gives, and calculate the toolpath again.
-7. For a registration mark, tick **Registration mark** in 4-Axis Rotary Machining, or pencil a
-   line along the material at A=0 before you start.
+   warning gives, and calculate the toolpath again. If instead the warning says the file's
+   lift is higher than Z can go, raising Z1 makes that lift higher still: use smaller
+   material, or lower **Clearance (Z1)** where the bit still clears the material.
+7. For a registration mark, tick **Registration mark** in Rotary Finishing, or pencil a line
+   along the material at A=0 before you start.
 
 This is a **warning**: you can still save, once you have checked.
 

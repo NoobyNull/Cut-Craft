@@ -167,3 +167,29 @@ fn a_toolpath_that_turns_a_itself_is_refused() {
     let err = apply(&job, &mut t, &locked(None)).unwrap_err();
     assert!(err.to_string().contains("only for flat toolpaths"), "{err}");
 }
+
+#[test]
+fn a_square_locked_part_way_round_cuts_down_from_its_corner() {
+    let job = job(Blank::Square);
+    let mut t = groove(&job, 0.0, 10.0, 1.0);
+    apply(&job, &mut t, &locked(Some(45.0))).unwrap();
+    // a 40 mm square's corner is 20√2 from the axis
+    let (_, height) = written(&job, &t)[2];
+    assert!(
+        (height - (20.0 * 2f64.sqrt() - 1.0)).abs() < 1e-9,
+        "1 down from the corner: {height}"
+    );
+}
+
+#[test]
+fn a_drill_bank_or_a_cut_past_the_axis_is_refused() {
+    let job = job(Blank::Round);
+    let mut t = groove(&job, 20.0, 40.0, 2.0);
+    t.drill_bank = Some(crate::drill_bank::BankToolpath::default());
+    let err = apply(&job, &mut t, &locked(None)).unwrap_err();
+    assert!(err.to_string().contains("drill bank"), "{err}");
+    // 25 down from a 20 mm radius goes 5 past the axis
+    let mut t = groove(&job, 20.0, 40.0, 25.0);
+    let err = apply(&job, &mut t, &locked(None)).unwrap_err();
+    assert!(err.to_string().contains("past the turning axis"), "{err}");
+}

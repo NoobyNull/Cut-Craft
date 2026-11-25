@@ -631,12 +631,12 @@ fn rotary_setup(
     if !marked
         && toolpaths
             .iter()
-            .any(|t| t.strategy == "rotary_machining_toolpath")
+            .any(|t| t.strategy.starts_with("rotary_") && t.strategy != "rotary_lathe_toolpath")
     {
         found.push(Finding::warning(
             Check::RotarySetup,
-            "No toolpath cuts a registration mark at A=0. Tick Registration mark in 4-Axis Rotary \
-             Machining, or pencil a line on the material at A=0, so the part can be put back \
+            "No toolpath cuts a registration mark at A=0. Tick Registration mark in Rotary \
+             Finishing, or pencil a line on the material at A=0, so the part can be put back \
              exactly as it was if the job has to be started again"
                 .to_owned(),
         ));
@@ -791,15 +791,8 @@ fn room(
     if lift <= above + 1e-9 {
         return;
     }
-    for t in toolpaths {
-        // held off the axis, a change of how far across turns A too
-        let across = |i: usize| t.across.get(i).copied().unwrap_or(0.0);
-        let low = t.moves.windows(2).enumerate().any(|(i, m)| {
-            m[1].kind == MoveKind::Rapid
-                && ((round(m[1].to) - round(m[0].to)).abs() > 1e-6
-                    || (across(i + 1) - across(i)).abs() > 1e-6)
-                && radius + m[0].to.z.min(m[1].to.z) < lift - 1e-6
-        });
+    let low = turned_low(toolpaths, radius, lift, round);
+    for (t, low) in toolpaths.iter().zip(low) {
         if low {
             found.push(Finding::warning(
                 Check::RotarySetup,
@@ -813,6 +806,42 @@ fn room(
             ));
         }
     }
+}
+
+/// For each of `toolpaths` in order, whether a rapid of it turns A with the bit lower than
+/// `lift` above the axis, as the post writes it: A (as `round`) and Z once a bit held off the
+/// axis is turned to where its tip cuts, carried from one toolpath to the next, as the post's
+/// first move of each starts where the last one ended.
+fn turned_low(
+    toolpaths: &[&Toolpath],
+    radius: f64,
+    lift: f64,
+    round: impl Fn(DVec3) -> f64,
+) -> Vec<bool> {
+    let mut was: Option<(f64, f64)> = None;
+    toolpaths
+        .iter()
+        .map(|t| {
+            let mut low = false;
+            for (i, m) in t.moves.iter().enumerate() {
+                let now = match t.across.get(i) {
+                    Some(&across) => {
+                        crate::rotary_axis::held_at(radius, round(m.to), m.to.z, across)
+                    }
+                    None => (round(m.to), m.to.z),
+                };
+                if let Some(before) = was
+                    && m.kind == MoveKind::Rapid
+                    && (now.0 - before.0).abs() > 1e-6
+                    && radius + before.1.min(now.1) < lift - 1e-6
+                {
+                    low = true;
+                }
+                was = Some(now);
+            }
+            low
+        })
+        .collect()
 }
 
 fn capitalised(text: &str) -> String {

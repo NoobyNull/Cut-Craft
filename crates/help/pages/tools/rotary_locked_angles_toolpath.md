@@ -9,8 +9,8 @@ part like a flat 3D finish. Then A turns to the next angle, and the next.
 
 You don't pick the angles. Each one is chosen where it reaches the most of what is left, facing
 the bit squarely, so a flat is finished from straight over it. You set the **Most angles**, and
-it stops sooner once nothing worth another angle is left: a square part takes four, however
-many you allow.
+it stops sooner once nothing worth another angle is left: a square part takes four when you
+allow at least four, and no more however many you allow.
 
 Use it for flats and faces, and on machines whose A is better at holding still than at moving
 smoothly. For round shapes, [Rotary Finishing](help:rotary_finishing_toolpath) keeps A turning
