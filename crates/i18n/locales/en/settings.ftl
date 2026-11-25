@@ -3668,13 +3668,51 @@ setting-where-along-the-axis-the-c43487 = Where along the axis the roughing star
 setting-end-93764a = End
 setting-where-along-the-axis-the-5fe3ba = Where along the axis the roughing ends, from the job's start; 0 runs to the job's end
 
+## Rotary Finishing (rotary_finishing_toolpath)
+setting-the-last-pass-over-a-8be518 =
+    The last pass over a carved part, the bit on the model all the way round: only what the
+    toolpaths above it in the list leave.
+setting-the-bit-a-ball-nose-91d7fa = The bit: a ball nose follows curves best. Its finishing stepover spaces the passes
+setting-which-way-the-bit-goes-b4a0ef =
+    Which way the bit goes over the part: round it, stepping along between passes, or
+    along it, A turning a step between passes
+setting-bit-held-5d70bf = Bit held
+setting-where-the-bit-is-held-324509 = Where the bit is held: over the turning axis, or to one side of it
+setting-over-the-axis-28664d = Over the axis
+setting-straight-over-the-turning-axis-8046b4 = Straight over the turning axis: the tip of the bit cuts
+setting-off-centre-07cf25 = Off centre
+setting-a-set-distance-to-one-cfc04e =
+    A set distance to one side of the turning axis: the side of the ball cuts, not its
+    slow-turning tip, for a cleaner finish, and walls that face sideways are reached
+setting-how-far-to-one-side-3d44a4 =
+    How far to one side of the turning axis the bit is held. Positive is the way the part
+    comes up towards the bit as A turns back
+setting-held-to-one-side-for-7c16d1 = Held to one side for the whole finish, or to one side then the other
+setting-one-side-8b09c6 = One side
+setting-held-to-one-side-for-5556ac = Held to one side for the whole finish
+setting-both-sides-a0ca82 = Both sides
+setting-held-to-one-side-for-b689cd =
+    Held to one side for the whole part, then to the other: walls facing either way are
+    reached, in twice the time
+setting-material-left-on-the-part-de02f0 = Material left on the part for a later pass, all the way round
+setting-where-along-the-axis-the-c7448b = Where along the axis the finish starts, from the job's start (the chuck end)
+setting-where-along-the-axis-the-5f7226 = Where along the axis the finish ends, from the job's start; 0 runs to the job's end
+setting-registration-mark-ad2169 = Registration mark
+setting-a-small-notch-at-a-94d0fa =
+    A small notch at A=0, just past the end of the finish, so the part can be put back
+    exactly as it was if a job has to be started again
+setting-cut-support-efe14c = Cut support
+setting-cut-away-the-centre-stock-3b5b5d =
+    Cut away the centre stock Job Setup leaves along the axis (Holding the Part), down to
+    the model: for the last toolpath, once everything else is cut. The ends the part is
+    kept joined at stay as they are
+
 ## 4-Axis Rotary Machining (rotary_machining_toolpath)
 setting-the-bit-a-ball-nose-40e65e = The bit: a ball nose follows curves best. Its finishing stepover spaces the rings
 setting-how-the-bit-goes-round-a6e7cf = How the bit goes round the part
 setting-the-bit-stays-straight-over-36fe1f =
     The bit stays straight over the turning axis while A turns and it moves along: like
     unrolled 3D finishing, but kept true to the round part
-setting-off-centre-07cf25 = Off centre
 setting-the-bit-is-held-a-dc984d =
     The bit is held a set distance to one side of the turning axis while A turns: the side
     of the ball cuts, not its slow-turning tip, for a cleaner finish, and walls that face
@@ -3691,9 +3729,6 @@ setting-bulk-to-fine-detail-a-9bb38a =
     the machine turns over itself; last, A locks at a few more angles, picked where they
     reach the most of what is left, for the details. The bit never cuts air, and the holder
     above it never touches the material, the chuck or the tailstock
-setting-how-far-to-one-side-3d44a4 =
-    How far to one side of the turning axis the bit is held. Positive is the way the part
-    comes up towards the bit as A turns back
 setting-faces-9c251d = Faces
 setting-how-many-sides-the-part-276288 =
     How many sides the part is cut from, evenly round it, starting at A=0: A turns to
@@ -3710,16 +3745,9 @@ setting-the-angles-a-locks-at-e92e6d =
     Left empty, they are picked by themselves
 setting-where-along-the-axis-the-386a30 = Where along the axis the rings start, from the job's start (the chuck end)
 setting-where-along-the-axis-the-f38825 = Where along the axis the rings end, from the job's start; 0 runs to the job's end
-setting-material-left-on-the-part-de02f0 = Material left on the part for a later pass, all the way round
-setting-registration-mark-ad2169 = Registration mark
 setting-a-small-notch-at-a-74552c =
     A small notch at A=0, just past the last ring, so the part can be put back exactly as
     it was if a job has to be started again
-setting-cut-support-efe14c = Cut support
-setting-cut-away-the-centre-stock-3b5b5d =
-    Cut away the centre stock Job Setup leaves along the axis (Holding the Part), down to
-    the model: for the last toolpath, once everything else is cut. The ends the part is
-    kept joined at stay as they are
 
 ## Rotary Lathe (rotary_lathe_toolpath)
 setting-the-bit-a-square-end-a1b221 =

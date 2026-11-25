@@ -288,6 +288,7 @@ tooltip-replace-below = Replace Below: the parts of the selected component lower
 tooltip-reset-inside-selected-vectors = Reset Inside Selected Vectors: clears the shape inside the selected closed vectors, so the model there is back to the flat base: only on the components picked, or on every shown one when none is picked
 tooltip-reset-outside-selected-vectors = Reset Outside Selected Vectors: clears the shape outside the selected closed vectors, so the model there is back to the flat base: only on the components picked, or on every shown one when none is picked
 tooltip-reverse-direction = Reverse Direction: the vector under the point runs the other way
+tooltip-rotary-finishing-toolpath = Rotary Finishing: the last pass over a carved part on a rotary job, the bit kept on the model all the way round, as low as it goes without touching it
 tooltip-rotary-lathe-toolpath = Rotary Lathe: on a rotary job, A spins the material steadily while the bit stays straight over the turning axis and steps down, as on a lathe: to face an end, to turn the part round to its outline, or to part it off
 tooltip-rotary-machining-toolpath = 4-Axis Rotary Machining: finishes a model all the way round a turning cylinder, ring by ring, the bit kept on the true round surface: X (or Y), Z and A move together
 tooltip-rotary-roughing-toolpath = Rotary Roughing: takes the bulk off a carved part on a rotary job, a level at a time from the outside in, all the way round at each level before the next, down to the allowance left on the model for the finish
