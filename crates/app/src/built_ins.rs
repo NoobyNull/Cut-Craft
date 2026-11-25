@@ -183,7 +183,7 @@ pub const BUILT_INS: &[BuiltIn] = &[
     act("interface_layout", "Interface Layout", "Interface Layout: pick how the window is arranged: Ribbon, Rail, Canvas or Classic"),
     act("pan", "Pan", "Pan: drag the 2D view to slide the drawing round, without changing how close you are").icon("view/pan.png"),
     act("zoom_box", "Zoom Box", "Zoom Box: drag a box round the part of the drawing you want to fill the view").icon("view/zoom_box.png"),
-    act("zoom_to_job", "Zoom to Job", "Zoom to Job: fits the whole material into the view").icon("view/zoom_to_job.png"),
+    act("zoom_to_job", "Zoom to Job", "Zoom to Job: fits the whole material into the view, however far you zoomed").icon("view/zoom_to_job.png"),
     act("zoom_to_drawing", "Zoom to Drawing", "Zoom to Drawing: fits everything you have drawn into the view, even what is off the material. In the 3D view F does it too, with the pointer over the view and no text box being typed in; F6 always does").keys("F6"),
     act("zoom_selected", "Zoom to Selection", "Zoom Selected: zooms in or out until the selected objects fill the view").icon("view/zoom_selected.png"),
     act("tool_database", "Tool Database", "Tool Database: the list of your bits, with their sizes, speeds and feeds, to add, change or pick from. Renaming a bit renames it in this job's toolpaths too, and in other jobs when they open, so its tool changer slot still finds it").window(),
