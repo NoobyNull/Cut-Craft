@@ -230,7 +230,7 @@ fn every_command_has_a_line_saying_what_it_does() {
     let missing: Vec<&str> = crate::commands::registry()
         .iter()
         .map(cut_craft_core::DynCommand::id)
-        .filter(|id| crate::gui::about(id).is_none_or(str::is_empty))
+        .filter(|id| crate::gui::english_about(id).is_none_or(str::is_empty))
         .collect();
     assert!(missing.is_empty(), "no description for {missing:?}");
     assert!(

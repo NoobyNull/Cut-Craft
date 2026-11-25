@@ -383,7 +383,7 @@ fn the_level_menu_mirrors_and_components_move_between_levels() {
         let (&id, level) = app.doc.levels.iter().next().unwrap();
         gui::level_menu(&app.doc, id, level)
     };
-    h.choose(level_menu, &["Mirror Mode", "Left to Right"]);
+    h.choose(level_menu, &["Mirror Mode", "Left To Right"]);
     assert_eq!(h.app.doc.levels[&0].mirror, Mirror::LeftToRight);
     assert!(
         !leaf(&level_menu(&h.app), &["Wrapping"]).is_enabled,

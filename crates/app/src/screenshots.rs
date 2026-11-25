@@ -53,6 +53,9 @@ const SCENES: &[Scene] = &[
     ("rotary-imported-as-it-is", |app, _| app.form = None),
     // Help: Toolpaths ▸ Previewing a rotary job
     ("rotary-turning-preview", rotary_turning),
+    // Help: Moving around the 2D view ▸ Rotary jobs (the seams and the wrap bands)
+    ("rotary-wrap-bands", rotary_wrap_bands),
+    ("rotary-wrap-bands-dark", |_, _| {}),
     // Help: Toolpaths ▸ Looking at the G-code
     ("view-gcode", view_gcode),
     // Help: Updates (one-click install and relaunch)
@@ -936,6 +939,31 @@ fn canvas(app: &mut CutCraftApp, ctx: &egui::Context) {
 }
 
 /// A full 3D model imported into a rotary job: shown turned round the axis in the stock.
+/// A rotary job's 2D view: two slanted lines running off the top seam and coming back in at
+/// the bottom, a circle across the bottom seam and one in the middle; the first line picked,
+/// so its ghost is picked too.
+fn rotary_wrap_bands(app: &mut CutCraftApp, _: &egui::Context) {
+    use cut_craft_core::document::{Along, Job};
+    use cut_craft_core::geometry::Path;
+    everyday(app);
+    app.doc.job = Job::rotary(300.0, 60.0, Along::X);
+    let turn = std::f64::consts::PI * 60.0;
+    let mut c = cut_craft_core::Change::builder(&app.doc);
+    let line = c.add(Path::polyline(
+        &[Point::new(60.0, 15.0), Point::new(130.0, turn + 35.0)],
+        false,
+    ));
+    c.add(Path::polyline(
+        &[Point::new(150.0, 15.0), Point::new(220.0, turn + 35.0)],
+        false,
+    ));
+    c.add(Path::circle(Point::new(35.0, 4.0), 22.0));
+    c.add(Path::circle(Point::new(260.0, 110.0), 20.0));
+    c.select([line]);
+    app.record(Ok(c.finish()), "Drew");
+    app.camera = None;
+}
+
 fn rotary_import(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.options.general.layout = crate::options::WindowLayout::Classic;
     app.form = None;

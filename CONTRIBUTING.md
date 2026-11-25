@@ -89,11 +89,17 @@ Languages have their own test suite, run by the **Languages** workflow:
 
     cargo nextest run -p cut-craft -p cut-craft-i18n --profile languages
 
-The **hard-coded text** check in it (also in the ordinary run) fails on
-words handed straight to a button, label, tooltip, menu or window in `crates/app/src`, and on
-a key with no English words. Text already in the code before the move is listed in
-`crates/app/i18n/hard-coded-baseline.txt`; when you move one into Fluent, delete its line
-(the check fails on a stale line too, so the list only shrinks).
+The **hard-coded text** check in it (also in the ordinary run) warns of words handed
+straight to a button, label, tooltip, menu, window or the status line in `crates/app/src`: a
+warning on the pull request, never a fail. It does fail on a key with no English words. Text
+already in the code before the move is listed in `crates/app/i18n/hard-coded-baseline.txt`;
+when you move one into Fluent, delete its line (a stale line is warned of too, so the list
+only shrinks).
+
+A form's words (each setting's name, tooltip and choices, from the command's doc comments)
+are copied into `crates/i18n/locales/en/settings.ftl`, keyed by their English words. When you
+change a form, write that file again: `cargo test -p cut-craft --bin cut-craft
+write_settings_words -- --ignored` (a test fails until you do).
 
 ## Test suites by area
 

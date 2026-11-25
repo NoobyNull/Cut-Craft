@@ -17,8 +17,10 @@ impl CutCraftApp {
             match files::load_materials(path) {
                 Ok(lib) => self.materials = lib,
                 Err(e) => {
-                    self.status
-                        .set_message(&format!("{e}; material changes will not be saved"));
+                    self.status.set_message(&cut_craft_i18n::tr!(
+                        "status-materials-not-saved",
+                        error = e.clone()
+                    ));
                     self.materials_unreadable = self.materials_path.take();
                 }
             }
@@ -84,18 +86,18 @@ impl CutCraftApp {
                         for line in &report {
                             log::warn!("joining a bit's per-material copies: {line}");
                         }
-                        let more = match report.len() {
-                            1 => String::new(),
-                            n => format!(" (and {} more; see the log)", n - 1),
-                        };
-                        self.status.set_message(&format!(
-                            "Bits listed once per material are now one bit each. {first}{more}"
+                        self.status.set_message(&cut_craft_i18n::tr!(
+                            "status-bits-joined",
+                            first = first.clone(),
+                            more = report.len() - 1
                         ));
                     }
                 }
                 Err(e) => {
-                    self.status
-                        .set_message(&format!("{e}; bit changes will not be saved"));
+                    self.status.set_message(&cut_craft_i18n::tr!(
+                        "status-tools-not-saved",
+                        error = e.clone()
+                    ));
                     self.tools_unreadable = self.tools_path.take();
                 }
             }
@@ -119,7 +121,7 @@ impl CutCraftApp {
         }
     }
 
-    /// The Bit Library window, `manager`, with the active machine's tool changer, its
+    /// The Tool Database window, `manager`, with the active machine's tool changer, its
     /// tools loaded with the tools.
     pub(super) fn open_tool_manager(&mut self, mut manager: cut_craft_tool_database::Manager) {
         manager.library = self.materials.clone();
@@ -140,7 +142,7 @@ impl CutCraftApp {
         self.tool_manager = Some(manager);
     }
 
-    /// A toolpath form's Select…: the Bit Library as Select Bit, on `current`; its Select
+    /// A toolpath form's Select…: the Tool Database as Select Tool, on `current`; its Select
     /// gives the form the tool shown, with its own feeds, speeds and pass depth. A toolpath
     /// form's offers only lasers for a laser toolpath, and only bits for any other.
     pub(super) fn select_tool(&mut self, current: &str) {
@@ -154,7 +156,7 @@ impl CutCraftApp {
         self.picking = None;
     }
 
-    /// Select Bit's Select: `name` for what it was opened for (a tool of one of the form's
+    /// Select Tool's Select: `name` for what it was opened for (a tool of one of the form's
     /// lists, or a tool changer holder), or else as the open form's tool.
     pub(super) fn selected_tool(&mut self, name: &str) {
         match self.picking.take() {
@@ -176,7 +178,7 @@ impl CutCraftApp {
         }
     }
 
-    /// The Bit Library, opened on the open form's tool; saving it updates the form.
+    /// The Tool Database, opened on the open form's tool; saving it updates the form.
     pub(super) fn edit_tool(&mut self, ctx: &egui::Context, name: Option<String>) {
         self.invoke(ctx, "tool_database");
         if let Some(manager) = &mut self.tool_manager {
@@ -216,7 +218,7 @@ impl CutCraftApp {
         }
     }
 
-    /// [`Self::tools_changed`] after the Bit Library's Apply, OK or Select, with the
+    /// [`Self::tools_changed`] after the Tool Database's Apply, OK or Select, with the
     /// job's toolpaths following the tools `renamed`: the status bar says what became of
     /// the save (never "saved" when it was not) and then the renamed toolpaths.
     pub(super) fn tools_kept(&mut self, done: &str, renamed: &[(String, String)]) {
@@ -230,10 +232,10 @@ impl CutCraftApp {
         }
     }
 
-    /// Writes the bit library, if it has a file, and reports `done` or the failure.
+    /// Writes the tool database, if it has a file, and reports `done` or the failure.
     pub(super) fn tools_changed(&mut self, done: &str) {
         if let Some(path) = &self.tools_unreadable {
-            let message = not_saved("Bit library", path);
+            let message = not_saved("Tool database", path);
             self.status.set_message(&message);
             return;
         }

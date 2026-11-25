@@ -85,8 +85,11 @@ impl CutCraftApp {
             }
             Err(e) => {
                 let file = &gadget.code.name;
-                self.status
-                    .set_message(&format!("{file} could not be used: {e}"));
+                self.status.set_message(&cut_craft_i18n::tr!(
+                    "status-gadget-not-used",
+                    file = file.clone(),
+                    error = e.to_string()
+                ));
                 false
             }
         }
@@ -154,16 +157,16 @@ impl CutCraftApp {
     /// user has somewhere to put `.lua` gadget files.
     pub(super) fn open_gadgets_folder(&mut self) {
         let Some(dir) = crate::gadgets::my_gadgets_dir() else {
-            self.status.set_message(
-                "Cut Craft has no settings folder on this computer to keep gadgets in",
-            );
+            self.status
+                .set_message(&cut_craft_i18n::tr!("status-no-gadgets-folder"));
             return;
         };
         if let Err(e) = std::fs::create_dir_all(&dir).and_then(|()| crate::files::show_folder(&dir))
         {
-            self.status.set_message(&format!(
-                "Could not open the My Gadgets folder, {} ({e})",
-                dir.display()
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-could-not-open-gadgets-folder",
+                path = dir.display().to_string(),
+                error = e.to_string()
             ));
         }
     }
