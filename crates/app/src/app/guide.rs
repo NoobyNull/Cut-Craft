@@ -136,10 +136,10 @@ impl CutCraftApp {
     /// (a page's icons, the Rail's rows, a flyout's list) goes through here.
     pub(super) fn with_guidance(&self, response: egui::Response, id: &str) -> egui::Response {
         let label = self.tool_label(id);
-        let about = crate::gui::about(id).unwrap_or(&label);
-        let tip = self.tool_tip(id, about);
+        let about = crate::gui::about(id).unwrap_or(label);
+        let tip = self.tool_tip(id, &about);
         hover(&response, &tip);
-        response.on_hover_text(tooltip(about, tip.next.as_deref()))
+        response.on_hover_text(tooltip(&about, tip.next.as_deref()))
     }
 
     /// The guidance for tool `id` with description `about`: what it does and, for a tool
@@ -162,7 +162,7 @@ impl CutCraftApp {
             .form
             .as_ref()
             .and_then(|f| gui_about(f.id))
-            .map_or_else(String::new, |about| body(&label, about));
+            .map_or_else(String::new, |about| body(&label, &about));
         Tip {
             label,
             about,
@@ -222,7 +222,7 @@ impl CutCraftApp {
 }
 
 /// See [`crate::gui::about`].
-fn gui_about(id: &str) -> Option<&'static str> {
+fn gui_about(id: &str) -> Option<String> {
     crate::gui::about(id)
 }
 

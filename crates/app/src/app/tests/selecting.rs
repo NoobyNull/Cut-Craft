@@ -645,7 +645,7 @@ fn a_tool_that_works_on_a_selection_says_what_to_select_first() {
     let h = Harness::new();
     let tip = h
         .app
-        .tool_tip("pocket_toolpath", gui::about("pocket_toolpath").unwrap());
+        .tool_tip("pocket_toolpath", &gui::about("pocket_toolpath").unwrap());
     assert_eq!(tip.label, "Pocket Toolpath");
     assert_eq!(
         tip.next.as_deref(),
@@ -659,7 +659,7 @@ fn a_tool_that_works_on_a_selection_says_what_to_select_first() {
     );
     let tip = h
         .app
-        .tool_tip("align_left", gui::about("align_left").unwrap());
+        .tool_tip("align_left", &gui::about("align_left").unwrap());
     assert_eq!(
         tip.next.as_deref(),
         Some(guide::SELECT_FIRST),
@@ -667,7 +667,7 @@ fn a_tool_that_works_on_a_selection_says_what_to_select_first() {
     );
     let tip = h
         .app
-        .tool_tip("draw_circle", gui::about("draw_circle").unwrap());
+        .tool_tip("draw_circle", &gui::about("draw_circle").unwrap());
     assert_eq!(
         tip.next.as_deref(),
         Some("Drag from the centre out to the radius; Shift-click one this tool drew to edit it"),

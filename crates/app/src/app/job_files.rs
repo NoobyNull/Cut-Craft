@@ -4,7 +4,7 @@
 use super::actions::{DONT_SAVE, SAVE};
 use super::{
     APP_NAME, CutCraftApp, Dialog, Document, History, JOB_EXTENSION, OpenForm, Screen, Session,
-    Shown, TEMPLATE, Value, View, egui, file_dialog, file_name, files, filtered_dialog, form, gui,
+    Shown, TEMPLATE, Value, View, egui, file_dialog, file_name, files, filtered_dialog, form,
     job_dialog, message_dialog, saving_path, template_dialog, toolpath_template_dialog,
 };
 
@@ -16,8 +16,10 @@ impl CutCraftApp {
             "new" if !self.options.job_defaults.classic_startup => {
                 if self.confirm_discard() {
                     self.start_blank_job();
-                    self.status
-                        .set_message(&format!("New job: {}", self.material_summary()));
+                    self.status.set_message(&cut_craft_i18n::tr!(
+                        "status-new-job",
+                        material = self.material_summary()
+                    ));
                 }
             }
             "new" => {
@@ -123,9 +125,10 @@ impl CutCraftApp {
                         &path,
                         &cut_craft_core::file::save_job(&self.doc),
                     ) {
-                        Ok(()) => self
-                            .status
-                            .set_message(&format!("Saved template {}", path.display())),
+                        Ok(()) => self.status.set_message(&cut_craft_i18n::tr!(
+                            "status-saved-template",
+                            path = path.display().to_string()
+                        )),
                         Err(e) => self
                             .status
                             .set_message(&crate::messages::could_not_save(&path, &e)),
@@ -194,8 +197,10 @@ impl CutCraftApp {
             }
         }
         let Some(cmd) = self.registry.get(id) else {
-            self.status
-                .set_message(&format!("{}: not implemented yet", gui::title_case(id)));
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-not-made-yet",
+                tool = crate::tool_names::name_of(&self.registry, id)
+            ));
             return;
         };
         let page = self.tool_model().kind_of(cmd.id());
@@ -575,9 +580,9 @@ impl CutCraftApp {
         self.file_action("new");
         if self.screen == Screen::NewJob {
             self.import_after_setup = Some(path.to_owned());
-            self.status.set_message(&format!(
-                "Set up the material, then OK makes the job and imports {} into it",
-                file_name(path)
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-set-up-then-import",
+                file = file_name(path).clone()
             ));
         }
     }
@@ -590,10 +595,9 @@ impl CutCraftApp {
             (self.recovery_path, self.recovery_lock) = (Some(own), lock);
         } else {
             (self.recovery_path, self.recovery_lock) = (None, None);
-            self.status.set_message(&format!(
-                "Warning: unsaved work cannot be copied for recovery, because {} cannot be \
-                 written. Save often",
-                dir.display()
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-no-recovery-copies",
+                path = dir.display().to_string()
             ));
         }
     }
@@ -627,9 +631,10 @@ impl CutCraftApp {
         };
         match files::write_recovery(&own, &bytes, &kept_note) {
             Ok(()) => files::remove_recovery(&left, true),
-            Err(e) => self
-                .status
-                .set_message(&format!("could not keep the recovery copy: {e}")),
+            Err(e) => self.status.set_message(&cut_craft_i18n::tr!(
+                "status-recovery-copy-not-kept",
+                error = e.to_string()
+            )),
         }
         self.doc = doc;
         self.session = Session::unsaved_at(note.path);
@@ -639,14 +644,12 @@ impl CutCraftApp {
                 .set_message(&super::tr!("update-your-unsaved-work-is-back"));
         } else {
             // Save goes back to the job's own file when it had one
-            let save = if self.session.path.is_some() {
-                "Save"
-            } else {
-                "Save As"
-            };
-            self.status.set_message(&format!(
-                "Recovered unsaved work from the last run: save it (File ▸ {save}) or close it"
-            ));
+            self.status
+                .set_message(&cut_craft_i18n::tr!(if self.session.path.is_some() {
+                    "status-recovered-save"
+                } else {
+                    "status-recovered-save-as"
+                }));
         }
         true
     }
@@ -742,7 +745,7 @@ impl CutCraftApp {
                 self.options.default_job = Some(job);
                 self.save_options();
                 self.status
-                    .set_message("New jobs will start with these settings");
+                    .set_message(&cut_craft_i18n::tr!("status-new-jobs-start-so"));
             }
             Err(e) => form.error = Some(e),
         }
@@ -766,7 +769,8 @@ impl CutCraftApp {
                 (self.history, self.session) = Default::default();
                 self.picked_constraint = None;
                 self.screen = Screen::Job;
-                self.status.set_message("New job created");
+                self.status
+                    .set_message(&cut_craft_i18n::tr!("status-new-job-created"));
                 self.status.current_tool = self.tool_label("select");
                 if let Some(path) = self.import_after_setup.take() {
                     self.import_file(&path);
@@ -795,9 +799,10 @@ impl CutCraftApp {
             && let Some(path) = saving_path(&path, format.extensions)
         {
             let result = files::export(&self.registry, id, &self.doc, &path);
-            self.status.set_message(
-                &result.map_or_else(|e| e, |()| format!("Exported {}", path.display())),
-            );
+            self.status.set_message(&result.map_or_else(
+                |e| e,
+                |()| cut_craft_i18n::tr!("status-exported", path = path.display().to_string()),
+            ));
         }
     }
 

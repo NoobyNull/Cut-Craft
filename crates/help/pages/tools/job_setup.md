@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-25
-see-also: setup_material, material_setup, settings, draw_rectangle, rotary_firmware, check_rotary_setup, rotary_machining_toolpath
+see-also: setup_material, material_setup, settings, draw_rectangle, rotary_firmware, check_rotary_setup, rotary_machining_toolpath, view_2d
 ---
 
 ## Steps
@@ -69,6 +69,10 @@ The 3D view shows the material as you described it: a round blank, a square or a
 round its axis. A toolpath preview cuts into that same shape, so a shallow cut takes a
 square's corners off just as it will on the machine. Depths are measured down from the round
 that touches a square's or board's flat faces, the same round the design is wrapped onto.
+
+The 2D view shows the design unrolled: one turn of the material between two blue seams, with
+a shaded band past each seam showing what wraps round from the other side. See
+[Moving around the 2D view](help:view_2d).
 
 5. Under **Holding the Part**, say what of the material is left to hold the part while it is
    cut (see below). Leave **Keep Joined At** on **Neither** and **Centre Stock Diameter** at 0
