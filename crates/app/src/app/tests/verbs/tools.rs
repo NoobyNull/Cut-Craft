@@ -208,4 +208,42 @@ impl Harness {
     pub(in super::super) fn remade_last(&self) -> Option<Value> {
         self.app.remade_last()
     }
+
+    /// Picks the bit `name` in the open toolpath form.
+    pub(in super::super) fn choose_tool(&mut self, name: &str) {
+        self.app.choose_tool(name);
+    }
+
+    /// The form's Calculate, after its checks (a size that leaves the model out, ...).
+    pub(in super::super) fn calculate_checked(&mut self, id: &'static str, settings: &Value) {
+        self.app.calculate_checked(id, settings);
+    }
+
+    /// Marks the open form as changed, as any edit does, so it acts on what it shows.
+    pub(in super::super) fn touch_form(&mut self) {
+        self.app.form.as_mut().expect("a form is open").dirty = true;
+    }
+
+    /// The open form's title.
+    pub(in super::super) fn form_label(&self) -> &'static str {
+        self.app.form.as_ref().expect("a form is open").label
+    }
+
+    /// The page the open form shows on.
+    pub(in super::super) fn form_page(&self) -> Page {
+        self.app.form.as_ref().expect("a form is open").page
+    }
+
+    /// The keys of the open form's fields, as it shows them.
+    pub(in super::super) fn form_fields(&self) -> Vec<&str> {
+        (self
+            .app
+            .form
+            .as_ref()
+            .expect("a form is open")
+            .fields
+            .iter())
+        .map(|f| f.key.as_str())
+        .collect()
+    }
 }
