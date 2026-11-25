@@ -26,23 +26,23 @@ fn right_clicking_the_version_offers_check_for_updates() {
         .text_at("Check for Updates...")
         .expect("in the version's menu");
     h.click(item, Modifiers::NONE);
-    assert!(h.app.updates.is_open(), "the Updates window opens and asks");
+    assert!(h.updates_window_open(), "the Updates window opens and asks");
 }
 
 /// A job saved as `sign.ccjob` in `dir`, with this run's recovery copy claimed in
 /// `dir/settings` as run `run`; the saved file's bytes.
 fn saved_job(h: &mut Harness, dir: &std::path::Path, run: &str) -> Vec<u8> {
-    h.app.claim_recovery(&dir.join("settings"), run);
+    h.given_settings_folder(&dir.join("settings"), run);
     let job = dir.join("sign.ccjob");
-    h.app.save_to(&job);
+    h.save_to(&job);
     std::fs::read(&job).expect("saved")
 }
 
 /// The next run, started in `dir/settings` as run `run`: whether it opened work left for it.
 fn next_run(dir: &std::path::Path, run: &str) -> (Harness, bool) {
     let mut next = Harness::at_start();
-    next.app.claim_recovery(&dir.join("settings"), run);
-    let opened = next.app.open_recovery();
+    next.given_settings_folder(&dir.join("settings"), run);
+    let opened = next.open_recovered_work();
     (next, opened)
 }
 
@@ -53,7 +53,7 @@ fn updating_keeps_unsaved_changes_and_the_new_version_opens_them_under_the_same_
     let saved = saved_job(&mut h, &dir, "1");
     h.rectangle(10.0, 10.0, 20.0, 20.0);
     assert_eq!(
-        h.app.hand_off_for_update(),
+        h.hand_off_for_update(),
         HandOff::Kept,
         "kept without asking"
     );
@@ -63,24 +63,21 @@ fn updating_keeps_unsaved_changes_and_the_new_version_opens_them_under_the_same_
         saved,
         "the job's own file untouched"
     );
-    assert_eq!(
-        h.app.job_to_reopen(),
-        None,
-        "the kept copy opens, not the file"
-    );
+    assert_eq!(h.job_to_reopen(), None, "the kept copy opens, not the file");
     // the old version is still closing as the new one starts
     let (next, opened) = next_run(&dir, "2");
     assert!(opened, "the new version opens the kept work");
-    assert_eq!(next.app.session.path, Some(job), "under the job's own name");
-    assert!(
-        next.app.session.is_dirty(&next.app.history),
-        "still unsaved"
+    assert_eq!(
+        next.job_path(),
+        Some(job.as_path()),
+        "under the job's own name"
     );
-    assert_eq!(next.app.doc.vectors.len(), 1);
+    assert!(next.has_unsaved_changes(), "still unsaved");
+    assert_eq!(next.doc().vectors.len(), 1);
     assert!(
-        next.app.status.message.contains("update"),
+        next.status_message().contains("update"),
         "{}",
-        next.app.status.message
+        next.status_message()
     );
     drop(h);
     let _ = std::fs::remove_dir_all(dir);
@@ -90,14 +87,14 @@ fn updating_keeps_unsaved_changes_and_the_new_version_opens_them_under_the_same_
 fn updating_keeps_a_job_that_was_never_saved() {
     let dir = fresh_dir("update-keeps-untitled");
     let mut h = Harness::new();
-    h.app.claim_recovery(&dir.join("settings"), "1");
+    h.given_settings_folder(&dir.join("settings"), "1");
     h.rectangle(10.0, 10.0, 20.0, 20.0);
-    assert_eq!(h.app.hand_off_for_update(), HandOff::Kept);
+    assert_eq!(h.hand_off_for_update(), HandOff::Kept);
     let (next, opened) = next_run(&dir, "2");
     assert!(opened);
-    assert_eq!(next.app.session.path, None, "still Untitled");
-    assert!(next.app.session.is_dirty(&next.app.history));
-    assert_eq!(next.app.doc.vectors.len(), 1);
+    assert_eq!(next.job_path(), None, "still Untitled");
+    assert!(next.has_unsaved_changes());
+    assert_eq!(next.doc().vectors.len(), 1);
     drop(h);
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -107,8 +104,8 @@ fn updating_with_nothing_unsaved_reopens_the_job_from_its_file() {
     let dir = fresh_dir("update-nothing-unsaved");
     let mut h = Harness::new();
     saved_job(&mut h, &dir, "1");
-    assert_eq!(h.app.hand_off_for_update(), HandOff::NothingUnsaved);
-    assert_eq!(h.app.job_to_reopen(), Some(dir.join("sign.ccjob")));
+    assert_eq!(h.hand_off_for_update(), HandOff::NothingUnsaved);
+    assert_eq!(h.job_to_reopen(), Some(dir.join("sign.ccjob")));
     let (_, opened) = next_run(&dir, "2");
     assert!(!opened, "no copy was needed");
     drop(h);
@@ -118,10 +115,10 @@ fn updating_with_nothing_unsaved_reopens_the_job_from_its_file() {
 #[test]
 fn updating_asks_to_save_when_the_work_cannot_be_kept() {
     let mut h = Harness::new();
-    h.app.recovery_path = None;
+    h.given_no_recovery_folder();
     h.rectangle(10.0, 10.0, 20.0, 20.0);
     assert_eq!(
-        h.app.hand_off_for_update(),
+        h.hand_off_for_update(),
         HandOff::NotKept,
         "closing asks Save changes? as before"
     );
@@ -136,14 +133,13 @@ fn work_recovered_after_a_crash_keeps_its_file_name() {
     h.frame(vec![]);
     h.time += AUTOSAVE_SECONDS;
     h.frame(vec![]);
-    let (_, writing) = h.app.autosave.take().expect("a copy is being written");
-    writing.join().unwrap().unwrap();
+    h.finish_recovery_copy();
     // the run ends badly: its lock goes with it, its copy stays
     drop(h);
     let (next, opened) = next_run(&dir, "2");
     assert!(opened);
-    assert_eq!(next.app.session.path, Some(dir.join("sign.ccjob")));
-    assert!(next.app.session.is_dirty(&next.app.history));
+    assert_eq!(next.job_path(), Some(dir.join("sign.ccjob").as_path()));
+    assert!(next.has_unsaved_changes());
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -153,11 +149,14 @@ fn the_kept_work_is_not_written_over_while_cut_craft_closes() {
     let mut h = Harness::new();
     saved_job(&mut h, &dir, "1");
     h.rectangle(10.0, 10.0, 20.0, 20.0);
-    assert_eq!(h.app.hand_off_for_update(), HandOff::Kept);
+    assert_eq!(h.hand_off_for_update(), HandOff::Kept);
     // the recovery interval passes before the window has quite gone
     h.time += AUTOSAVE_SECONDS;
     h.frame(vec![]);
-    assert!(h.app.autosave.is_none(), "no ordinary copy written over it");
+    assert!(
+        !h.writing_recovery_copy(),
+        "no ordinary copy written over it"
+    );
     let copy = dir.join("settings").join("recovery-1.ccjob");
     assert!(crate::files::recovery_note(&copy).after_update);
     drop(h);
@@ -170,9 +169,9 @@ fn closing_again_after_the_work_is_kept_neither_asks_nor_throws_it_away() {
     let mut h = Harness::new();
     saved_job(&mut h, &dir, "1");
     h.rectangle(10.0, 10.0, 20.0, 20.0);
-    assert_eq!(h.app.hand_off_for_update(), HandOff::Kept);
+    assert_eq!(h.hand_off_for_update(), HandOff::Kept);
     // a second close request (no Save changes? question, which a test would hang on)
-    assert!(h.app.close_requested(), "closes");
+    assert!(h.close_window(), "closes");
     assert!(
         dir.join("settings").join("recovery-1.ccjob").exists(),
         "the work is still kept"

@@ -20,6 +20,6 @@ What the bit cannot reach is left uncut, and the part does not come out as drawn
 ## How to fix it
 
 Use a smaller bit, or add a second toolpath with a smaller bit to clean up after it
-(rest machining). A Pocket's **Clearance Tools** can do this for you.
+(rest machining). A Pocket's **Clearance Bits** can do this for you.
 
 See also [Checks before cutting](help:checks_before_cutting).

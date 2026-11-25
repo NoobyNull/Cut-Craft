@@ -450,7 +450,7 @@ impl Document {
         })
     }
 
-    /// The shown components a model tool changes: the picked ones when any are picked (as in
+    /// The shown components a model bit changes: the picked ones when any are picked (as in
     /// the Components panel), else every shown one.
     pub fn components_to_change(&self) -> impl Iterator<Item = (&EntityId, &Component)> {
         let picked: Vec<EntityId> = self

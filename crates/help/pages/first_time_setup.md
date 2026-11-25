@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-25
 see-also: getting_started, interface_layout, settings, setup_material, bug_reports, post_processor_management
 icon: file/setup_material.png
 ---
@@ -33,7 +33,7 @@ or if you set it up wrong the first time.
 
 Press **Start using Cut Craft**. It adds the machine and makes it the one you use, sets
 the job every new file starts with, and puts the starter bits in your units at the top of
-the Tool Database, and arranges the window as picked. The status bar says what was set
+the Bit Library, and arranges the window as picked. The status bar says what was set
 up.
 
 **Skip for now** starts with Cut Craft's usual 600 × 400 × 20 mm job and no machine, and
@@ -51,6 +51,9 @@ answers from before, so change only what is wrong:
   added to it yourself in Machine Configuration are kept.
 - **The material and units** become the job every new file starts with (the same as
   [Job Defaults](help:settings) in Edit ▸ Options).
+
+Run again, setup changes My Machine and the layout, so Cut Craft
+[backs up your settings](help:backups) first.
 
 Every answer can also be changed on its own later: the machine in **Machine ▸ Machine
 Configuration**, new jobs in **Edit ▸ Options ▸ Job Defaults**, crash reports in **Edit ▸

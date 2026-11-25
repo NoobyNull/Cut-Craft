@@ -5,6 +5,7 @@ mod action_runs;
 mod actions;
 mod app_icon;
 mod background;
+mod backups;
 pub(crate) mod built_ins;
 mod calculate_again;
 mod canvas_2d;
@@ -12,6 +13,7 @@ mod canvas_layout;
 mod check_list;
 mod command_form;
 mod commit;
+mod custom_toolbars;
 mod cutting;
 mod depth;
 mod dialog_windows;
@@ -701,8 +703,12 @@ pub(crate) struct CutCraftApp {
     ribbon_tab: usize,
     /// What the Canvas layout has open.
     canvas: canvas_layout::CanvasState,
+    /// What the toolbars of your own have open.
+    toolbars: custom_toolbars::ToolbarState,
     /// Where the options are saved; `None` keeps them in memory (tests).
     options_path: Option<std::path::PathBuf>,
+    /// Help ▸ Back Up Settings and the automatic backups ([`cut_craft_backup`]).
+    backups: backups::Backups,
     /// The user's own spelling words, one a line; none in tests.
     words_path: Option<std::path::PathBuf>,
     /// Where how long each kind of slow job took is kept between runs
@@ -758,10 +764,10 @@ pub(crate) struct CutCraftApp {
     tools: ToolDatabase,
     /// Where `tools` is saved; `None` keeps it in memory (tests, or a file that failed to load).
     tools_path: Option<std::path::PathBuf>,
-    /// The tool database file that could not be read at start: nothing is saved over it,
+    /// The bit library file that could not be read at start: nothing is saved over it,
     /// and every save says so.
     tools_unreadable: Option<std::path::PathBuf>,
-    /// The open Tool Database window.
+    /// The open Bit Library window.
     tool_manager: Option<cut_craft_tool_database::Manager>,
     /// The Materials Library: materials by class and hardness.
     materials: cut_craft_core::material_library::MaterialLibrary,
@@ -771,7 +777,7 @@ pub(crate) struct CutCraftApp {
     materials_unreadable: Option<std::path::PathBuf>,
     /// The open Materials Library window.
     materials_window: Option<cut_craft_tool_database::materials::MaterialsWindow>,
-    /// What the open Select Tool picks for: a tool in one of the form's lists, or a tool
+    /// What the open Select Bit picks for: a tool in one of the form's lists, or a tool
     /// changer holder; `None` picks the form's own tool.
     picking: Option<PickFor>,
     /// A Calculate waiting on the deeper-than-the-material warning.
@@ -794,6 +800,12 @@ pub(crate) struct CutCraftApp {
     /// The problems Save Anyway was answered for: the next save goes on despite them, and
     /// asks again if the checks find any not among them. Empty when not answered.
     checks_accepted: Vec<String>,
+    /// The errors (Must fix) the save under way was answered Save Anyway for: said at the
+    /// top of each file it writes. Set as each save starts, never kept for the next.
+    saving_errors: Vec<String>,
+    /// The job revision and machine the save under way was checked for: a change while it
+    /// waits on a question (the Web API can make one) stops it, to be checked again.
+    saving_checked: Option<(u64, usize)>,
     /// The warnings of the checks before cutting ticked as read, by what they say: Save
     /// and Send to Machine wait until each one found is ticked.
     acknowledged: std::collections::BTreeSet<String>,

@@ -32,3 +32,5 @@ see-also: 3d_roughing_toolpath, create_shape, stepover
    ![Step 6](pictures/3d_finishing_toolpath/step-6.png)
 
 On a tall model, clear most of the wood first with [3D Roughing](help:3d_roughing_toolpath). When it looks right in the preview, [save it for your machine](help:save_toolpaths).
+
+The **Bit** box on the form says which bit cuts it: **Select…** picks another from the [Bit Library](help:tool_database), and **Edit…** changes its sizes, feeds and speeds there.

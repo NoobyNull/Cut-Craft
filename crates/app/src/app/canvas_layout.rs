@@ -41,7 +41,11 @@ impl CutCraftApp {
         // under the view's own bar (2D / 3D, the split, sheet and layer, snapping)
         let top = room.top() + 2.0 * row + 3.0 * margin;
         let tab = RIBBON_TABS[self.ribbon_tab];
-        if tab == "Favourites" || tab == GADGETS {
+        if self.toolbars.ribbon.is_some() {
+            self.canvas.group = None;
+            let frame = floating(ui);
+            self.canvas_toolbar(ui, egui::pos2(room.left() + margin, top), frame);
+        } else if tab == "Favourites" || tab == GADGETS {
             self.canvas.group = None;
             let left = egui::pos2(room.left() + margin, top);
             let _ = self.canvas_flyout(ui, left, tab, &self.canvas_list(tab));
@@ -69,19 +73,9 @@ impl CutCraftApp {
     /// The header: the tabs, then on the right the Find a Tool box.
     fn canvas_header(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Canvas header");
-        let gadgets = self.gadget_tools();
-        if gadgets.is_empty() && RIBBON_TABS[self.ribbon_tab] == GADGETS {
-            self.ribbon_tab = 0;
-        }
         ui.horizontal(|ui| {
-            for (i, tab) in RIBBON_TABS.iter().enumerate() {
-                if (*tab != GADGETS || !gadgets.is_empty())
-                    && ui
-                        .selectable_value(&mut self.ribbon_tab, i, page_tab_name(tab))
-                        .clicked()
-                {
-                    self.canvas.group = None;
-                }
+            if self.tab_row(ui) {
+                self.canvas.group = None;
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 self.canvas_search(ui);
@@ -216,6 +210,10 @@ impl CutCraftApp {
                                     } else {
                                         response.on_hover_hint(&name)
                                     };
+                                    if let Some(action) = self.group_menu_on(&response, group.name)
+                                    {
+                                        self.invoke(ui.ctx(), &action);
+                                    }
                                     if hover && response.hovered() {
                                         self.canvas.group = Some(group.name);
                                     } else if response.clicked() {

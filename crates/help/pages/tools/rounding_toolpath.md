@@ -28,3 +28,5 @@ see-also: job_setup, 3d_roughing_toolpath
    ![Step 5](pictures/rounding_toolpath/step-5.png)
 
 When it looks right in the preview, [save it for your machine](help:save_toolpaths).
+
+The **Bit** box on the form says which bit cuts it: **Select…** picks another from the [Bit Library](help:tool_database), and **Edit…** changes its sizes, feeds and speeds there.

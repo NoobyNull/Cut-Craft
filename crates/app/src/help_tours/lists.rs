@@ -762,7 +762,7 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("field:file"),
             },
             Step {
-                caption: "Pick the **Tool** the file cuts with: its shape and size draw the \
+                caption: "Pick the **Bit** the file cuts with: its shape and size draw the \
                           preview.",
                 setup: |_, _| {},
                 mark: Mark::At("field:tool"),

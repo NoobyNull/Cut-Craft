@@ -1,4 +1,4 @@
-//! The Materials Library and Tool Database windows, and the Design page's tool buttons and fly-
+//! The Materials Library and Bit Library windows, and the Design page's tool buttons and fly-
 //! outs.
 
 use super::{
@@ -28,7 +28,7 @@ impl CutCraftApp {
             }
             MaterialsOutcome::Cancel => self.materials_window = None,
             MaterialsOutcome::AddTool => {
-                // on the database as kept: its own edits are kept as the Tool Database's
+                // on the database as kept: its own edits are kept as the Bit Library's
                 // Select keeps them, the library's stay unkept until its OK
                 let mut manager = cut_craft_tool_database::Manager::selecting(&self.tools, "");
                 manager.library = self.materials.clone();
@@ -46,7 +46,7 @@ impl CutCraftApp {
         };
         self.materials = window.library.clone();
         // the library's own edits onto the database as it is now, not the copy it
-        // opened on: edits in the Tool Database since then stay
+        // opened on: edits in the Bit Library since then stay
         self.tools = window.tools_onto(&self.tools);
         window.applied(&self.tools);
         if close {
@@ -57,7 +57,7 @@ impl CutCraftApp {
         self.tools_changed("Materials Library saved");
         if let Err(e) = library {
             let tools = if self.status.message == "Materials Library saved" {
-                "the bits' feeds were saved to the tool database".to_owned()
+                "the bits' feeds were saved to the bit library".to_owned()
             } else {
                 self.status.message.clone()
             };
@@ -78,8 +78,8 @@ impl CutCraftApp {
         };
         match (outcome, self.picking) {
             (Outcome::Select(name), Some(super::super::PickFor::Material)) => {
-                // the picker's own edits (a catalogue bit copied into My Tools, a tool
-                // added or edited) kept as the Tool Database's Select keeps them
+                // the picker's own edits (a catalogue bit copied into My Bits, a tool
+                // added or edited) kept as the Bit Library's Select keeps them
                 self.tools = manager.draft.clone();
                 let renamed = manager.take_renamed();
                 for (from, to) in &renamed {
@@ -87,7 +87,7 @@ impl CutCraftApp {
                 }
                 self.tool_manager = None;
                 self.picking = None;
-                self.tools_kept("Tool database saved", &renamed);
+                self.tools_kept("Bit library saved", &renamed);
                 self.refresh_form_tool();
                 if let Some(window) = &mut self.materials_window {
                     window.rebase(&self.tools);
@@ -99,7 +99,7 @@ impl CutCraftApp {
             (Outcome::MaterialsLibrary, _) => {
                 // the edits so far kept, as Apply, then the library on them
                 self.tools = manager.draft.clone();
-                self.tools_changed("Tool database saved");
+                self.tools_changed("Bit library saved");
                 self.materials_window =
                     Some(cut_craft_tool_database::materials::MaterialsWindow::new(
                         &self.materials,
@@ -112,7 +112,7 @@ impl CutCraftApp {
         true
     }
 
-    /// The open Tool Database learns which tools the job's toolpaths cut with, so its
+    /// The open Bit Library learns which tools the job's toolpaths cut with, so its
     /// Delete can say when it would take one.
     pub(super) fn tool_manager_sees_the_job(&mut self) {
         if let Some(manager) = &mut self.tool_manager {
@@ -122,7 +122,7 @@ impl CutCraftApp {
         }
     }
 
-    /// The Tool Database manager; its edits are kept on Apply or OK.
+    /// The Bit Library manager; its edits are kept on Apply or OK.
     pub(in super::super) fn tool_database_window(&mut self, ctx: &egui::Context) {
         use super::super::{Dialog, PickFor, filtered_dialog};
         use cut_craft_tool_database::Outcome;
@@ -172,7 +172,7 @@ impl CutCraftApp {
                 if matches!(outcome, Outcome::Ok | Outcome::Select(_)) {
                     self.tool_manager = None;
                 }
-                self.tools_kept("Tool database saved", &renamed);
+                self.tools_kept("Bit library saved", &renamed);
                 self.refresh_form_tool();
                 if let Outcome::Select(name) = &outcome {
                     let picking = self.picking;
@@ -194,7 +194,7 @@ impl CutCraftApp {
                     // the checks made so far used the slots just changed
                     self.forget_save_checks();
                     self.machines_changed(&format!(
-                        "Tool database saved; {} loaded",
+                        "Bit library saved; {} loaded",
                         changer.machine
                     ));
                 }
@@ -215,7 +215,7 @@ impl CutCraftApp {
                     filtered_dialog(Dialog::SaveToolDatabase, &self.registry).save_file()
                 {
                     let done = format!(
-                        "Exported {} tools to {}",
+                        "Exported {} bits to {}",
                         tools.tools.len(),
                         file_name(&path)
                     );
@@ -227,8 +227,8 @@ impl CutCraftApp {
         }
     }
 
-    /// Adds the tools of a tool database file in a group named after it: to the open Tool
-    /// Database window, kept on its OK, else to the database, saved now.
+    /// Adds the tools of a bit library file in a group named after it: to the open Bit
+    /// Library window, kept on its OK, else to the database, saved now.
     pub(in super::super) fn import_tools(&mut self, path: &std::path::Path) {
         let name = path.file_stem().map_or_else(
             || "Imported".to_owned(),
@@ -237,7 +237,7 @@ impl CutCraftApp {
         match files::read_tool_file(path) {
             Ok(tools) => {
                 let n = tools.tools.len();
-                let done = format!("Imported {n} tools from {}", file_name(path));
+                let done = format!("Imported {n} bits from {}", file_name(path));
                 // a bit listed once per material becomes one bit: what was not kept is said
                 let said = |report: Vec<String>| match report.first() {
                     Some(first) => format!("; {first}"),
@@ -327,7 +327,18 @@ impl CutCraftApp {
         // Ribbon names under its icons)
         for (name, tools) in sections {
             if !name.is_empty() {
-                ui.strong(crate::tool_names::group_name(name));
+                let label = crate::tool_names::group_name(name);
+                if self.group_named(name).is_some() {
+                    // a group's heading puts the whole group on a toolbar of your own
+                    let heading = ui.add(
+                        egui::Label::new(egui::RichText::new(label).strong())
+                            .selectable(false)
+                            .sense(egui::Sense::click()),
+                    );
+                    chosen = chosen.or_else(|| self.group_menu_on(&heading, name));
+                } else {
+                    ui.strong(label);
+                }
             }
             if !among && !folded {
                 self.spread_tools(ui, tools, edge, &mut clicked, &mut chosen);
@@ -398,8 +409,10 @@ impl CutCraftApp {
             Place::Grid
         };
         self.popup(response, || {
-            self.tool_model()
-                .menu(id, place, &self.options.favourites, folded)
+            let menu = self
+                .tool_model()
+                .menu(id, place, &self.options.favourites, folded);
+            self.with_toolbar_menu(menu, &crate::custom_toolbars::Item::Tool(id.to_owned()))
         })
     }
 

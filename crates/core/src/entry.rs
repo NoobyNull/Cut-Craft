@@ -61,7 +61,7 @@ pub enum Turn {
     Clockwise,
 }
 
-/// The loops a trochoidal toolpath makes, as shares of the tool's diameter, and which way
+/// The loops a trochoidal toolpath makes, as shares of the bit's diameter, and which way
 /// they turn.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Loops {
@@ -553,7 +553,7 @@ pub enum TabPlacement {
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct TabSettings {
-    /// As thick as the tool's pass depth (at most half the cut) and twice as long as thick:
+    /// As thick as the bit's pass depth (at most half the cut) and twice as long as thick:
     /// a 1/4" bit taking 1/4" passes leaves 1/2" x 1/4" tabs. Off: the length and thickness
     /// below (added with tab sizes)
     #[serde(default = "yes")]

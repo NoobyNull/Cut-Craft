@@ -23,7 +23,7 @@ see-also: profile_toolpath, vcarve_engrave_toolpath, stepover
 
    ![Step 4](pictures/pocket_toolpath/step-4.png)
 
-5. Check the bit. **Select…** picks another one from your Tool Database; its feeds, speeds and depth per pass come with it.
+5. Check the bit. **Select…** picks another one from your Bit Library; its feeds, speeds and depth per pass come with it.
 
    ![Step 5](pictures/pocket_toolpath/step-5.png)
 
@@ -39,7 +39,7 @@ see-also: profile_toolpath, vcarve_engrave_toolpath, stepover
 
    ![Step 8](pictures/pocket_toolpath/step-8.png)
 
-The bit clears the inside in rows that overlap a little. How far over each row moves is the [stepover](help:stepover), set with the bit in the Tool Database.
+The bit clears the inside in rows that overlap a little. How far over each row moves is the [stepover](help:stepover), set with the bit in the Bit Library.
 
 With clearance bits added, a big pocket can take a while to calculate. The progress window
 gives each bit its share of the bar and says about how long is left

@@ -2854,6 +2854,7 @@ dependencies = [
  "cmd-wrapped-fluting-layout",
  "cmd-wrapped-spiral-layout",
  "color_quant",
+ "cut-craft-backup",
  "cut-craft-border-tile",
  "cut-craft-bug-report",
  "cut-craft-core",
@@ -2901,6 +2902,17 @@ dependencies = [
  "sha2",
  "winit",
  "winresource",
+]
+
+[[package]]
+name = "cut-craft-backup"
+version = "0.7.6"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "sha2",
+ "zip 2.6.1",
 ]
 
 [[package]]

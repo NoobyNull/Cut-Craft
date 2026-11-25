@@ -196,6 +196,7 @@ impl CutCraftApp {
                         } else {
                             self.design_subtabs(ui);
                             self.gadgets_section(ui);
+                            self.toolbar_sections(ui);
                         }
                     }
                     "Sheets" => self.sheets_panel(ui),

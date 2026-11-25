@@ -254,6 +254,7 @@ fn they_load_back_as_saved_and_fill_gaps_with_defaults() {
             "Mouse and Shortcuts",
             "SpaceMouse",
             "Updates",
+            "Backups",
             "Bug Reports",
             "Web API",
             "Advanced"

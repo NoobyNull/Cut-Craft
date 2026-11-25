@@ -189,7 +189,7 @@ fn the_tool_changer_window_loads_a_holder_with_select_tool() {
     h.app.invoke(&h.ctx, "tool_changer");
     h.frame(vec![]);
     h.frame(vec![]);
-    // each holder: its tool, then Select… to pick one in the Tool Database
+    // each holder: its tool, then Select… to pick one in the Bit Library
     let selects = h.texts_at("Select…");
     assert_eq!(selects.len(), 3, "a Select… per holder");
     h.click(selects[1], Modifiers::NONE);
@@ -233,7 +233,7 @@ fn a_tool_changer_loads_tools_and_the_gcode_calls_their_slots() {
     let mut h = Harness::new();
     h.app.machines.add();
     h.app.machines.active_mut().unwrap().set_slot_count(5);
-    // load the 3 mm end mill into slot 3 in the Tool Database, kept on OK
+    // load the 3 mm end mill into slot 3 in the Bit Library, kept on OK
     h.app.invoke(&h.ctx, "tool_database");
     let manager = h.app.tool_manager.as_mut().unwrap();
     manager
@@ -262,7 +262,7 @@ fn a_tool_changer_loads_tools_and_the_gcode_calls_their_slots() {
     h.app.pages.set_pinned(Page::Toolpaths, true);
     h.frame(vec![]);
     h.frame(vec![]);
-    // Select… opens the Tool Database, the tool changer's holders over its tree
+    // Select… opens the Bit Library, the tool changer's holders over its tree
     h.click(
         h.text_at("Select…").expect("the form's tool"),
         Modifiers::NONE,
@@ -364,8 +364,8 @@ fn the_tool_changer_window_loads_holders_and_tools_carry_their_own_numbers() {
     assert!(h.app.tool_changer_window);
     h.frame(vec![]);
     h.frame(vec![]);
-    assert!(h.text_at("Tool Changer").is_some(), "the window");
-    assert!(h.text_at("Load by Tool Number").is_some());
+    assert!(h.text_at("Tool Changer (ATC)").is_some(), "the window");
+    assert!(h.text_at("Load by Bit Number").is_some());
     assert!(h.text_at("T4").is_some(), "a row per holder");
 }
 
@@ -378,7 +378,7 @@ fn tools_loaded_in_the_tool_changer_window_take_their_slot_numbers() {
     machine.slots[1] = Some("6 mm Ball Nose".into());
     h.app.tool_changer_changed();
     assert_eq!(h.app.tools.get("6 mm Ball Nose").unwrap().number, 2);
-    // and a tool loaded before is numbered when the Tool Database opens
+    // and a tool loaded before is numbered when the Bit Library opens
     h.app.machines.active_mut().unwrap().slots[3] = Some("3 mm End Mill".into());
     h.app.invoke(&h.ctx, "tool_database");
     let draft = &h.app.tool_manager.as_ref().unwrap().draft;
@@ -468,7 +468,7 @@ fn tool_changes_go_to_files_of_their_own_the_tool_changer_or_a_pause() {
     assert!(done.starts_with("Saved 2 toolpath files"), "{done}");
     assert!(dir.join("apart_1_6 mm End Mill.nc").exists());
     let gcode = std::fs::read_to_string(dir.join("apart_2_3 mm End Mill.nc")).unwrap();
-    assert!(!gcode.contains("M6"), "no tool change in a file: {gcode}");
+    assert!(!gcode.contains("M6"), "no bit change in a file: {gcode}");
     // the tool changer: one file, M6
     save(&h, ToolChanges::ToolChanger, "atc.nc");
     let gcode = std::fs::read_to_string(dir.join("atc.nc")).unwrap();
@@ -672,7 +672,7 @@ fn the_buttons_already_there_keep_their_places() {
     // the Toolpaths page was regrouped on purpose (Matthew, 2026-11-13); its new groups
     // keep their places from here on
     starts(
-        "Job and Tools",
+        "Job and Bits",
         &[
             "material_setup",
             "materials",
@@ -851,7 +851,7 @@ fn changing_the_tool_changer_checks_the_toolpaths_again() {
 
 #[test]
 fn loading_bits_in_the_tool_database_checks_the_toolpaths_again() {
-    // the Tool Database's OK puts bits in the tool changer's slots; the checks made with
+    // the Bit Library's OK puts bits in the tool changer's slots; the checks made with
     // the slots empty must not still say they are missing
     use crate::files::ToolChanges;
     let mut h = Harness::new();
@@ -945,8 +945,19 @@ fn the_keep_out_check_at_saving_checks_the_moves_that_are_saved() {
     h.app.options.toolpaths.tolerance_2d = 0.1;
     let plan = vec![vec![id]];
     assert_eq!(h.app.not_kept_out(&h.app.doc, &plan), [] as [String; 0]);
-    let why = h.app.thinned_for_saving(&plan).unwrap_err();
-    assert!(why.contains("keep-out zone"), "{why}");
+    // the checks before cutting check the moves as saved, thinned: a risk to the machine
+    let found = h
+        .app
+        .preflight(&plan, crate::files::ToolChanges::SeparateFiles);
+    let keep_out = found
+        .iter()
+        .find(|f| f.check == cut_craft_core::check_list::Check::KeepOut)
+        .expect("the thinned cut enters the clamp's zone");
+    assert_eq!(
+        keep_out.severity,
+        cut_craft_core::preflight::Severity::Damage
+    );
+    assert!(keep_out.message.contains("Clamp 1"), "{}", keep_out.message);
 }
 
 #[test]

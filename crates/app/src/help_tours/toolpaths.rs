@@ -72,7 +72,7 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("field:depth"),
             },
             Step {
-                caption: "Check the bit. **Select…** picks another one from your Tool Database; \
+                caption: "Check the bit. **Select…** picks another one from your Bit Library; \
                           its feeds, speeds and depth per pass come with it.",
                 setup: |_, _| {},
                 mark: Mark::At("button:Select…"),
@@ -801,8 +801,8 @@ pub(super) const TOURS: &[Tour] = &[
         tool: "tool_database",
         steps: &[
             Step {
-                caption: "The Tool Database keeps your bits, each with its size, shape, feeds \
-                          and speeds. On the Toolpaths page, press **Tool Database** (under Job \
+                caption: "The Bit Library keeps your bits, each with its size, shape, feeds \
+                          and speeds. On the Toolpaths page, press **Bit Library** (under Job \
                           and Tools).",
                 setup: |app, ctx| {
                     fresh_job(app, ctx);
@@ -811,9 +811,9 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:tool_database"),
             },
             Step {
-                caption: "**My Tools** are the bits you own; the makers' catalogues below are \
+                caption: "**My Bits** are the bits you own; the makers' catalogues below are \
                           for copying from. Click a bit to see its drawing and settings, or add \
-                          your own. Every toolpath's **Select…** picks from My Tools, and \
+                          your own. Every toolpath's **Select…** picks from My Bits, and \
                           brings that bit's feeds, speeds and depth per pass with it.",
                 setup: |app, ctx| app.invoke(ctx, "tool_database"),
                 mark: Mark::None,
@@ -841,7 +841,7 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::Everything,
             },
             Step {
-                caption: "On the Toolpaths page, press **Keep-Out Zones** (under Job and Tools).",
+                caption: "On the Toolpaths page, press **Keep-Out Zones** (under Job and Bits).",
                 setup: |app, _| app.pages.set_pinned(Page::Toolpaths, true),
                 mark: Mark::At("tool:keep_out_zones"),
             },

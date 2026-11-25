@@ -6,11 +6,11 @@
 error-the-depth-map-is-too-eab97d = the depth map is too big
 
 ## commands/3d-finishing-toolpath/src/lib.rs
-error-choose-at-least-one-tool-80c346 = choose at least one tool
-error-the-tool-s-finishing-stepover-87e5e5 = the tool's finishing stepover must be more than 0% and at most 100%: set it in the Tool Database
+error-choose-at-least-one-bit-a1ac27 = choose at least one bit
+error-the-bit-s-finishing-stepover-217283 = the bit's finishing stepover must be more than 0% and at most 100%: set it in the Bit Library
 
 ## commands/3d-roughing-toolpath/src/lib.rs
-error-set-the-tool-s-clearing-d355e5 = set the tool's clearing stepover to more than 0% and at most 100% in the Tool Database
+error-set-the-bit-s-clearing-13c7c3 = set the bit's clearing stepover to more than 0% and at most 100% in the Bit Library
 error-set-the-allowance-to-0-dcc459 = set the allowance to 0 or more
 
 ## commands/add-draft/src/lib.rs
@@ -396,7 +396,7 @@ error-no-room-for-the-registration-29c30f = No room for the registration mark cl
 
 ## commands/rotary-lathe-toolpath/src/lib.rs
 error-the-lathe-spins-the-material-5ba114 = the lathe spins the material: set the job up as rotary in Job Setup
-error-the-tool-s-stepover-must-fba4c4 = the tool's stepover must be more than 0% and at most 100%: set it in the Tool Database
+error-the-bit-s-stepover-must-7f947e = the bit's stepover must be more than 0% and at most 100%: set it in the Bit Library
 error-part-off-s-start-is-e8e2fe = Part off's Start is outside the machining limit: move Start to where the limit reaches along the part, or pick Material as the limit.
 
 ## commands/rounding-toolpath/src/lib.rs
@@ -452,7 +452,7 @@ error-the-vector-does-not-cross-405c08 = the vector does not cross the component
 error-select-at-least-two-closed-8a37fc = select at least two closed vectors to subtract
 
 ## commands/surfacing-toolpath/src/lib.rs
-error-set-the-bit-s-stepover-d1c9d6 = set the bit's stepover between 1% and 100% of its width (Edit… under Tool)
+error-set-the-bit-s-stepover-b4f207 = set the bit's stepover between 1% and 100% of its width (Edit… under Bit)
 error-there-is-nothing-to-flatten-a592d9 = there is nothing to flatten
 error-enter-the-spoilboard-s-width-f2c7df = enter the spoilboard's width and height (set your machine's bed size in Machine ▸ Machines and they fill in)
 error-select-the-closed-outline-of-8132c8 = select the closed outline of what to flatten, or flatten the whole material
@@ -501,8 +501,8 @@ error-nothing-selected-is-in-a-d6b845 = nothing selected is in a group. Select a
 
 ## commands/vcarve-engrave-toolpath/src/lib.rs
 error-select-the-closed-vectors-to-6fa22c = select the closed vectors to carve
-error-clearance-tools-clear-a-fill-c296bb = clearance tools clear a Fill's flat bottom: set Carve to Fill, or take them off
-error-clearance-tools-clear-the-flat-947180 = clearance tools clear the flat bottom: give a flat depth
+error-clearance-bits-clear-a-fill-e94c6e = clearance bits clear a Fill's flat bottom: set Carve to Fill, or take them off
+error-clearance-bits-clear-the-flat-eda53f = clearance bits clear the flat bottom: give a flat depth
 error-pick-a-v-bit-v-d942c5 = pick a V-bit: V-carving needs one
 
 ## commands/vector-boundary/src/lib.rs

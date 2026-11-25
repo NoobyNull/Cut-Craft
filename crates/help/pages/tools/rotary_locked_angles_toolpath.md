@@ -23,7 +23,7 @@ and is usually smoother.
 3. On the Toolpaths page, press **Rotary Locked Angles** (under 3D Toolpaths). It shows once
    **4th axis** is ticked in Machine Configuration (see
    [The 4th axis and your firmware](help:rotary_firmware)).
-4. Pick a ball nose. Its **finishing stepover** (in the [Tool Database](help:tool_database))
+4. Pick a ball nose. Its **finishing stepover** (in the [Bit Library](help:tool_database))
    is how far apart the passes are.
 5. Set **Most angles**, then press **Calculate**.
 
