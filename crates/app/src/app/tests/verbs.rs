@@ -511,10 +511,139 @@ impl Harness {
     ) -> bool {
         self.app.may_run_add_on(id, name, program)
     }
+
+    // ---- menus, the clipboard and undo ----
+
+    /// The items of the menu bar's menu `name` (File, Edit, Gadgets, ...).
+    pub(super) fn menu_items(&self, name: &str) -> &[gui::MenuItem] {
+        &self
+            .app
+            .menus
+            .menus
+            .iter()
+            .find(|m| m.name == name)
+            .unwrap_or_else(|| panic!("no {name} menu"))
+            .items
+    }
+
+    /// Whether `id`'s button or menu item can be picked now (not greyed out).
+    pub(super) fn available(&self, id: &str) -> bool {
+        self.app.available(id)
+    }
+
+    /// How many pieces Copy or Cut put on the clipboard.
+    pub(super) fn on_clipboard(&self) -> usize {
+        self.app.clipboard.len()
+    }
+
+    /// Whether Edit ▸ Undo has anything to take back.
+    pub(super) fn can_undo(&self) -> bool {
+        self.app.history.can_undo()
+    }
+
+    /// How many steps Edit ▸ Undo could take back.
+    pub(super) fn undo_steps(&self) -> usize {
+        self.app.history.undo_depth()
+    }
+
+    /// A count that moves on with every change to the job, undo and redo too.
+    pub(super) fn job_revision(&self) -> u64 {
+        self.app.history.revision()
+    }
+
+    // ---- forms, as their buttons run them ----
+
+    /// The form's Apply, Calculate or Create with `settings`.
+    pub(super) fn apply_form(&mut self, id: &str, settings: &Value) -> Result<(), String> {
+        self.app.apply_form(id, settings)
+    }
+
+    /// Replaces all the open form's settings with `settings`, as typing each would.
+    pub(super) fn set_form_settings(&mut self, settings: Value) {
+        self.set_form_value("", settings);
+    }
+
+    /// The settings `id`'s form opens with on this job.
+    pub(super) fn opening_settings(&self, id: &str) -> Value {
+        self.app
+            .registry
+            .get(id)
+            .unwrap_or_else(|| panic!("no tool {id}"))
+            .initial_params(&self.app.doc)
+    }
+
+    /// `id`'s own default settings.
+    pub(super) fn default_settings(&self, id: &str) -> Value {
+        self.app
+            .registry
+            .get(id)
+            .unwrap_or_else(|| panic!("no tool {id}"))
+            .default_params()
+    }
+
+    /// The note under the open form's buttons ("Already up to date", ...), if it shows one.
+    pub(super) fn form_note(&self) -> Option<&str> {
+        self.app.form_note()
+    }
+
+    /// Calculate as New on a toolpath form.
+    pub(super) fn calculate_as_new(&mut self) {
+        self.app.calculate_as_new();
+    }
+
+    /// Picks toolpath `id` in the Toolpaths list.
+    pub(super) fn select_toolpath(&mut self, id: EntityId) {
+        self.app.selected_toolpath = Some(id);
+    }
+
+    // ---- the window, starting up and slow jobs ----
+
+    /// The window's title.
+    pub(super) fn window_title(&self) -> &str {
+        &self.app.title
+    }
+
+    /// The tool the status bar names as in use.
+    pub(super) fn current_tool(&self) -> &str {
+        &self.app.status.current_tool
+    }
+
+    /// The job is the file at `path`, as if opened from it.
+    pub(super) fn given_job_path(&mut self, path: std::path::PathBuf) {
+        self.app.session.path = Some(path);
+    }
+
+    /// Starts Cut Craft with no file to open, as a plain launch does.
+    pub(super) fn start_up(&mut self) {
+        self.app.open_at_start(None);
+    }
+
+    /// The screen showing: the start screen or a job.
+    pub(super) fn screen(&self) -> Screen {
+        self.app.screen
+    }
+
+    /// The progress window shows as soon as a slow job starts, not after a wait.
+    pub(super) fn given_progress_shown_at_once(&mut self) {
+        self.app.wait_before_showing = std::time::Duration::ZERO;
+    }
+
+    /// Starts `work` as a slow job titled `title`, as a toolpath that takes a while does;
+    /// once done (and still wanted), the status bar says "used".
+    pub(super) fn start_slow_job(&mut self, title: &str, work: impl FnOnce() + Send + 'static) {
+        self.app.in_background(title, "test:slow", work, |app, ()| {
+            app.status.set_message("used")
+        });
+    }
+
+    /// Whether a slow job is running (its progress window up).
+    pub(super) fn busy(&self) -> bool {
+        self.app.busy.is_some()
+    }
 }
 
 /// The test files moved onto the verbs, each with its source: they never reach into the app.
-const THROUGH_THE_HARNESS: [(&str, &str); 9] = [
+const THROUGH_THE_HARNESS: [(&str, &str); 11] = [
     ("layers_sheets.rs", include_str!("layers_sheets.rs")),
     (
         "accessibility_tests.rs",
@@ -527,6 +656,8 @@ const THROUGH_THE_HARNESS: [(&str, &str); 9] = [
     ("rotary_wrap.rs", include_str!("rotary_wrap.rs")),
     ("unsigned_code.rs", include_str!("unsigned_code.rs")),
     ("rotary.rs", include_str!("rotary.rs")),
+    ("moving.rs", include_str!("moving.rs")),
+    ("calculating.rs", include_str!("calculating.rs")),
 ];
 
 /// The lines of `source` that reach into the app past the harness.
