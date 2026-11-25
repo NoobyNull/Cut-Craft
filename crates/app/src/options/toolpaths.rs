@@ -317,14 +317,6 @@ pub struct General {
     pub show_tips_at_startup: bool,
 }
 
-#[expect(
-    clippy::trivially_copy_pass_by_ref,
-    reason = "serde's skip_serializing_if"
-)]
-pub(super) fn is_zero(n: &usize) -> bool {
-    *n == 0
-}
-
 pub(super) fn autosave_seconds() -> u32 {
     // a whole number of seconds
     #[expect(

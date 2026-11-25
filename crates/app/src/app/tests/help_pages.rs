@@ -1108,19 +1108,24 @@ fn did_you_know_steps_through_the_tips() {
 }
 
 #[test]
-fn a_different_tip_shows_each_start_unless_turned_off() {
+fn each_start_shows_a_tip_not_seen_yet_unless_turned_off() {
+    use super::tips::TIPS;
     let mut h = Harness::at_start();
-    h.app.options.next_tip = 3;
-    h.app.tip_at_startup();
-    assert_eq!(h.app.tip, Some(3));
-    assert_eq!(h.app.options.next_tip, 4, "the next one next time");
+    let mut shown = std::collections::HashSet::new();
+    for _ in 0..TIPS.len() {
+        h.app.tip = None;
+        h.app.tip_at_startup();
+        let n = h.app.tip.expect("a tip at start");
+        h.frame(vec![]);
+        assert!(shown.insert(n), "tip {n} came up twice before the rest");
+    }
+    // tests start in Classic, so the Canvas tip is among them
+    assert_eq!(shown.len(), TIPS.len(), "every tip once");
     h.app.tip = None;
-    h.app.options.next_tip = super::tips::TIPS.len() - 1;
     h.app.tip_at_startup();
-    assert_eq!(
-        h.app.options.next_tip, 0,
-        "back to the first after the last"
-    );
+    assert!(h.app.tip.is_some(), "then round again");
+    h.frame(vec![]);
+    assert_eq!(h.app.options.seen_tips.len(), 1, "starting over");
     h.app.tip = None;
     h.app.options.general.show_tips_at_startup = false;
     h.app.tip_at_startup();
@@ -1129,6 +1134,66 @@ fn a_different_tip_shows_each_start_unless_turned_off() {
     h.app.open_first_run();
     h.app.tip_at_startup();
     assert_eq!(h.app.tip, None, "not over first-time setup");
+}
+
+#[test]
+fn paging_through_tips_counts_them_as_seen() {
+    let mut h = Harness::at_start();
+    h.choose(help_menu, &["Did You Know?..."]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    for _ in 0..3 {
+        let next = h.text_at("Next ▶").unwrap();
+        h.click(next, Modifiers::NONE);
+        h.frame(vec![]);
+    }
+    let seen: Vec<u64> = super::tips::TIPS[..4]
+        .iter()
+        .map(super::tips::Tip::key)
+        .collect();
+    assert_eq!(h.app.options.seen_tips, seen);
+}
+
+/// Where the Canvas tip is in the list.
+fn canvas_tip() -> usize {
+    super::tips::TIPS
+        .iter()
+        .position(|t| t.tries == Some(crate::options::WindowLayout::Canvas))
+        .expect("a tip offers Canvas")
+}
+
+#[test]
+fn the_canvas_tip_switches_to_canvas_and_is_not_shown_in_canvas() {
+    let mut h = Harness::at_start();
+    let n = canvas_tip();
+    assert!(super::tips::TIPS[n].weight > 1, "it comes up more often");
+    h.app.open_tips(n);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    // the words name the button too: the button is under them
+    let try_it = *h.texts_at("Try Canvas").last().expect("a button to try it");
+    h.click(try_it, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(
+        h.app.options.general.layout,
+        crate::options::WindowLayout::Canvas
+    );
+    assert_eq!(h.app.tip, None, "the tip closes");
+    // in Canvas: never at start, and Next and Previous step over it
+    h.app.options.seen_tips.clear();
+    for _ in 0..super::tips::TIPS.len() {
+        h.app.tip = None;
+        h.app.tip_at_startup();
+        assert_ne!(h.app.tip, Some(n), "not offered in Canvas");
+        h.frame(vec![]);
+    }
+    h.app.open_tips(n - 1);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let next = h.text_at("Next ▶").unwrap();
+    h.click(next, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.app.tip, Some(n + 1), "stepped over");
 }
 
 #[test]
