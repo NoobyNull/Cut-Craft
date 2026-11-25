@@ -14,7 +14,7 @@ The finish after it then has only a thin, even layer left to take off.
    **4th axis** is ticked in Machine Configuration (see
    [The 4th axis and your firmware](help:rotary_firmware)).
 3. Pick a square end mill: it clears the bulk quickest. Its **pass depth** (in the
-   [Tool Database](help:tool_database)) is how deep each level goes, and its **stepover** how
+   [Bit Library](help:tool_database)) is how deep each level goes, and its **stepover** how
    far apart the passes are at the outside of the blank.
 4. Choose the **Direction** (below) and the **Cut direction**.
 5. Set the **Allowance**: how much is left on the model for the finish.

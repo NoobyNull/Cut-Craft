@@ -524,7 +524,7 @@ impl Manager {
                             .on_hover_hint(cut_craft_i18n::t!(
                                 "Cut with the tool shown, with its saved feeds, speeds and \
                                  pass depth (any edits made here are kept); a catalogue's \
-                                 tool is copied into My Tools first"
+                                 tool is copied into My Bits first"
                             ))
                             .on_disabled_hover_text(cut_craft_i18n::t!(
                                 "Pick a bit in the list first"
@@ -1266,7 +1266,7 @@ impl Manager {
             ui.horizontal_wrapped(|ui| {
                 ui.label(cut_craft_i18n::t!(
                     "This tool is in a maker's catalogue, which stays as it came. Copy it into \
-                     My Tools to change it, cut with it or load it in the tool changer."
+                     My Bits to change it, cut with it or load it in the tool changer."
                 ));
                 copy = ui.button(cut_craft_i18n::t!("Copy to My Bits")).clicked();
             });
@@ -1320,7 +1320,7 @@ impl Manager {
             ui.label(egui::RichText::new(tree::leaf(group)).strong());
             ui.weak(cut_craft_i18n::t!(
                 "A maker's catalogue, kept as it came: copy its tools into My Bits to edit \
-                 them. Delete takes a whole catalogue out (copies in My Tools stay)."
+                 them. Delete takes a whole catalogue out (copies in My Bits stay)."
             ));
             if let Some(notes) = self.draft.groups.iter().find(|g| g.path == group)
                 && !notes.notes.is_empty()

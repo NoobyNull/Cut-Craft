@@ -573,8 +573,8 @@ fn holder(ui: &mut egui::Ui, machine: &mut Machine) {
             )
             .on_hover_hint(cut_craft_i18n::t!(
                 "Tick for a tool changer whose bits each sit in a holder of their own: \
-                     each bit can then have its own collet nut and spindle sizes in the Tool \
-                     Database. A bit without them uses the sizes above"
+                     each bit can then have its own collet nut and spindle sizes in the Bit \
+                     Library. A bit without them uses the sizes above"
             ));
         });
 }

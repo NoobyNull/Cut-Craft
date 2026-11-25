@@ -128,7 +128,8 @@ fn made(doc: &Document, p: &Params) -> Result<(Toolpath, Vec<String>), CommandEr
     let stepover = tool.stepover;
     if !(stepover > 0.0 && stepover <= 1.0) {
         return Err(CommandError::InvalidParams(
-            "the tool's stepover must be more than 0% and at most 100%: set it in the Tool Database".into(),
+            "the bit's stepover must be more than 0% and at most 100%: set it in the Bit Library"
+                .into(),
         ));
     }
     let Some(stock) = doc.job.rotary.and_then(|_| Stock::of(&doc.job)) else {

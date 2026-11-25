@@ -71,7 +71,7 @@ pub(super) fn tool_picker(
         None => {
             ui.colored_label(
                 ui.visuals().warn_fg_color,
-                t!("No tool picked yet: Select… one"),
+                t!("No bit picked yet: Select… one"),
             );
         }
     }
@@ -485,10 +485,7 @@ pub(super) fn tools_section(
                  toolpath used, to cut only what it left"
                 ),
             ),
-            _ => (
-                t!("Tools"),
-                t!("No bit picked yet: Add a bit… to pick one"),
-            ),
+            _ => (t!("Tools"), t!("No bit picked yet: Add a bit… to pick one")),
         };
         ui.strong(heading);
         tool_list(ui, key, &mut params[key], tools, slots, &empty, units)

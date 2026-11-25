@@ -69,7 +69,7 @@ Tool** (**Ctrl+K**) and the help pages' titles all use the same words, so a tool
 same way wherever you see it. It translates what each tool does in its tooltip, every
 tool's form and settings, the right-click menus of your layers, sheets, levels and
 toolpaths, what the status bar says, and the hints and buttons around the 2D view and the
-layers list, Machine Configuration, the Tool Database and the Report a Bug form, too. When
+layers list, Machine Configuration, the Bit Library and the Report a Bug form, too. When
 a newer pack is published, **Gadgets ▸ Add-ons** offers to update it.
 
 If a pack you picked is removed, Cut Craft goes back to English the next time it starts

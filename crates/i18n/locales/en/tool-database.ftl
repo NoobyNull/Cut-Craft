@@ -1,4 +1,4 @@
-# Tool Database window: sentences with a value put in. Its other words are in text.ftl.
+# Bit Library window: sentences with a value put in. Its other words are in text.ftl.
 
 tool-database-no-cutting-data = No cutting data for { $material }: it cuts with its class's or its default data
 tool-database-tool-changer = Tool changer: { $machine }
