@@ -321,9 +321,9 @@ fn a_design_sub_tab_can_have_a_section_of_its_own() {
 
 #[test]
 fn the_view_buttons_are_the_view_actions() {
-    for (id, _, icon) in VIEW_BUTTONS {
-        assert!(icon_set().contains(icon), "{icon}");
-        assert!(BUILT_INS.contains(&id), "{id}");
+    for id in VIEW_BUTTONS {
+        let icon = gui::built_in_icon(id).unwrap_or_default();
+        assert!(icon_set().contains(icon), "{id}: {icon}");
     }
 }
 
@@ -432,7 +432,7 @@ fn every_enabled_control_works() {
     {
         ids.extend(group.tools.iter().map(|&t| t.to_owned()));
     }
-    ids.extend(VIEW_BUTTONS.iter().map(|(id, ..)| (*id).to_owned()));
+    ids.extend(VIEW_BUTTONS.iter().map(|id| (*id).to_owned()));
     // the right-click menus, on each thing they open on
     let doc = &h.app.doc;
     let mut popups = h.app.menus.selection_menu(doc);

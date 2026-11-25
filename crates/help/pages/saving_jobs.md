@@ -94,8 +94,7 @@ again. Only a file that is no longer there is taken off the list.
   already there, it asks before replacing it. The same goes for exports, templates and
   other saved files.
 - Every file window starts on the kind of file you asked for, so the list only shows
-  files that will work. **File ▸ Open** shows Cut Craft jobs; **Import Component / 3D
-  Model** shows 3D models (.stl, .obj, .ccclip); **Import Vectors / Bitmap** shows drawings
+  files that will work. **File ▸ Open** shows Cut Craft jobs; **Import 3D Model** shows 3D models (.stl, .obj, .ccclip); **Import Vectors or Picture** shows drawings
   and pictures (.dxf, .svg, .png, .jpg and the rest); **Import Cut List** shows .csv
   spreadsheets; saving G-code shows your post-processor's file type. To pick a file of
   another kind, open the file-type list at the bottom of the window (beside the file name

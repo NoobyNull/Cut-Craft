@@ -3,15 +3,15 @@ reviewed: 2026-11-23
 see-also: import_toolpaths_file, load_template, save_toolpaths
 ---
 
-**Import Toolpaths** reads a G-code file back as toolpaths, one for each bit it uses, so you can
+**Import Toolpaths (G-code)** reads a G-code file back as toolpaths, one for each bit it uses, so you can
 preview it, check it and save it again through another post-processor. Choose **File ▸ Import ▸
-Import Toolpaths...**.
+Import Toolpaths (G-code)...**.
 
 ## Steps
 
 ![The steps, one after another](pictures/import_toolpaths/tour.gif)
 
-1. Choose **File ▸ Import ▸ Import Toolpaths...** and pick a G-code file your machine runs.
+1. Choose **File ▸ Import ▸ Import Toolpaths (G-code)...** and pick a G-code file your machine runs.
 
    ![Step 1](pictures/import_toolpaths/step-1.png)
 

@@ -21,7 +21,7 @@ The tool opens just as if you had pressed its button: its form on the Design or
 Toolpaths page, ready to fill in.
 
 - Only tools you can use right now are listed. A tool that needs something first is left
-  out until it is there: Edit Text waits for a text to be picked, Zoom Selected for a
+  out until it is there: Edit Text waits for a text to be picked, Zoom to Selection for a
   shape. Point at a greyed-out button to see what it is waiting for.
 - **No tool has that in its name** means nothing matched: try a shorter part of the name,
   or another word for it.

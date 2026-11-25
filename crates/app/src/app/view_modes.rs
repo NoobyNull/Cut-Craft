@@ -79,7 +79,9 @@ impl CutCraftApp {
         ui.scope_builder(egui::UiBuilder::new().max_rect(room), |ui| {
             // laid out from the right, so the first button is the leftmost
             ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                for (id, label, icon) in VIEW_BUTTONS.into_iter().rev() {
+                for id in VIEW_BUTTONS.into_iter().rev() {
+                    let label = &self.tool_label(id);
+                    let icon = gui::built_in_icon(id).unwrap_or_default();
                     let button = self
                         .icon_button(icon, id, label, edge)
                         .selected(in_hand(id));

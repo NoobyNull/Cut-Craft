@@ -29,7 +29,7 @@ No wheel button, or prefer another? In **Edit ▸ Options ▸ Mouse and Shortcut
 
 - [Zoom to Job](help:zoom_to_job) fits the whole sheet in the view.
 - **View ▸ Zoom to Drawing** (**F6**) fits everything you have drawn.
-- [Zoom Selected](help:zoom_selected) fits the shapes you picked.
+- [Zoom to Selection](help:zoom_selected) fits the shapes you picked.
 - [Zoom Box](help:zoom_box): drag a box round what you want to fill the view.
 - [Pan](help:pan): drag with the left button to move the view, for a mouse with no wheel.
 

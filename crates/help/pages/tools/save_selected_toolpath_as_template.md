@@ -18,5 +18,5 @@ see-also: save_all_visible_toolpaths_as_template, load_template
 ## Good to know
 
 - The template keeps the toolpath's group, and the groups holding that group, so loading it
-  brings the same nesting back: see [Load Template](help:load_template) and
+  brings the same nesting back: see [Load Toolpath Template](help:load_template) and
   [Group Toolpaths](help:group_toolpaths).

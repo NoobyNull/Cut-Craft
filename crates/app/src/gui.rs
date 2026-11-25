@@ -233,190 +233,15 @@ impl SubTabSet {
 /// name and `section` or `row`, or `*` and either for every sub-tab.
 pub const SUBTAB_PLACE: &str = "subtab_place:";
 
-/// Names and descriptions of the built-in tools on the Import sub-tab, which have no
-/// command crate to give them: the names run words together ("Import Vectors Bitmap")
-/// and say nothing about the files they take.
-pub const BUILT_IN_ABOUTS: &[(&str, &str, &str)] = &[
-    (
-        "setup_material",
-        "Setup Material",
-        "Set the material for this job: single sided, double sided or rotary, and its size. \
-         Z zero, X0 Y0 and the rest come from Options ▸ Job Defaults",
-    ),
-    (
-        "machine_files",
-        "Machine Files",
-        "See the files on the machine's card or shared folder, and upload, rename, delete or \
-         make folders there, without walking over to the machine",
-    ),
-    (
-        "import_vectors_bitmap",
-        "Import Vectors or Picture",
-        "Bring in a drawing (DXF, SVG or a Vectric job's vectors) or a picture (PNG, JPG, \
-         BMP, GIF or TIFF) to trace, carve round or draw over. An SVG sized in pixels is \
-         read at 96 pixels per inch, and a note says the size it came in at",
-    ),
-    (
-        "import_vectors",
-        "Import Vectors",
-        "Bring in a drawing made in another program: DXF, SVG or a Vectric job's vectors",
-    ),
-    (
-        "import_into_shape",
-        "Import Into Selected Shape",
-        "Select a closed shape first (a circle, plaque or heart), then bring in a drawing or \
-         picture sized to fit inside it: scaled, stretched or bent to follow its outline. \
-         Select an open line instead to bend the drawing along it, like lettering on an arc",
-    ),
-    (
-        "import_component_3d_model",
-        "Import 3D Model",
-        "Bring in a 3D model (STL or OBJ) or saved 3D clipart, to size, place and carve",
-    ),
-    (
-        "clipart_library",
-        "Clipart Library",
-        "Open the Library tab: your folders of ready-made drawings, pictures and 3D clipart, \
-         to drag onto the job",
-    ),
-    (
-        "import_toolpaths_file",
-        "Import Toolpaths (G-code)",
-        "Read a G-code file (.nc, .tap, .gcode and the like) back in as toolpaths, to preview \
-         and check it before it runs",
-    ),
-    (
-        "import_cut_list",
-        "Import Cut List",
-        "Draw a part for each row of a spreadsheet's cut list (saved as CSV): name, length, \
-         width and how many, ready for Nest Parts. Sizes are in the units after the Length \
-         and Width headings, such as Length (in) or Length (mm), else in the job's units. \
-         The note after importing names the units used for each, so a heading missing its \
-         unit shows up",
-    ),
-    // the Model sub-tab's exports, which are file formats rather than commands
-    (
-        "export_as_stl",
-        "Export Model as STL",
-        "Save the 3D model as an STL file, for a 3D printer or another program",
-    ),
-    (
-        "export_as_grayscale_bitmap",
-        "Export Model as Grayscale Picture",
-        "Save the 3D model as a PNG picture where lighter is higher, for another carving \
-         program",
-    ),
-    (
-        "export_as_3d_clipart",
-        "Export Model as 3D Clipart",
-        "Save the selected 3D parts as clipart, to drop into other jobs from the Library",
-    ),
-    // the Toolpaths page's templates and printouts, which were only in the Toolpaths menu
-    (
-        "load_template",
-        "Load Toolpath Template",
-        "Add the toolpaths saved in a template to this job, ready to pick the vectors (or \
-         picture) each one cuts and calculate. A Merged or Array Copy toolpath uses the \
-         toolpaths saved with it; one saved without them says to tick the ones to use",
-    ),
-    (
-        "save_selected_toolpath_as_template",
-        "Save Toolpath as Template",
-        "Save the selected toolpath's settings and bits, to make the same cut on another job",
-    ),
-    (
-        "save_all_visible_toolpaths_as_template",
-        "Save All Shown Toolpaths as Template",
-        "Save the settings and tools of every toolpath shown in the list, to make the same \
-         cuts on another job",
-    ),
-    (
-        "create_job_sheet",
-        "Save Job Sheet",
-        "Save a page for the machine: the job, the material, each toolpath's bit and how long \
-         it takes",
-    ),
-    (
-        "print_job_sheet",
-        "Print Job Sheet",
-        "Open the job sheet in the web browser to print it: the job, the material, each \
-         toolpath's bit and how long it takes",
-    ),
-    (
-        "part_labels",
-        "Print Part Labels",
-        "Print a label for each named part, to stick on it once it is cut out",
-    ),
-    (
-        "clearing_settings",
-        "Clearing Settings",
-        "How adaptive and trochoidal clearing cut in this job: the light step, the loops, \
-         and whether rows and loops keep climb on the way back",
-    ),
-    (
-        "advanced_rotary_mode",
-        "Turn On Advanced Rotary Mode",
-        "Open Options at Advanced rotary mode: each rotary toolpath then cuts the whole blank, \
-         not only what the toolpaths above it leave",
-    ),
-    (
-        "cut_list",
-        "Save Cut List",
-        "Save a list of the job's parts and their sizes, as a spreadsheet (CSV)",
-    ),
-    (
-        "show_open_vector_ends",
-        "Show Open Vector Ends",
-        "Put a circle on each end of every open vector, so a gap that stops a shape being \
-         pocketed or carved stands out",
-    ),
-    (
-        "show_construction_lines",
-        "Show Construction Lines",
-        "Show or hide the dashed construction lines: lines that only place things and are \
-         never cut. Hidden, they cannot be picked either",
-    ),
-];
-
-/// The icons of built-in tools whose file is not named for their id.
-const BUILT_IN_ICONS: &[(&str, &str)] = &[
-    ("load_template", "toolpaths/load_toolpath_template.png"),
-    (
-        "save_selected_toolpath_as_template",
-        "toolpaths/save_toolpath_template.png",
-    ),
-    (
-        "save_all_visible_toolpaths_as_template",
-        "toolpaths/save_all_as_template.png",
-    ),
-];
-
 /// A built-in tool's own icon, where no file is named for its id.
 pub fn built_in_icon(id: &str) -> Option<&'static str> {
-    BUILT_IN_ICONS
-        .iter()
-        .find(|(i, _)| *i == id)
-        .map(|(_, icon)| *icon)
+    crate::built_ins::get(id).and_then(|b| b.icon)
 }
 
-/// A built-in tool's own name, where [`title_case`] of its id would not do.
+/// A built-in action's own name ([`crate::built_ins`]).
 pub fn built_in_label(id: &str) -> Option<&'static str> {
-    BUILT_IN_ABOUTS
-        .iter()
-        .find(|(i, _, _)| *i == id)
-        .map(|(_, label, _)| *label)
-        .or_else(|| {
-            RENAMED
-                .iter()
-                .find(|(i, _)| *i == id)
-                .map(|(_, label)| *label)
-        })
+    crate::built_ins::get(id).map(|b| b.name)
 }
-
-/// Built-in tools whose names are no longer their ids in words: the Tool Database is the Bit
-/// Library, as a cutter is a bit (CONTRIBUTING.md, Tools and bits). Ids stay, so saved
-/// favourites, shortcuts and counts keep working.
-const RENAMED: &[(&str, &str)] = &[("tool_database", "Bit Library")];
 
 impl Toolbar {
     /// Every group the Design page can show: the drawing then the modeling tools.
@@ -526,12 +351,7 @@ pub fn english_about(id: &str) -> Option<&'static str> {
                 .find(|(command, _)| *command == id)
                 .map(|(_, about)| *about)
         })
-        .or_else(|| {
-            BUILT_IN_ABOUTS
-                .iter()
-                .find(|(i, _, _)| *i == id)
-                .map(|(_, _, about)| *about)
-        })
+        .or_else(|| crate::built_ins::get(id).map(|b| b.about))
         .or_else(|| crate::flyout::variant(id).map(|v| v.hint))
 }
 
@@ -883,6 +703,7 @@ impl MenuSystem {
     }
 
     /// Every command item, submenus flattened.
+    #[cfg(test)]
     pub fn items(&self) -> Vec<&MenuItem> {
         self.menus.iter().flat_map(|m| leaves(&m.items)).collect()
     }
@@ -968,6 +789,7 @@ fn text_items(doc: &Document) -> Vec<MenuItem> {
 }
 
 /// Every command item of `items`, submenus flattened.
+#[cfg(test)]
 pub fn leaves(items: &[MenuItem]) -> Vec<&MenuItem> {
     items
         .iter()
@@ -1041,6 +863,20 @@ impl MenuItem {
         Self {
             icon: Some(path.to_owned()),
             ..self
+        }
+    }
+
+    /// Built-in action `id`'s item, named and with the shortcut its [`crate::built_ins`] entry
+    /// gives.
+    ///
+    /// # Panics
+    /// When `id` is no built-in action: the menus are made the same way every run, so a test
+    /// meets it first.
+    pub fn built_in(id: &str) -> Self {
+        let b = crate::built_ins::get(id).unwrap_or_else(|| panic!("{id} is no built-in action"));
+        Self {
+            action: id.to_owned(),
+            ..Self::new(&b.menu_name(), b.keys)
         }
     }
 

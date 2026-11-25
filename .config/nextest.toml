@@ -25,6 +25,10 @@ default-filter = "package(cut-craft-rotary) | package(cut-craft-rotary-carving) 
 filter = "test(=app::hard_coded_text::warns_of_new_text_written_into_the_code)"
 success-output = "immediate"
 
+[[profile.default.overrides]]
+filter = "test(=app::hard_coded_text::warns_of_new_text_written_into_the_code)"
+success-output = "immediate"
+
 [profile.languages]
 default-filter = "package(cut-craft-i18n) or test(/^app::hard_coded_text::/) or test(=commands::tests::english_words_do_not_name_other_programs)"
 
