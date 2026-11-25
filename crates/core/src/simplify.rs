@@ -136,16 +136,16 @@ fn kept(points: &[(DVec3, f64)], tolerance: f64) -> Vec<usize> {
 }
 
 /// How far `p` is from the segment `a`–`b`, across the axis counted as a fourth direction.
-fn off_line(p: (DVec3, f64), a: (DVec3, f64), b: (DVec3, f64)) -> f64 {
-    let (ab, ab_w) = (b.0 - a.0, b.1 - a.1);
-    let length = ab.length_squared() + ab_w * ab_w;
-    let t = if length > 0.0 {
-        (((p.0 - a.0).dot(ab) + (p.1 - a.1) * ab_w) / length).clamp(0.0, 1.0)
+fn off_line(point: (DVec3, f64), from: (DVec3, f64), to: (DVec3, f64)) -> f64 {
+    let (line, line_across) = (to.0 - from.0, to.1 - from.1);
+    let length = line.length_squared() + line_across * line_across;
+    let along = if length > 0.0 {
+        (((point.0 - from.0).dot(line) + (point.1 - from.1) * line_across) / length).clamp(0.0, 1.0)
     } else {
         0.0
     };
-    let w = p.1 - (a.1 + ab_w * t);
-    (p.0.distance_squared(a.0 + ab * t) + w * w).sqrt()
+    let off_across = point.1 - (from.1 + line_across * along);
+    (point.0.distance_squared(from.0 + line * along) + off_across * off_across).sqrt()
 }
 
 #[cfg(test)]
