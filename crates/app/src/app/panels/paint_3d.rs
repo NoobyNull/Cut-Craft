@@ -131,7 +131,7 @@ impl CutCraftApp {
         let Some((which, first)) = self.settings_3d.as_ref().and_then(|s| s.anchors) else {
             return;
         };
-        self.status.set_message(which.prompt(first.is_some()));
+        self.status.set_message(&which.prompt(first.is_some()));
         if response.clicked()
             && let Some(at) = response.interact_pointer_pos()
             && let Some(p) = self.point_at_3d(fit, at)

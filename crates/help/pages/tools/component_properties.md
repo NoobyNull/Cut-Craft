@@ -36,4 +36,14 @@ component in **Components** ▸ **Properties**, or **Model ▸ Selected Componen
 - **Bake**: makes the height, base, fade and tilt permanent and resets them.
 - **Appearance**: its colour in the 3D view, its own or its group's.
 
+## In the 3D view
+
+Pick the component in the 3D view with **Transform** on: a row of round buttons sits along the
+near edge of its box. Drag **Total height**, **Shape height** or **Base height** up or down to
+change it there, or click the last button for its combine mode, fade, tilt and appearance.
+Beside **Fade** or **Tilt**, **Set** places its direction with two clicks on the model: for a
+fade, first the point that keeps its height, then the point it fades down toward; for a tilt,
+first the point that does not move, then the point tilted up. The status line says which
+point to click next.
+
 See [Group Properties](help:group_properties) to set one mode on a whole group.
