@@ -295,7 +295,7 @@ fn job_defaults_start_blank_and_reset_puts_back_cut_crafts_own_job() {
 }
 
 #[test]
-fn saving_thins_each_toolpath_to_its_familys_tolerance() {
+fn saving_thins_each_toolpath_to_its_family_tolerance() {
     use cut_craft_core::glam::DVec3;
     use cut_craft_core::toolpath::{Move, MoveKind, Toolpath};
     let line = |strategy: &str| Toolpath {

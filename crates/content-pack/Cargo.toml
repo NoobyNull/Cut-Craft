@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cut-craft-content-pack"
 description = "Content packs: the pack.json that lists a pack's files, their licences and checksums"
 version.workspace = true

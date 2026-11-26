@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-copy-toolpath-to-sheet"
 description = "Copy Toolpath to Sheet"
 version.workspace = true

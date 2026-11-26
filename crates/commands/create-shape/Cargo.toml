@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-create-shape"
 description = "Create Shape"
 version.workspace = true

@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cut-craft-web-api"
 description = "Options ▸ Web API: a small local HTTP server that hands requests to the app, which runs them like clicks"
 version.workspace = true

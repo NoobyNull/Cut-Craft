@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-align"
 description = "Align Objects: Align Left / Right / Top / Bottom, Center, Center Horizontally / Vertically, and the three Center In Material commands"
 version.workspace = true

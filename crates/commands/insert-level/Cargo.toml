@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-insert-level"
 description = "Insert New Level"
 version.workspace = true

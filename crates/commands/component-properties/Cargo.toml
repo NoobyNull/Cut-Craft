@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-component-properties"
 description = "Component Properties"
 version.workspace = true

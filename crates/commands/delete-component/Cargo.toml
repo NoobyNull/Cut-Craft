@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-delete-component"
 description = "Delete Component"
 version.workspace = true

@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-embellish"
 description = "Embellish: folk-swirl ornament designed to fit the selected shape"
 version.workspace = true

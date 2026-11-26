@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-delete-toolpath"
 description = "Delete Toolpath"
 version.workspace = true

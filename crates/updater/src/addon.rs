@@ -789,7 +789,7 @@ fn unpack_within(
         let Some(path) = file.enclosed_name() else {
             return Err(format!(
                 "the add-on's .zip holds an odd path \"{}\"",
-                file.name()
+                String::from_utf8_lossy(file.name_raw())
             ));
         };
         let to = dir.join(path);

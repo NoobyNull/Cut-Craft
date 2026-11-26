@@ -1,0 +1,60 @@
+# Checks beyond Format and Clippy, each its own job so one failing stops none of the others:
+# - cargo-deny (deny.toml): licences that suit PolyForm Noncommercial and a later MIT/Apache,
+#   no unknown sources, and RustSec security advisories. New advisories appear without any
+#   change here, so it also runs every day and fails then too.
+# - cargo-machete: dependencies a crate lists but never uses.
+# - typos (_typos.toml): common misspellings in code, docs, help and translations.
+# - actionlint (with shellcheck): mistakes in these workflow files and their scripts.
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # every day, for advisories published since: 10:00 UTC is 2 or 3 AM in California
+    - cron: "0 10 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deny:
+    name: Dependencies (cargo-deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check --hide-inclusion-graph
+
+  machete:
+    name: Unused dependencies (cargo-machete)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bnjbvr/cargo-machete@v0.9.1
+
+  typos:
+    name: Spelling (typos)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: crate-ci/typos@v1.39.0
+
+  actionlint:
+    name: Workflows (actionlint)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install actionlint
+        run: |
+          curl -sSfL https://github.com/rhysd/actionlint/releases/download/v1.7.8/actionlint_1.7.8_linux_amd64.tar.gz \
+            | tar xz actionlint
+      - name: Check the workflows
+        # shellcheck comes with the runner, so the scripts in run: steps are checked too
+        run: ./actionlint -color

@@ -118,6 +118,8 @@ jobs:
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/depth-addon/addon.toml)
           if [[ -n "$GH_TOKEN" ]] && gh release view "v$version" --repo "$DEPTH_REPO" >/dev/null 2>&1; then
             gh release view "v$version" --repo "$DEPTH_REPO" --json assets --jq '.assets[].name' > names
+            # names is read by the loop and only grepped inside it, never written there
+            # shellcheck disable=SC2094
             while read -r name; do
               [[ $name == *.minisig || -e "out/$name" ]] && continue
               grep -qxF "$name.minisig" names && continue

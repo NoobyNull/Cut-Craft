@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cut-craft-rotary"
 description = "Rotary work in true 3D: the material and the model as solids on the turning axis, the bit dropped onto them at any turn of A, and a simulator that cuts the material with the very moves a file makes"
 version.workspace = true

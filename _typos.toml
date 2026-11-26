@@ -1,0 +1,34 @@
+# typos: catches common misspellings in code, docs, help and translations. CI runs it
+# (.github/workflows/lint.yml). Add a real word here when typos mistakes it for a typo.
+
+[default.extend-words]
+collet = "collet"       # the bit holder
+aci = "aci"             # AutoCAD Color Index, in the DXF importer
+cose = "cose"           # COSE keys, in the crash-report service's WebAuthn
+sur = "sur"             # macOS Big Sur
+lod = "lod"             # level of detail, a help search synonym
+alo = "alo"             # alo/ahi: a's low and high, in rest.rs
+fpr = "fpr"             # gpg's fingerprint record
+vermillion = "vermillion"  # the Okabe-Ito colour name
+
+[default]
+extend-ignore-re = [
+  "-[0-9a-f]{6}\\b",    # the hash at the end of a translation id (text-...-e245ba)
+  "\\{n\\}nd\\b",       # 2nd, in preflight.rs
+  "\\bPNGs?\\b",
+  "\\b\\d+ths\\b",      # 10ths
+  "-NC-ND-",            # Creative Commons No-Derivatives licences
+  "\\(ND\\)",
+  "\\bwidht\\b",        # a deliberately misspelt setting in a Web API test
+]
+
+[files]
+extend-exclude = [
+  "credits/libraries.md",            # other projects' licence texts, copied as written
+  "docs/courses*.md",                # video titles and search patterns
+  "docs/courses-capabilities.tsv",
+  "crates/core/src/spell.rs",        # deliberate misspellings in spell-check tests
+  "crates/i18n/src/lib.rs",          # a deliberately bad placeholder in a test
+  "crates/core/src/notes/tests.rs",  # a deliberately bad variable in a test
+  "crates/content-pack/src/lib.rs",  # item_nd: a No-Derivatives licence in a test
+]

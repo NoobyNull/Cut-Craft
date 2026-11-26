@@ -70,7 +70,7 @@ jobs:
               -f content="$(base64 -w0 README.md)"
           fi
           version="1.0.${{ github.run_number }}"
-          langs=$(cd out && ls language-*.zip | sed 's/language-\(.*\)\.zip/\1/' | paste -sd, -)
+          langs=$(cd out && printf '%s\n' language-*.zip | sed 's/language-\(.*\)\.zip/\1/' | paste -sd, -)
           gh release create "v$version" out/* --repo "$TRANSLATIONS_REPO" \
             --target main \
             --title "Language packs $version" \
