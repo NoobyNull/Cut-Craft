@@ -132,9 +132,10 @@ Cut Craft is moving to the [Power-Whittle](https://github.com/Power-Whittle) org
 it has moved, every pull request keeps that side current too (the pull request template has the
 boxes to tick):
 
-- **The timeline.** Put the pull request, or the issue it fixes, on the
-  [PowerWhittle timeline](https://github.com/orgs/Power-Whittle/projects/1) with a start date
-  and a target date, and keep its status right. When it merges, mark it done. The board needs
+- **The timelines.** Put the pull request, or the issue it fixes, on both the
+  [PowerWhittle timeline](https://github.com/orgs/Power-Whittle/projects/1) and the
+  [CutCraft (PowerWhittle)](https://github.com/users/NoobyNull/projects/3) board, each with a
+  start date and a target date, and keep its status right. When it merges, mark it done. The board needs
   write access; without it, ask a maintainer in the pull request to add or update it for you.
 - **The release mirror.** Power-Whittle/PowerWhittle is a read-only copy for releases. Once the
   release workflow's mirror step lands (it pushes each release's tag and `main` there and adds
