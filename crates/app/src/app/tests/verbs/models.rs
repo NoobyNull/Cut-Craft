@@ -28,17 +28,20 @@ impl Harness {
 
     /// Picks `path` on the 3D view's right-click menu, for what is under the pointer.
     pub(in super::super) fn choose_on_view_3d_menu(&mut self, path: &[&str]) {
-        self.choose(|app| app.menus.view_3d_menu(&app.doc, &app.under_3d), path);
+        self.choose(
+            |app| app.menus.view_3d_menu(&app.doc, app.drawn_3d.under()),
+            path,
+        );
     }
 
     /// The 3D view's right-click menu, for what is under the pointer.
     pub(in super::super) fn view_3d_menu_here(&self) -> Vec<gui::MenuItem> {
-        (self.app.menus).view_3d_menu(&self.app.doc, &self.app.under_3d)
+        (self.app.menus).view_3d_menu(&self.app.doc, self.app.drawn_3d.under())
     }
 
     /// The components under the pointer in the 3D view at the last right-click.
     pub(in super::super) fn under_pointer_3d(&self) -> &[EntityId] {
-        &self.app.under_3d
+        self.app.drawn_3d.under()
     }
 
     /// Collapses `level` in the Components list.

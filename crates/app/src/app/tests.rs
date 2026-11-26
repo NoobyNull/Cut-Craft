@@ -445,7 +445,7 @@ fn drawing_on_the_dome(tool: &str) -> (Harness, impl Fn(f64, f64) -> Pos2, f64) 
     h.app.invoke(&h.ctx, tool);
     h.frame(vec![]);
     h.frame(vec![]);
-    let fit = h.app.fit_3d.expect("the 3D view has been drawn");
+    let fit = h.app.drawn_3d.fit().expect("the 3D view has been drawn");
     let surface = h.app.surface_3d().unwrap().into_owned();
     let camera = view3d::Camera::new(&surface, h.app.orbit, h.app.framing, fit, None);
     let cell = surface.cell;
@@ -477,10 +477,8 @@ fn transform_3d(orbit: view3d::Orbit, perspective: bool) -> Harness {
 /// Where the 3D view drew `which`.
 fn handle_3d_at(h: &Harness, which: Handle3d) -> Pos2 {
     h.app
-        .handles_3d
-        .iter()
-        .find(|(k, _)| *k == which)
-        .map(|(_, at)| *at)
+        .drawn_3d
+        .handle_at(which)
         .expect("the handle is drawn")
 }
 
@@ -503,7 +501,7 @@ fn dome_from_above() -> (Harness, Pos2) {
     h.app.view = View::ThreeD;
     h.frame(vec![]);
     h.frame(vec![]);
-    let fit = h.app.fit_3d.unwrap();
+    let fit = h.app.drawn_3d.fit().unwrap();
     let surface = h.app.surface_3d().unwrap().into_owned();
     let screen = view3d::screen_of(&surface, h.app.orbit, h.app.framing, fit, None);
     let z = surface.at(Point::new(20.0, 20.0)).unwrap();

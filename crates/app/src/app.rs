@@ -19,6 +19,7 @@ mod depth;
 mod dialog_windows;
 mod draw3d;
 mod drawing_input;
+mod drawn_3d;
 mod edit_apply;
 mod entry;
 mod first_run;
@@ -820,12 +821,8 @@ pub(crate) struct CutCraftApp {
     /// What the copied vectors were part of: groups, layers, text and part names.
     clipboard_from: Copied,
     clipboard_components: Vec<cut_craft_core::component::Component>,
-    /// Where the 3D view's picture was fitted last frame, for picking.
-    fit_3d: Option<egui::Rect>,
-    /// The 3D view's edit handles, where they were drawn last frame.
-    handles_3d: Vec<(Handle3d, egui::Pos2)>,
-    /// The components under the 3D view's last right-click, topmost first.
-    under_3d: Vec<EntityId>,
+    /// What the 3D view drew last frame, for picking: its fit, handles and right-click.
+    drawn_3d: drawn_3d::Drawn3d,
     /// A drag on one of the 3D view's edit handles.
     handle_drag: handle_drag::HandleDrag,
     settings_3d: Option<Settings3d>,

@@ -7,7 +7,7 @@ impl Harness {
 
     /// The rectangle the 3D view fits the job into, as last drawn.
     pub(in super::super) fn fit_3d(&self) -> Rect {
-        self.app.fit_3d.expect("the 3D view has been drawn")
+        self.app.drawn_3d.fit().expect("the 3D view has been drawn")
     }
 
     /// Pans and zooms the 3D view to `framing`, as the wheel and middle drag do.
@@ -62,7 +62,7 @@ impl Harness {
 
     /// The handles drawn over the selection in the 3D view, and where.
     pub(in super::super) fn handles_3d(&self) -> &[(Handle3d, Pos2)] {
-        &self.app.handles_3d
+        self.app.drawn_3d.handles()
     }
 
     /// Whether a handle in the 3D view is being dragged.
