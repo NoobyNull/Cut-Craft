@@ -228,10 +228,21 @@ fn asked_id() -> egui::Id {
 
 /// `response`'s right-click menu, with Report a Bug Here… at its foot: the right-click is
 /// [`claim`]ed, so the small menu doesn't open over this one as well.
+///
+/// egui shuts the menu only on a *click* away from it; a press on what the menu belongs to
+/// that turns into a drag (grabbing a shape to move it) shuts it too, so it isn't left open.
 pub fn context_menu(response: &egui::Response, add_contents: impl FnOnce(&mut egui::Ui)) {
     if response.secondary_clicked() {
         claim(&response.ctx);
     }
+    let pressed_on_owner = response.ctx.input(|i| {
+        i.pointer
+            .primary_pressed()
+            .then(|| i.pointer.press_origin())
+            .flatten()
+    });
+    let pressed_on_owner =
+        pressed_on_owner.is_some_and(|at| response.ctx.layer_id_at(at) == Some(response.layer_id));
     response.context_menu(|ui| {
         add_contents(ui);
         ui.separator();
@@ -243,6 +254,9 @@ pub fn context_menu(response: &egui::Response, add_contents: impl FnOnce(&mut eg
             ui.close();
         }
     });
+    if pressed_on_owner {
+        egui::Popup::close_id(&response.ctx, egui::Popup::default_response_id(response));
+    }
 }
 
 /// The regions holding `at`, outermost first (in the order they were drawn).

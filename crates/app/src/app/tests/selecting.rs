@@ -1386,7 +1386,49 @@ fn clicking_a_shape_while_the_right_click_menu_is_open_closes_it() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 40.0, 40.0);
     h.right_click(h.at(150.0, 150.0));
-    assert!(h.text_at("Report a Bug Here…").is_some(), "the menu is open");
+    assert!(
+        h.text_at("Report a Bug Here…").is_some(),
+        "the menu is open"
+    );
     h.click(h.at(10.0, 30.0), Modifiers::NONE);
-    assert!(h.text_at("Report a Bug Here…").is_none(), "the menu is shut");
+    assert!(
+        h.text_at("Report a Bug Here…").is_none(),
+        "the menu is shut"
+    );
+}
+
+/// Pressing on a shape and moving it while the right-click menu is open shuts the menu too:
+/// a press that turns into a drag is not a click, but it is still a click away from the menu.
+#[test]
+fn dragging_a_shape_while_the_right_click_menu_is_open_closes_it() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 40.0, 40.0);
+    h.right_click(h.at(150.0, 150.0));
+    assert!(
+        h.text_at("Report a Bug Here…").is_some(),
+        "the menu is open"
+    );
+    let from = h.at(10.0, 30.0);
+    h.drag(from, from + vec2(20.0, 0.0));
+    assert!(
+        h.text_at("Report a Bug Here…").is_none(),
+        "the menu is shut"
+    );
+}
+
+/// Right-clicking a shape, then left-clicking it, shuts the menu.
+#[test]
+fn clicking_the_right_clicked_shape_closes_its_menu() {
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 40.0, 40.0);
+    h.right_click(h.at(10.0, 30.0));
+    assert!(
+        h.text_at("Report a Bug Here…").is_some(),
+        "the menu is open"
+    );
+    h.click(h.at(10.0, 30.0), Modifiers::NONE);
+    assert!(
+        h.text_at("Report a Bug Here…").is_none(),
+        "the menu is shut"
+    );
 }
