@@ -767,8 +767,7 @@ fn name_toolpaths(app: &mut CutCraftApp, names: &[&str]) {
 
 /// Toolpath number `n` (from 0) clicked in the list, and only it.
 fn pick_toolpath(app: &mut CutCraftApp, n: usize) {
-    app.selected_toolpath = toolpath_ids(app).get(n).copied();
-    app.more_toolpaths.clear();
+    app.toolpath_pick.only(toolpath_ids(app).get(n).copied());
 }
 
 /// The toolpaths' cut order turned round.

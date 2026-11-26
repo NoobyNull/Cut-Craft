@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-26
 see-also: preview_detail, rotary_machining_toolpath, rotary_locked_angles_toolpath, rotary_firmware, job_setup
 ---
 

@@ -28,7 +28,7 @@ impl CutCraftApp {
             ui,
             &self.doc,
             overlay,
-            self.selected_toolpath,
+            self.toolpath_pick.picked(),
             &display,
             (self.job_epoch, self.history.revision()),
             &look.lines(dark),

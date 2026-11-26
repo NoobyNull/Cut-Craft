@@ -167,7 +167,7 @@ impl CutCraftApp {
     /// Preview Toolpath: the picked toolpath, or a picked group's toolpaths (its sub-groups'
     /// too) in list order, as one preview.
     pub(super) fn preview_selected(&mut self, _: &egui::Context) {
-        if let Some(id) = self.selected_toolpath {
+        if let Some(id) = self.toolpath_pick.picked() {
             self.preview_toolpath(id);
         } else if let Some(group) = &self.selected_group {
             self.preview_ids(&self.doc.toolpaths_under_group(group));

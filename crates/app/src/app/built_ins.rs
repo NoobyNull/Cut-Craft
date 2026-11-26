@@ -182,7 +182,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
          to drag onto the job")
         .run(|a, _| a.open_design_tab("Library")),
     act("edit_toolpath", "Edit Toolpath", "Edit Toolpath: opens the selected toolpath's form, to change its settings and calculate it again")
-        .when(|a| a.selected_toolpath.is_some(), "actions-why-pick-toolpath")
+        .when(|a| a.toolpath_pick.picked().is_some(), "actions-why-pick-toolpath")
         .run(|a, _| a.edit_toolpath()),
     act("create_shape_round", "Create Shape Round", "Create Shape, Round: raises the selected closed vectors into a 3D dome that rises at \
          the angle you set and rounds over the top")
@@ -245,7 +245,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
          toolpaths saved with it; one saved without them says to tick the ones to use").window().icon("toolpaths/load_toolpath_template.png")
         .run(|a, _| a.load_toolpath_template()),
     act("save_selected_toolpath_as_template", "Save Toolpath as Template", "Save the selected toolpath's settings and bits, to make the same cut on another job").window().icon("toolpaths/save_toolpath_template.png")
-        .when(|a| a.selected_toolpath.is_some(), "actions-why-pick-toolpath")
+        .when(|a| a.toolpath_pick.picked().is_some(), "actions-why-pick-toolpath")
         .run(|a, _| a.save_toolpath_template(false)),
     act("save_as_template", "Save As Template", "Save As Template: saves the job as a template, to start new jobs from it with the same material and toolpaths").window()
         .run(|a, _| a.save_job_template()),
@@ -313,7 +313,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
     act("import_component_3d_model", "Import 3D Model", "Bring in a 3D model (STL or OBJ) or saved 3D clipart, to size, place and carve").window()
         .run(|a, _| a.import_picked(Dialog::ImportModel)),
     act("recalculate_toolpath", "Recalculate Toolpath", "Recalculate Toolpath: works the selected toolpath out again, after its vectors, bits or material changed")
-        .when(|a| a.selected_toolpath.is_some(), "actions-why-pick-toolpath")
+        .when(|a| a.toolpath_pick.picked().is_some(), "actions-why-pick-toolpath")
         .run(|a, _| a.recalculate_selected()),
     act("recalculate_visible_toolpaths", "Recalculate Visible Toolpaths", "Recalculate Visible Toolpaths: works out again every toolpath ticked in the Toolpath List")
         .when(CutCraftApp::any_toolpath_shown, "actions-why-none-shown")
@@ -322,7 +322,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
         .when(|a| !a.doc.toolpaths.is_empty(), "actions-why-no-toolpaths")
         .run(|a, _| a.recalculate_all()),
     act("delete_toolpath", "Delete Toolpath", "Delete Toolpath: removes a toolpath from the toolpath list")
-        .when(|a| a.selected_toolpath.is_some(), "actions-why-pick-toolpath")
+        .when(|a| a.toolpath_pick.picked().is_some(), "actions-why-pick-toolpath")
         .run(|a, _| a.delete_selected_toolpath()),
     act("save_toolpaths", "Save Toolpaths", "Save Toolpaths: writes the toolpaths as a G-code file for your machine to run")
         .when(|a| !a.doc.toolpaths.is_empty(), "actions-why-no-toolpaths")
@@ -360,7 +360,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
     act("tool_database", "Bit Library", "Bit Library: the list of your bits, with their sizes, speeds and feeds, to add, change or pick from. Renaming a bit renames it in this job's toolpaths too, and in other jobs when they open, so its tool changer slot still finds it").window()
         .run(CutCraftApp::open_tool_database),
     act("preview_toolpath", "Preview Toolpath", "Preview Toolpath: shows the selected toolpath, or every toolpath in the selected group, cutting the material in the 3D view")
-        .when(|a| a.selected_toolpath.is_some() || a.selected_group.is_some(), "actions-why-pick-toolpath-or-group")
+        .when(|a| a.toolpath_pick.picked().is_some() || a.selected_group.is_some(), "actions-why-pick-toolpath-or-group")
         .run(CutCraftApp::preview_selected),
     act("preview_all_toolpaths", "Preview All Toolpaths", "Preview All Toolpaths: shows every toolpath cutting the material in the 3D view, in list order")
         .when(|a| !a.doc.toolpaths.is_empty(), "actions-why-no-toolpaths")

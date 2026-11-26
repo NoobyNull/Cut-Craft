@@ -778,7 +778,9 @@ fn a_script_writes_over_an_earlier_save_as_options_say() {
 #[test]
 fn the_state_says_the_material_the_model_and_what_is_picked() {
     let (mut h, at, id) = with_a_toolpath();
-    h.app.selected_toolpath = Some(cut_craft_core::document::EntityId(id));
+    h.app
+        .toolpath_pick
+        .set(Some(cut_craft_core::document::EntityId(id)));
     let (status, state) = call(&mut h, at, "GET", "state", None);
     assert_eq!(status, 200, "{state}");
     assert!(

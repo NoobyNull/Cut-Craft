@@ -700,7 +700,7 @@ pub(super) const TOURS: &[Tour] = &[
                     two_toolpaths(app, ctx);
                     pick_toolpath(app, 0);
                     let second = toolpath_ids(app)[1];
-                    app.more_toolpaths.insert(second);
+                    app.toolpath_pick.also(second);
                 },
                 mark: Mark::At("toolpath:Engrave"),
             },
@@ -717,8 +717,7 @@ pub(super) const TOURS: &[Tour] = &[
                     let toolpaths = toolpath_ids(app);
                     let params = serde_json::json!({ "toolpaths": toolpaths, "group": "Group 1" });
                     run(app, "group_toolpaths", params);
-                    app.selected_toolpath = None;
-                    app.more_toolpaths.clear();
+                    app.toolpath_pick.only(None);
                 },
                 mark: Mark::At("toolpath_group:Group 1"),
             },

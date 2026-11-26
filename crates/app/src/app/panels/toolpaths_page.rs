@@ -325,7 +325,7 @@ impl CutCraftApp {
             .toolpaths
             .keys()
             .copied()
-            .filter(|id| self.selected_toolpath == Some(*id) || self.more_toolpaths.contains(id))
+            .filter(|&id| self.toolpath_pick.is_picked(id))
             .collect()
     }
 
@@ -350,12 +350,7 @@ impl CutCraftApp {
                 .map(|(g, at)| (g.clone(), serde_json::json!(at)))
                 .collect::<serde_json::Map<_, _>>(),
         });
-        let selected = self.selected_toolpath.and_then(place);
-        let more = self
-            .more_toolpaths
-            .iter()
-            .filter_map(|&id| place(id))
-            .collect();
+        let moved = self.toolpath_pick.moved(place);
         let behind = |doc: &cut_craft_core::document::Document| -> Vec<String> {
             doc.toolpaths
                 .values()
@@ -366,8 +361,7 @@ impl CutCraftApp {
         let before = behind(&self.doc).len();
         match self.apply("arrange_toolpaths", &params) {
             Ok(()) => {
-                self.selected_toolpath = selected;
-                self.more_toolpaths = more;
+                self.toolpath_pick = moved;
                 let after = behind(&self.doc);
                 if after.len() > before {
                     self.reorder_ask = Some(after);
@@ -555,7 +549,7 @@ impl CutCraftApp {
         let ctrl = ui.input(|i| i.modifiers.command || i.modifiers.shift);
         // any press elsewhere hands Del back to the drawing; a row's click takes it below
         if ui.input(|i| i.pointer.any_pressed()) {
-            self.toolpath_list_clicked = false;
+            self.toolpath_pick.list_clicked(false);
         }
         let dragging = egui::DragAndDrop::has_payload_of_type::<Moving>(ui.ctx());
         // each toolpath's colour in the preview, when the machined areas take them
@@ -635,9 +629,8 @@ impl CutCraftApp {
                                 // The toolpath menu acts on the row right-clicked, so it
                                 // selects it
                                 if label.secondary_clicked() {
-                                    self.toolpath_list_clicked = true;
-                                    self.selected_toolpath = Some(id);
-                                    self.more_toolpaths.clear();
+                                    self.toolpath_pick.list_clicked(true);
+                                    self.toolpath_pick.only(Some(id));
                                     self.selected_group = None;
                                 }
                                 if let Some(action) = self
@@ -700,30 +693,17 @@ impl CutCraftApp {
                 }
             });
         if let Some((id, selected)) = clicked {
-            self.toolpath_list_clicked = true;
+            self.toolpath_pick.list_clicked(true);
             if ctrl {
-                // Ctrl-click: one more picked, or one less
-                if self.selected_toolpath.is_none() {
-                    self.selected_toolpath = Some(id);
-                } else if self.selected_toolpath == Some(id) {
-                    self.selected_toolpath = self.more_toolpaths.pop_first();
-                } else if !self.more_toolpaths.remove(&id) {
-                    self.more_toolpaths.insert(id);
-                }
+                self.toolpath_pick.ctrl_click(id);
             } else {
-                self.selected_toolpath = if selected && picked.len() == 1 {
-                    None
-                } else {
-                    Some(id)
-                };
-                self.more_toolpaths.clear();
+                self.toolpath_pick.click(id, selected && picked.len() == 1);
             }
             self.selected_group = None;
         }
         if let Some((group, on)) = group_picked {
             self.selected_group = on.then_some(group);
-            self.selected_toolpath = None;
-            self.more_toolpaths.clear();
+            self.toolpath_pick.only(None);
         }
         // opening or closing a group is how it is looked at, not a change to undo
         if let Some((group, open)) = opened {
@@ -745,8 +725,7 @@ impl CutCraftApp {
         // one change, so one Undo takes a tick back
         self.list_properties(shown, coloured);
         if let Some(id) = edit {
-            self.selected_toolpath = Some(id);
-            self.more_toolpaths.clear();
+            self.toolpath_pick.only(Some(id));
             self.invoke(ui.ctx(), "edit_toolpath");
         }
         if let Some(action) = chosen {

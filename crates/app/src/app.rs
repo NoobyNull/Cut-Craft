@@ -114,6 +114,7 @@ pub(crate) use tests::document_menus;
 mod tips;
 mod title_bar;
 mod toolpath_output;
+mod toolpath_pick;
 mod tools_materials;
 mod trace_window;
 mod turn_rings;
@@ -652,12 +653,6 @@ pub(crate) struct CutCraftApp {
     toolpath_subtab: usize,
     /// The Toolpaths sub-tab shown as a section to unfold next frame, as `design_unfold`.
     toolpath_unfold: Option<&'static str>,
-    /// The toolpaths Ctrl-clicked in the list besides `selected_toolpath`, to group, move
-    /// or drag together.
-    more_toolpaths: std::collections::BTreeSet<EntityId>,
-    /// A toolpath row was the last thing clicked: Del deletes the picked toolpath, not the
-    /// drawing's selection. Any other click hands Del back to the drawing.
-    toolpath_list_clicked: bool,
     /// The form a placing tool (Move, Rotate, Set Size: Transform Objects) was opened over,
     /// with its edits: Esc on the placing tool's form goes back to it.
     form_behind: Option<OpenForm>,
@@ -720,8 +715,8 @@ pub(crate) struct CutCraftApp {
     /// Draw Text's dictionary and the user's own words.
     spelling: spelling::Spelling,
     session: Session,
-    /// Toolpath picked in the Toolpaths panel.
-    selected_toolpath: Option<EntityId>,
+    /// The toolpaths picked in the Toolpath List, and whether a row was last clicked.
+    toolpath_pick: toolpath_pick::ToolpathPick,
     /// The toolpath group picked in the list instead of a toolpath: previewed and saved as
     /// one, and joined by the toolpaths made while it is picked.
     selected_group: Option<String>,

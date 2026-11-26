@@ -121,7 +121,8 @@ impl Harness {
     /// The job as `doc` with `toolpath` picked, and nothing else going on: no undo, form,
     /// view tool or message, as a fresh start on that job.
     pub(in super::super) fn start_over_on(&mut self, doc: Document, toolpath: Option<EntityId>) {
-        (self.app.doc, self.app.selected_toolpath) = (doc, toolpath);
+        self.app.doc = doc;
+        self.app.toolpath_pick.only(toolpath);
         self.app.history = History::default();
         (self.app.form, self.app.view_tool) = (None, None);
         self.app.status.set_message("");

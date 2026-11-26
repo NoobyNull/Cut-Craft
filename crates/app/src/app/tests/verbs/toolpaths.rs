@@ -68,7 +68,7 @@ impl Harness {
 
     /// Picks no toolpath in the Toolpaths list, as a click on its empty space does.
     pub(in super::super) fn given_no_toolpath_picked(&mut self) {
-        self.app.selected_toolpath = None;
+        self.app.toolpath_pick.set(None);
     }
 
     /// The toolpaths picked in the Toolpaths list, in its order.
