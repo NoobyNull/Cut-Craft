@@ -1,8 +1,8 @@
 //! Toolpath settings, the questions Cut Craft asks, job defaults, General and Import.
 
 use super::{
-    CanvasFlyouts, Deserialize, Display, FileDialogDefault, JsonSchema, RibbonIcons, Serialize,
-    WindowLayout, egui, on,
+    CanvasFlyouts, Deserialize, Display, FileDialogDefault, JsonSchema, OtherWays, RibbonIcons,
+    Serialize, WindowLayout, egui, on,
 };
 
 /// Toolpath settings.
@@ -314,6 +314,11 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "Ribbon icons")]
     pub ribbon_icons: RibbonIcons,
+    /// Where the other ways to draw a shape are picked: Draw Rectangle from a corner or the
+    /// center, Draw Circle from the center or an edge
+    #[serde(default)]
+    #[schemars(title = "Other ways to draw a shape")]
+    pub other_ways: OtherWays,
     /// When a group in the Canvas layout's palette lists its tools beside it: On Hover as
     /// soon as the pointer is over the group, On Click when it is clicked
     #[serde(default)]

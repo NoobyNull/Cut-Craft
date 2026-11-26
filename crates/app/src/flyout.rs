@@ -337,6 +337,74 @@ pub fn variant(id: &str) -> Option<&'static Variant> {
     VARIANTS.iter().find(|v| v.id == id)
 }
 
+/// One way to draw a shape, offered at the top of the shape's form under **Draw from**: the
+/// shape's own tool (drawn as it always has been) or one of its [`VARIANTS`].
+#[derive(Debug, PartialEq, Eq)]
+pub struct Way {
+    /// The tool this way is: the shape's command, or a variant of it.
+    pub id: &'static str,
+    /// How it reads the drag.
+    pub drag: DragWay,
+    /// Its short name on the form's choice (Corner, Center, Edge), a Fluent key.
+    pub name: &'static str,
+    /// How to drag it, shown on hover, a Fluent key.
+    pub hint: &'static str,
+}
+
+/// The shapes drawn more than one way, by command: each shape has one button, and its form
+/// offers the ways (Matthew, 2026-11-24: the same shape done another way is one tool).
+pub const WAYS: &[(&str, &[Way])] = &[
+    (
+        "draw_rectangle",
+        &[
+            Way {
+                id: "draw_rectangle",
+                drag: DragWay::AsIs,
+                name: "form-way-corner",
+                hint: "form-way-corner-hint",
+            },
+            Way {
+                id: "draw_rectangle_from_center",
+                drag: DragWay::FromCenter,
+                name: "form-way-center",
+                hint: "form-way-center-rectangle-hint",
+            },
+        ],
+    ),
+    (
+        "draw_circle",
+        &[
+            Way {
+                id: "draw_circle",
+                drag: DragWay::AsIs,
+                name: "form-way-center",
+                hint: "form-way-center-circle-hint",
+            },
+            Way {
+                id: "draw_circle_from_edge",
+                drag: DragWay::AcrossEdge,
+                name: "form-way-edge",
+                hint: "form-way-edge-hint",
+            },
+        ],
+    ),
+];
+
+/// The ways shape `command` can be drawn, the usual way first; none for any other tool.
+pub fn ways_of(command: &str) -> &'static [Way] {
+    WAYS.iter()
+        .find(|(c, _)| *c == command)
+        .map_or(&[], |(_, ways)| ways)
+}
+
+/// Whether tool `id` has a button of its own on the tool pages and the Ribbon: every tool
+/// but another way to draw a shape, which is picked in the shape's form unless `ways`
+/// (Options ▸ General) gives each its own button too. Find Tool, menus
+/// and favourites name every tool either way.
+pub fn has_button(id: &str, ways: crate::options::OtherWays) -> bool {
+    ways == crate::options::OtherWays::AsButtons || variant(id).is_none()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -603,6 +671,49 @@ mod tests {
             DragWay::AsIs.apply(drag((1.0, 2.0), (3.0, 4.0))).start,
             Point::new(1.0, 2.0)
         );
+    }
+
+    #[test]
+    fn a_shape_drawn_two_ways_offers_both_in_its_form_the_usual_way_first() {
+        let ids: Vec<_> = ways_of("draw_rectangle").iter().map(|w| w.id).collect();
+        assert_eq!(ids, ["draw_rectangle", "draw_rectangle_from_center"]);
+        let ids: Vec<_> = ways_of("draw_circle").iter().map(|w| w.id).collect();
+        assert_eq!(ids, ["draw_circle", "draw_circle_from_edge"]);
+        assert!(
+            ways_of("draw_ellipse").is_empty(),
+            "an ellipse is its own tool"
+        );
+        for (command, ways) in WAYS {
+            assert_eq!(ways[0].id, *command);
+            assert_eq!(ways[0].drag, DragWay::AsIs);
+        }
+        // every variant is one of its command's ways, read its own way
+        for v in &VARIANTS {
+            let way = ways_of(v.command).iter().find(|w| w.id == v.id);
+            assert_eq!(way.map(|w| w.drag), Some(v.way), "{}", v.id);
+        }
+    }
+
+    #[test]
+    fn every_way_has_english_words() {
+        for (_, ways) in WAYS {
+            for way in *ways {
+                for key in [way.name, way.hint] {
+                    assert_ne!(cut_craft_i18n::tr(key), key, "{key} has no English");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn another_way_to_draw_a_shape_has_no_button_unless_asked_for() {
+        use crate::options::OtherWays::{AsButtons, InTheForm};
+        assert!(has_button("draw_rectangle", InTheForm));
+        assert!(has_button("draw_circle", InTheForm));
+        assert!(has_button("draw_ellipse", InTheForm));
+        assert!(!has_button("draw_rectangle_from_center", InTheForm));
+        assert!(!has_button("draw_circle_from_edge", InTheForm));
+        assert!(has_button("draw_circle_from_edge", AsButtons));
     }
 
     #[test]

@@ -72,6 +72,7 @@ pictures.
 | 2.3e | Did You Know tips get weights and come up unseen first (which were seen is kept on each computer only); a Canvas tip with Try Canvas comes up more often, not for those already in Canvas | Done (#711) |
 | 2.3f | Toolbars of your own: right-click any tool or group ▸ Add to Toolbar (New Toolbar makes "My Tools"); each shows in every layout (a Ribbon and Canvas tab, a Rail button, a Classic section) or floats over the drawing where you leave it; drag or right-click to reorder, rename, delete. Favourites stay as they are | Done (#720) |
 | 2.3g | Settings backup before the layout switch: Help ▸ Back Up Settings saves one `.ccbackup` file, and Cut Craft backs up by itself before updates, layout changes, first-time setup again and library rewrites, plus weekly (keeps 10). Restore with a preview (Merge or Replace per part) is stage 2 | Stage 1 done (#721); restore 28 Nov to 3 Dec |
+| 2.3h | One button per shape: Draw Rectangle (Corner or Center) and Draw Circle (Center or Edge) each have one button, with **Draw from** at the top of the form picking the way and the button opening the way picked last. A setting gives each way its own button again | PR open |
 | 2.4 | Walk the whole path by hand on both platforms and file every snag | Not started; 9 to 11 Dec, snags fixed by 18 Dec |
 | 2.5 | Help on every step of the path, including the built-in actions with no help page | Not started; 9 to 15 Dec |
 | 2.6 | Making a toolpath across a keep-out zone still refuses, against "tools never refuse" | Not started; 3 to 8 Dec |

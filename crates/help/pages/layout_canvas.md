@@ -23,6 +23,10 @@ everything else floats over the view, so you see the most of your job.
 To open a group's list only when you click its icon, set **Options ▸ General ▸ Canvas tool
 lists open** to **On Click**. Then click the same icon again to close its list.
 
+Draw Rectangle and Draw Circle are listed once each: **Draw from**, at the top of their
+settings, picks how the shape is drawn ([Settings](help:settings) can list each way on its
+own instead).
+
 To find a tool by name, click the **Find a tool** box in the header, or press **Ctrl+K**,
 and type part of its name. The tools that match drop down under it: click one, or press
 **Enter** for the first. **Esc** clears the box. See [Find Tool](help:find_tool).

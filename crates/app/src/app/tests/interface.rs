@@ -786,7 +786,11 @@ fn the_status_bar_shows_the_version() {
 #[test]
 fn a_flyout_opens_from_its_arrow_or_a_held_press_and_shows_the_tool_picked_last() {
     let mut h = Harness::new();
-    h.given_options(|o| o.general.fold_tool_groups = true);
+    h.given_options(|o| {
+        o.general.fold_tool_groups = true;
+        // Draw Circle from Edge with a button of its own, so the flyout holds it
+        o.general.other_ways = crate::options::OtherWays::AsButtons;
+    });
     h.pin(Page::Design);
     h.frame(vec![]);
     h.frame(vec![]);

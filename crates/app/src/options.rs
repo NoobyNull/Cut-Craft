@@ -138,6 +138,12 @@ pub struct Options {
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[schemars(skip)]
     pub ribbon_pins: std::collections::BTreeMap<String, bool>,
+    /// The way each shape drawn more than one way was last drawn, picked under Draw from
+    /// in its form: the shape's command, then the tool that way is
+    /// ([`crate::flyout::WAYS`]). Its button opens that way again.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    #[schemars(skip)]
+    pub shape_ways: std::collections::BTreeMap<String, String>,
     /// Toolbars of your own (right-click a tool or group ▸ Add to Toolbar), in order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(skip)]
@@ -227,6 +233,7 @@ impl Default for Options {
                 flyout_hold_seconds: flyout_hold_seconds(),
                 fold_tool_groups: false,
                 ribbon_icons: RibbonIcons::Compact,
+                other_ways: OtherWays::InTheForm,
                 canvas_flyouts: CanvasFlyouts::OnHover,
                 show_tips_at_startup: true,
             },
@@ -255,6 +262,7 @@ impl Default for Options {
             toolpath_sections: vec![],
             flyout_faces: crate::flyout::Faces::new(),
             ribbon_pins: std::collections::BTreeMap::new(),
+            shape_ways: std::collections::BTreeMap::new(),
             toolbars: Vec::new(),
         }
     }

@@ -44,9 +44,17 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::None,
             },
             Step {
-                caption: "Under **Create**, press **Draw Rectangle From Centre** (it shares a button with Draw Rectangle).",
+                caption: "Under **Create**, press **Draw Rectangle**: one button draws every way.",
                 setup: |app, _| on_design_tab(app, 0),
-                mark: Mark::At("tool:draw_rectangle_from_center"),
+                mark: Mark::At("tool:draw_rectangle"),
+            },
+            Step {
+                caption: "At the top of its form, under **Draw from**, pick **Center**. Its button opens that way next time.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "draw_rectangle");
+                    app.pick_way("draw_rectangle");
+                },
+                mark: Mark::At("way:draw_rectangle_from_center"),
             },
             Step {
                 caption: "Click the middle, then drag out to a corner, or type the size in the form.",
@@ -69,9 +77,17 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::None,
             },
             Step {
-                caption: "Under **Create**, press **Draw Circle From Edge** (it shares a button with Draw Circle).",
+                caption: "Under **Create**, press **Draw Circle**: one button draws every way.",
                 setup: |app, _| on_design_tab(app, 0),
-                mark: Mark::At("tool:draw_circle_from_edge"),
+                mark: Mark::At("tool:draw_circle"),
+            },
+            Step {
+                caption: "At the top of its form, under **Draw from**, pick **Edge**. Its button opens that way next time.",
+                setup: |app, ctx| {
+                    app.invoke(ctx, "draw_circle");
+                    app.pick_way("draw_circle");
+                },
+                mark: Mark::At("way:draw_circle_from_edge"),
             },
             Step {
                 caption: "Drag across the circle from edge to edge, or type it in the form.",

@@ -97,3 +97,14 @@ the default) draws:
 The view keeps its own bar (2D / 3D, the split, sheet, layer, level, snapping). The 2D/3D
 split already existed (Window ▸ Tile, and the two split buttons); picture-in-picture 3D
 with a swap and a draggable split divider come in the next PR.
+
+## One button per shape (agreed 2026-11-24)
+
+A shape drawn more than one way has one button in every layout: Draw Rectangle (Corner or
+Center) and Draw Circle (Center or Edge). **Draw from** at the top of its form picks the way,
+and the button opens the way picked last (`options.shape_ways`). Only the same shape done
+another way is folded in, so Ellipse, Polygon and Star keep their own buttons. The ways are
+left off the tool pages, the Rail's lists, the Canvas palette and the Ribbon (icons and group lists, with either
+Ribbon icons choice) through `CutCraftApp::has_button`; Find Tool, menus and favourites keep
+them. **Options ▸ General ▸ Other ways to draw a shape** (`OtherWays`: **In the form** by
+default, or **As buttons**) puts their buttons back.

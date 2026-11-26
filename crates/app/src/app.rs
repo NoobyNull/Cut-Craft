@@ -52,6 +52,7 @@ use readouts::{
     hms, inspected, inspected_rows, length, measured, measured_rows, sheet_length, summary_table,
 };
 mod settings;
+mod shape_ways;
 pub use settings::*;
 mod bit_changes;
 #[cfg(test)]

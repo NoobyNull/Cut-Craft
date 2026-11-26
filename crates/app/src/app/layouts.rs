@@ -211,7 +211,7 @@ impl CutCraftApp {
                 ),
                 None => egui::Button::new(&label),
             }
-            .selected(self.status.current_tool == label);
+            .selected(self.tool_in_hand(id));
             let response = ui.add_enabled(self.available(id), button);
             let response = self
                 .with_guidance(response, id)
@@ -307,10 +307,10 @@ impl CutCraftApp {
         } else if self.rail.open == List::Gadgets {
             Some((GADGETS, gadgets))
         } else {
-            self.rail
-                .group()
-                .and_then(|i| groups.get(i))
-                .map(|g| (g.name, g.tools.to_vec()))
+            self.rail.group().and_then(|i| groups.get(i)).map(|g| {
+                let tools = g.tools.iter().copied().filter(|id| self.has_button(id));
+                (g.name, tools.collect())
+            })
         };
         if let Some((name, tools)) = list {
             self.rail_flyout(ui, toolbar, name, &tools);
@@ -484,7 +484,7 @@ impl CutCraftApp {
         let groups: Vec<gui::ToolGroup> = groups
             .iter()
             .copied()
-            .filter(|group| group.tools.iter().any(|id| self.offered(id)))
+            .filter(|group| group.tools.iter().any(|id| self.has_button(id)))
             .collect();
         let plans: Vec<(Vec<&'static str>, f32)> = groups
             .iter()
@@ -511,7 +511,7 @@ impl CutCraftApp {
                     .tools
                     .iter()
                     .copied()
-                    .filter(|id| self.offered(id))
+                    .filter(|id| self.has_button(id))
                     .collect();
                 let shown = on_ribbon(&offered, &self.options.ribbon_pins, starter);
                 let across = shown.len().div_ceil(2);
@@ -627,7 +627,7 @@ impl CutCraftApp {
                         .tools
                         .iter()
                         .copied()
-                        .filter(|id| self.offered(id))
+                        .filter(|id| self.has_button(id))
                         .collect();
                     for id in listed {
                         if self.tool_rows(ui, &[id]) {

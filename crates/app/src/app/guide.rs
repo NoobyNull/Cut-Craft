@@ -136,7 +136,11 @@ impl CutCraftApp {
     /// (a page's icons, the Rail's rows, a flyout's list) goes through here.
     pub(super) fn with_guidance(&self, response: egui::Response, id: &str) -> egui::Response {
         let label = self.tool_label(id);
-        let about = crate::gui::about(id).unwrap_or(label);
+        let mut about = crate::gui::about(id).unwrap_or(label);
+        // a shape drawn more than one way says where its other ways are
+        if let Some(ways) = self.ways_note(id) {
+            about = format!("{about}\n\n{ways}");
+        }
         let tip = self.tool_tip(id, &about);
         hover(&response, &tip);
         response.on_hover_text(tooltip(&about, tip.next.as_deref()))
@@ -179,7 +183,8 @@ impl CutCraftApp {
         {
             return Some(step);
         }
-        self.drawing_step(form.id, self.polyline.is_empty())
+        self.way_step()
+            .or_else(|| self.drawing_step(form.id, self.polyline.is_empty()))
             .map(|step| body(form.label, &step))
     }
 

@@ -28,6 +28,18 @@ form-load-settings = Load Settings…
 form-calculate-as-new = Calculate as New
     .tooltip = Add another toolpath with these settings, keeping the one already made
 
+# A shape drawn more than one way: the choice at the top of its form.
+form-way-caption = Draw from:
+form-way-corner = Corner
+form-way-center = Center
+form-way-edge = Edge
+form-way-corner-hint = Drag from one corner to the opposite corner
+form-way-center-rectangle-hint = Drag from the middle out to a corner, the same distance each way
+form-way-center-circle-hint = Drag from the middle out to the edge
+form-way-edge-hint = Drag from one side straight across to the other
+# A shape's button, while its other ways are picked in its form. $ways: their names, such as Corner / Center.
+form-way-tooltip = Draw from { $ways }: pick which under Draw from, at the top of its form.
+
 # Toolpaths left out of date by an edit. $message is what the edit said in the status bar.
 recalculate-out-of-date = { $count ->
     [one] { $message }. 1 toolpath is now out of date (⚠ in the Toolpaths list): recalculate it, and save its G-code again if you already have

@@ -175,6 +175,14 @@ setting-compact-9ead86 = Compact
 setting-the-tools-that-fit-under-d9bbf5 = The tools that fit under the group's name; the name lists the rest
 setting-every-tool-ff8f76 = Every tool
 setting-every-tool-in-the-group-cbcb49 = Every tool in the group
+setting-other-ways-to-draw-a-5a04c4 = Other ways to draw a shape
+setting-where-the-other-ways-to-b3f4a9 =
+    Where the other ways to draw a shape are picked: Draw Rectangle from a corner or the
+    center, Draw Circle from the center or an edge
+setting-in-the-form-525e89 = In the form
+setting-one-button-for-each-shape-5b8943 = One button for each shape; Draw from, at the top of its form, picks the way
+setting-as-buttons-a8357c = As buttons
+setting-a-button-of-its-own-e01b8a = A button of its own for each way too, beside the shape's
 setting-canvas-tool-lists-open-9c6fcc = Canvas tool lists open
 setting-when-a-group-in-the-779c12 =
     When a group in the Canvas layout's palette lists its tools beside it: On Hover as

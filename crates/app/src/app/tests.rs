@@ -33,6 +33,7 @@ mod rotary;
 mod rotary_wrap;
 mod saving_toolpaths;
 mod selecting;
+mod shape_ways;
 mod snapping_and_guides;
 mod split_views;
 mod tool_database;

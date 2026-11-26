@@ -383,6 +383,8 @@ impl CutCraftApp {
         match id {
             // a drawing tool's toolbox variant: its form, the drag read the variant's way
             id if crate::flyout::variant(id).is_some() => self.start_variant(id),
+            // a shape drawn more than one way: the way picked last in its form
+            id if !crate::flyout::ways_of(id).is_empty() => self.start_shape(id),
             // the labels' setting is kept with the options, so they stay as left
             "show_keep_out_zone_labels" => {
                 self.display.toggle(id);

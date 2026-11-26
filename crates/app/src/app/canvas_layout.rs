@@ -154,11 +154,12 @@ impl CutCraftApp {
         self.ribbon_groups()
             .0
             .into_iter()
-            .filter(|group| group.tools.iter().any(|id| self.offered(id)))
+            .filter(|group| group.tools.iter().any(|id| self.has_button(id)))
             .collect()
     }
 
-    /// Favourites' or Gadgets' tools for this machine, listed with no palette.
+    /// Favourites' or Gadgets' tools for this machine, listed with no palette. Favourites keep
+    /// another way to draw a shape picked for them, as in every layout.
     fn canvas_list(&self, tab: &str) -> Vec<&'static str> {
         let tools = if tab == GADGETS {
             self.gadget_tools()
@@ -238,7 +239,7 @@ impl CutCraftApp {
             .tools
             .iter()
             .copied()
-            .filter(|id| self.offered(id))
+            .filter(|id| self.has_button(id))
             .collect();
         let beside = shown.response.rect.right_top() + egui::vec2(ui.spacing().item_spacing.x, 0.0);
         let list = self.canvas_flyout(ui, beside, group.name, &tools);
