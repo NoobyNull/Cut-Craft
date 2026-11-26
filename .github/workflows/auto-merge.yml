@@ -1,0 +1,49 @@
+# Matthew's own pull requests merge by themselves once the required checks pass (Ubuntu,
+# Windows, PR title; Mac never holds one up). Anyone else's pull request is left alone.
+#
+# It only turns GitHub's auto-merge on; branch protection still decides when a merge happens.
+# It skips: other authors, branches from forks (GitHub gives those runs no secrets anyway),
+# drafts, and pull requests that don't target main. Stacked pull requests point at each
+# other's branches, which have no required checks, so auto-merge there would merge them at once.
+#
+# AUTO_MERGE_TOKEN is a fine-grained token owned by NoobyNull (this repository only; Contents
+# and Pull requests read/write). With GitHub's built-in token the merge would be a bot push,
+# and GitHub starts no workflows for those, so CI, Help coverage and Languages on main would
+# stop running after each merge.
+#
+# pull_request_target runs this file as it is on main, never a pull request's own copy, so a
+# pull request can't edit the checks below to get at the token. Never add a checkout or run
+# anything from the pull request's branch here.
+name: Auto-merge
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  enable:
+    if: >-
+      github.event.pull_request.user.login == 'NoobyNull' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Turn on auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.AUTO_MERGE_TOKEN }}
+          PR: ${{ github.event.pull_request.html_url }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::AUTO_MERGE_TOKEN isn't set, so this pull request won't merge by itself. CONTRIBUTING.md, Auto-merge, says how to add it."
+            exit 0
+          fi
+          gh pr merge --auto --merge "$PR"
+          echo "::notice::Auto-merge is on. GitHub merges this once the required checks pass."
