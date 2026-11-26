@@ -66,6 +66,7 @@ status-model-imported = Model imported
 status-cancelled = { $tool } cancelled
 
 ## Saving and sending toolpaths
+status-nothing-saved-job-changed = Nothing saved: the job changed while saving. Save again, so the checks before cutting look at it as it is now
 status-toolpaths-not-sent = Toolpaths not sent
 status-toolpaths-not-saved = Toolpaths not saved
 

@@ -17,13 +17,13 @@ pub(super) enum Anchor {
 
 impl Anchor {
     /// What to click next, once `first` is placed or not.
-    pub(super) fn prompt(self, first: bool) -> &'static str {
-        match (self, first) {
-            (Self::Fade, false) => "Click the point that keeps its height",
-            (Self::Fade, true) => "Click the point the component fades down toward",
-            (Self::Tilt, false) => "Click the point that does not move",
-            (Self::Tilt, true) => "Click the point tilted up",
-        }
+    pub(super) fn prompt(self, first: bool) -> String {
+        cut_craft_i18n::tr(match (self, first) {
+            (Self::Fade, false) => "panels-fade-click-first",
+            (Self::Fade, true) => "panels-fade-click-second",
+            (Self::Tilt, false) => "panels-tilt-click-first",
+            (Self::Tilt, true) => "panels-tilt-click-second",
+        })
     }
 }
 

@@ -58,11 +58,9 @@ impl SavingChecks {
     /// checked: an error, and nothing written, when they changed while it waited.
     pub(super) fn still_as_checked(&self, now: Checked) -> Result<(), String> {
         match self.checked {
-            Some(checked) if checked != now => Err(
-                "Nothing saved: the job changed while saving. Save again, so the checks \
-                     before cutting look at it as it is now"
-                    .to_owned(),
-            ),
+            Some(checked) if checked != now => {
+                Err(cut_craft_i18n::tr!("status-nothing-saved-job-changed"))
+            }
             _ => Ok(()),
         }
     }

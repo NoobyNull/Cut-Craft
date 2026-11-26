@@ -470,10 +470,10 @@ impl Handle3d {
     /// What it does, for the status bar; a rotation handle names the angles of `steps`.
     fn hint(self, steps: handles::Steps) -> String {
         match self {
-            Self::Total => "Total height: drag up or down".to_owned(),
-            Self::Height => "Shape height: drag up or down".to_owned(),
-            Self::Base => "Base height: drag up or down".to_owned(),
-            Self::Settings => "Combine mode, fade, tilt and appearance".to_owned(),
+            Self::Total => tr!("panels-handle-total-height"),
+            Self::Height => tr!("panels-handle-shape-height"),
+            Self::Base => tr!("panels-handle-base-height"),
+            Self::Settings => tr!("panels-handle-settings"),
             Self::Transform(handle) => handle.hint(steps),
         }
     }
