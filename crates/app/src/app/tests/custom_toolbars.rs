@@ -236,6 +236,29 @@ fn a_snapped_toolbar_pushes_the_drawing_over_or_lies_over_its_edge() {
 }
 
 #[test]
+fn bars_lying_over_the_drawing_stay_under_its_controls_and_off_each_other() {
+    let mut h = with_toolbar(WindowLayout::Rail);
+    h.choose(
+        |app| app.row_menu("draw_rectangle"),
+        &["Add to New Toolbar"],
+    );
+    h.given_options(|o| o.general.snapped_bars = SnappedBars::OverTheDrawing);
+    h.invoke("toolbar:place:0:snap:top");
+    h.invoke("toolbar:place:1:snap:left");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let view = h.view_rect();
+    let top = h.toolbar_bar_rect(0).expect("over the drawing");
+    let left = h.toolbar_bar_rect(1).expect("over the drawing");
+    assert!(
+        top.top() >= view.top() - 1.0,
+        "under the view's own bar: {top:?} {view:?}"
+    );
+    assert!(!top.shrink(0.5).intersects(left), "{top:?} {left:?}");
+}
+
+#[test]
 fn old_floating_toolbars_still_float_where_they_were() {
     let mut h = Harness::new();
     let old =
