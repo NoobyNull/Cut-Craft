@@ -140,9 +140,12 @@ fn every_palette_group_can_be_reached_in_a_short_window() {
 
 /// The palette's place on screen.
 fn palette(h: &Harness) -> egui::Rect {
-    h.ctx
-        .memory(|m| m.area_rect(egui::Id::unique("canvas_palette")))
-        .expect("the palette is drawn")
+    h.palette_rect().expect("the palette is drawn")
+}
+
+/// The palette's first group's icon, under its grip.
+fn first_group(h: &Harness) -> egui::Pos2 {
+    palette(h).left_top() + egui::vec2(20.0, 30.0)
 }
 
 #[test]
@@ -152,7 +155,7 @@ fn pointing_at_a_palette_group_lists_its_tools_and_moving_away_closes_them() {
         h.options().general.canvas_flyouts,
         crate::options::CanvasFlyouts::OnHover
     );
-    let first = palette(&h).left_top() + egui::vec2(20.0, 20.0);
+    let first = first_group(&h);
     h.frame(vec![Event::PointerMoved(first)]);
     h.frame(vec![]);
     let group = h.canvas_groups()[0].name;
@@ -168,7 +171,7 @@ fn pointing_at_a_palette_group_lists_its_tools_and_moving_away_closes_them() {
 fn on_click_a_palette_group_waits_for_its_click() {
     let mut h = canvas();
     h.given_options(|o| o.general.canvas_flyouts = crate::options::CanvasFlyouts::OnClick);
-    let first = palette(&h).left_top() + egui::vec2(20.0, 20.0);
+    let first = first_group(&h);
     h.frame(vec![Event::PointerMoved(first)]);
     h.frame(vec![]);
     assert!(h.open_canvas_group().is_none(), "pointing opens nothing");
@@ -216,5 +219,46 @@ fn a_long_favourites_list_in_a_short_window_stays_inside_it() {
     assert!(
         list.right() <= 900.0 && list.bottom() <= 420.0,
         "the extra columns scroll sideways: {list:?}"
+    );
+}
+
+#[test]
+fn the_palette_is_a_bar_its_grip_moves_snaps_and_turns() {
+    let mut h = canvas();
+    let start = palette(&h);
+    assert!(start.height() > start.width(), "a column at first");
+    // its grip, the dots along its top, moves it
+    let grip = egui::pos2(start.center().x, start.top() + 7.0);
+    h.drag(grip, grip + egui::vec2(200.0, 60.0));
+    h.frame(vec![]);
+    let moved = palette(&h);
+    assert!(
+        (moved.left() - start.left() - 200.0).abs() < 2.0,
+        "{start:?} to {moved:?}"
+    );
+    assert!(matches!(
+        h.options().canvas_palette,
+        crate::bars::Place::Floating(f) if f.offset.is_some() && f.down
+    ));
+    // turned, it runs across
+    h.invoke("toolbar:palette:turn");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let across = palette(&h);
+    assert!(across.width() > across.height(), "{across:?}");
+    // snapped to the left, the drawing makes room for it
+    let before = h.view_rect();
+    h.invoke("toolbar:palette:snap:left");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.view_rect().left() > before.left() + 10.0, "pushed over");
+    // and its groups still list their tools beside it
+    h.open_canvas_group_list("Create Vectors");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let circle = h.text_at("Draw Circle").expect("listed");
+    assert!(
+        circle.x > h.view_rect().left(),
+        "beside the palette, over the drawing"
     );
 }

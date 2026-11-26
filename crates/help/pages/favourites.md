@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-26
 see-also: toolbars, interface_layout, settings, find_tool
 ---
 

@@ -3,21 +3,60 @@
 //! in Classic and the Canvas palette) or floating anywhere over the drawing. Kept in the
 //! options; changed only through the actions here, so every layout changes them the same way.
 
+use crate::bars::{self, Floating, Home, Place};
 use crate::gui::MenuItem;
 use serde::{Deserialize, Serialize};
 
 /// A toolbar of your own.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(from = "Kept")]
 pub struct Toolbar {
     pub name: String,
     #[serde(default)]
     pub items: Vec<Item>,
-    /// Shown as a small strip over the drawing instead of in the layout.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub floating: bool,
-    /// Where a floating toolbar was left, its top-left corner in points.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub at: Option<[f32; 2]>,
+    /// Where it sits: in the layout, snapped to a side or floating.
+    #[serde(flatten)]
+    pub place: Place,
+}
+
+/// A toolbar as the options keep it, read from before it had a [`Place`] too: then it
+/// was floating (where it was left) or in the layout.
+#[derive(Deserialize)]
+struct Kept {
+    name: String,
+    #[serde(default)]
+    items: Vec<Item>,
+    #[serde(default)]
+    place: Option<String>,
+    #[serde(flatten)]
+    rest: serde_json::Map<String, serde_json::Value>,
+}
+
+impl From<Kept> for Toolbar {
+    fn from(kept: Kept) -> Self {
+        let mut rest = kept.rest;
+        let place = match kept.place {
+            Some(place) => {
+                rest.insert("place".into(), place.into());
+                serde_json::from_value(rest.into()).unwrap_or(Place::Layout)
+            }
+            None if rest.get("floating").and_then(serde_json::Value::as_bool) == Some(true) => {
+                let offset = rest
+                    .get("at")
+                    .and_then(|at| serde_json::from_value::<[f32; 2]>(at.clone()).ok());
+                Place::Floating(Floating {
+                    offset,
+                    ..Floating::default()
+                })
+            }
+            None => Place::Layout,
+        };
+        Self {
+            name: kept.name,
+            items: kept.items,
+            place,
+        }
+    }
 }
 
 /// What a toolbar holds: one tool (by id) or a tool group (by its English name), which
@@ -54,7 +93,8 @@ impl Item {
 /// - `new:<item>` makes a new toolbar holding it;
 /// - `remove:<toolbar>:<at>` takes an item off;
 /// - `move:<toolbar>:<from>:<to>` moves an item to another place on its toolbar;
-/// - `float:<toolbar>:<true|false>` floats it over the drawing or puts it back;
+/// - `place:<toolbar>:<what>` snaps, floats, locks, turns, detaches or attaches it
+///   ([`bars::apply`]);
 /// - `rename:<toolbar>:<name>` and `delete:<toolbar>`.
 pub const ACTION: &str = "toolbar:";
 
@@ -90,8 +130,7 @@ pub fn apply(toolbars: &mut Vec<Toolbar>, action: &str) -> bool {
             toolbars.push(Toolbar {
                 name: new_name(toolbars),
                 items: vec![item],
-                floating: false,
-                at: None,
+                place: Place::default(),
             });
             true
         }
@@ -143,15 +182,13 @@ pub fn apply(toolbars: &mut Vec<Toolbar>, action: &str) -> bool {
             toolbar.items.insert(to.min(len - 1), item);
             true
         }
-        "float" => {
-            let Some((n, on)) = rest.split_once(':') else {
+        "place" => {
+            let Some((n, what)) = rest.split_once(':') else {
                 return false;
             };
-            let Some(toolbar) = index(n).and_then(|n| toolbars.get_mut(n)) else {
-                return false;
-            };
-            toolbar.floating = on == "true";
-            true
+            index(n)
+                .and_then(|n| toolbars.get_mut(n))
+                .is_some_and(|toolbar| bars::apply(&mut toolbar.place, what, true))
         }
         "rename" => {
             let Some((n, name)) = rest.split_once(':') else {
@@ -206,7 +243,7 @@ pub fn add_menu(toolbars: &[Toolbar], item: &Item) -> MenuItem {
 
 /// What a right-click on an item of toolbar `n` offers: moving it along, taking it off,
 /// and the toolbar's own menu.
-pub fn item_menu(toolbars: &[Toolbar], n: usize, at: usize) -> Vec<MenuItem> {
+pub fn item_menu(toolbars: &[Toolbar], n: usize, at: usize, home: Home) -> Vec<MenuItem> {
     let len = toolbars.get(n).map_or(0, |t| t.items.len());
     let mut menu = vec![
         MenuItem {
@@ -223,25 +260,27 @@ pub fn item_menu(toolbars: &[Toolbar], n: usize, at: usize) -> Vec<MenuItem> {
         MenuItem::with_action("Remove from Toolbar", &format!("{ACTION}remove:{n}:{at}")),
         MenuItem::separator(),
     ];
-    menu.extend(toolbar_menu(toolbars, n));
+    menu.extend(toolbar_menu(toolbars, n, home));
     menu
 }
 
-/// A toolbar's own menu (right-click its name): rename it, float it or put it back, delete
-/// it. Renaming opens a box for the name ([`RENAME`]).
-pub fn toolbar_menu(toolbars: &[Toolbar], n: usize) -> Vec<MenuItem> {
-    let floating = toolbars.get(n).is_some_and(|t| t.floating);
-    vec![
-        MenuItem::with_action("Rename Toolbar", &format!("{RENAME}{n}")),
-        MenuItem {
-            is_checked: floating,
-            ..MenuItem::with_action(
-                "Float over the Drawing",
-                &format!("{ACTION}float:{n}:{}", !floating),
-            )
-        },
-        MenuItem::with_action("Delete Toolbar", &format!("{ACTION}delete:{n}")),
-    ]
+/// A toolbar's own menu (right-click its name or grip): where it sits ([`bars::menu`],
+/// `home` being where the layout puts it back), then rename it or delete it. Renaming opens
+/// a box for the name ([`RENAME`]).
+pub fn toolbar_menu(toolbars: &[Toolbar], n: usize, home: Home) -> Vec<MenuItem> {
+    let mut menu = toolbars.get(n).map_or_else(Vec::new, |toolbar| {
+        bars::menu(&toolbar.place, &format!("{ACTION}place:{n}:"), Some(home))
+    });
+    menu.push(MenuItem::separator());
+    menu.push(MenuItem::with_action(
+        "Rename Toolbar",
+        &format!("{RENAME}{n}"),
+    ));
+    menu.push(MenuItem::with_action(
+        "Delete Toolbar",
+        &format!("{ACTION}delete:{n}"),
+    ));
+    menu
 }
 
 /// Opening the box to rename toolbar `n`: then its index.

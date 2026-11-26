@@ -148,6 +148,13 @@ pub struct Options {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(skip)]
     pub toolbars: Vec<crate::custom_toolbars::Toolbar>,
+    /// Where the Canvas layout's palette of tool groups sits (right-click its grip).
+    #[serde(
+        default = "crate::bars::Place::column",
+        skip_serializing_if = "crate::bars::Place::is_column"
+    )]
+    #[schemars(skip)]
+    pub canvas_palette: crate::bars::Place,
 }
 
 /// Each tool page's favourite tools, in the order shown, and whether it shows only those.
@@ -235,6 +242,8 @@ impl Default for Options {
                 ribbon_icons: RibbonIcons::Compact,
                 other_ways: OtherWays::InTheForm,
                 canvas_flyouts: CanvasFlyouts::OnHover,
+                snapped_bars: SnappedBars::PushTheDrawingOver,
+                new_bars: NewBars::Floating,
                 show_tips_at_startup: true,
             },
             job_defaults: JobDefaults::default(),
@@ -264,6 +273,7 @@ impl Default for Options {
             ribbon_pins: std::collections::BTreeMap::new(),
             shape_ways: std::collections::BTreeMap::new(),
             toolbars: Vec::new(),
+            canvas_palette: crate::bars::Place::column(),
         }
     }
 }

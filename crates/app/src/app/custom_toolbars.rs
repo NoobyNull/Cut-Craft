@@ -4,13 +4,24 @@
 //! Canvas tool lists open); a drag moves an item along its toolbar; a right-click moves it,
 //! takes it off, or renames, floats or deletes the toolbar.
 
+use super::bars::{Bar, Room};
 use super::installed::GADGETS;
 use super::{CutCraftApp, RIBBON_TABS, TOOL_ICON_ROWS, egui, gui};
+use crate::bars::{self, Place};
 use crate::custom_toolbars::{self as toolbars, Item};
-use crate::options::CanvasFlyouts;
+use crate::options::{CanvasFlyouts, NewBars};
 use crate::tool_names::{group_name, page_tab_name};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
+
+/// The Canvas palette's actions, after [`toolbars::ACTION`]: then what to do to where it
+/// sits ([`bars::apply`]).
+pub(super) const PALETTE: &str = "palette:";
+
+/// The id of toolbar `n`'s bar while it is snapped or floating.
+pub(super) fn toolbar_bar_id(n: usize, name: &str) -> egui::Id {
+    egui::Id::unique(("toolbar_bar", n, name))
+}
 
 /// How a strip lays out its items.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,14 +54,16 @@ pub(super) struct ToolbarState {
     pub rename: Option<(usize, String)>,
     /// A change to the toolbars picked while they are being drawn, made once the frame's
     /// toolbars are all drawn (so none is deleted or moved under the loop drawing them).
-    pending: Option<String>,
+    pub(super) pending: Option<String>,
+    /// A floating bar being dragged by its grip, and where its top-left corner is now.
+    pub drag: Option<(egui::Id, egui::Pos2)>,
 }
 
 impl CutCraftApp {
     /// The toolbars shown in the layout, not floating, by index.
     pub(super) fn docked_toolbars(&self) -> Vec<usize> {
         (0..self.options.toolbars.len())
-            .filter(|&n| !self.options.toolbars[n].floating)
+            .filter(|&n| self.options.toolbars[n].place == Place::Layout)
             .collect()
     }
 
@@ -77,8 +90,9 @@ impl CutCraftApp {
 
     /// A toolbar's name with its menu (rename, float, delete) on a right-click.
     pub(super) fn toolbar_name_menu(&mut self, response: &egui::Response, n: usize) {
+        let home = self.bar_home();
         if let Some(action) = self.popup(response, || {
-            toolbars::toolbar_menu(&self.options.toolbars, n)
+            toolbars::toolbar_menu(&self.options.toolbars, n, home)
         }) {
             self.toolbars.pending = Some(action);
         }
@@ -229,14 +243,26 @@ impl CutCraftApp {
         let Some(action) = action.strip_prefix(toolbars::ACTION) else {
             return;
         };
+        if let Some(what) = action.strip_prefix(PALETTE) {
+            if bars::apply(&mut self.options.canvas_palette, what, false) {
+                self.save_options();
+            }
+            return;
+        }
         let before = self.options.toolbars.len();
         if !toolbars::apply(&mut self.options.toolbars, action) {
             return;
         }
         let after = self.options.toolbars.len();
         if after > before {
-            // a new toolbar shows at once where the layout shows toolbars
-            self.toolbars.ribbon = Some(after - 1);
+            // a new toolbar starts where Options ▸ General ▸ New toolbars start says, and
+            // shows at once
+            if self.options.general.new_bars == NewBars::InTheLayout
+                && let Some(toolbar) = self.options.toolbars.last_mut()
+            {
+                toolbar.place = Place::Layout;
+                self.toolbars.ribbon = Some(after - 1);
+            }
         }
         // what was open on a toolbar that went, or moved, closes
         let state = &mut self.toolbars;
@@ -284,7 +310,12 @@ impl CutCraftApp {
                     let menu = self.popup(response, || {
                         let mut menu = self.row_menu(id);
                         menu.push(gui::MenuItem::separator());
-                        menu.extend(toolbars::item_menu(&self.options.toolbars, n, at));
+                        menu.extend(toolbars::item_menu(
+                            &self.options.toolbars,
+                            n,
+                            at,
+                            self.bar_home(),
+                        ));
                         menu
                     });
                     action = action.or(menu);
@@ -292,7 +323,7 @@ impl CutCraftApp {
                 Item::Group(_) => {
                     self.open_group_on(response, (n, at));
                     let menu = self.popup(response, || {
-                        toolbars::item_menu(&self.options.toolbars, n, at)
+                        toolbars::item_menu(&self.options.toolbars, n, at, self.bar_home())
                     });
                     action = action.or(menu);
                 }
@@ -512,47 +543,58 @@ impl CutCraftApp {
         over(&dropped).then(|| format!("{}move:{n}:{}:{to}", toolbars::ACTION, dropped.at))
     }
 
-    /// The floating toolbars, each a small strip under its name that can be dragged
-    /// anywhere over the window and stays where it is left.
-    pub(super) fn floating_toolbars(&mut self, ctx: &egui::Context) {
+    /// The toolbars placed beside or over the drawing rather than in the layout: with no
+    /// `start`, those snapped to a side; with one, those floating, starting there one
+    /// under another until moved.
+    pub(super) fn placed_toolbars(
+        &mut self,
+        ui: &mut egui::Ui,
+        room: &mut Room,
+        start: Option<egui::Pos2>,
+    ) {
+        let home = self.bar_home();
+        let step = 1.5 * TOOL_ICON_ROWS * ui.spacing().interact_size.y;
+        let mut floating = 0;
         for n in 0..self.options.toolbars.len() {
-            let toolbar = &self.options.toolbars[n];
-            if !toolbar.floating {
-                continue;
-            }
+            let Some(toolbar) = self.options.toolbars.get(n) else {
+                break;
+            };
+            let place = toolbar.place;
             let name = toolbar.name.clone();
-            let start = toolbar.at.map_or_else(
-                || ctx.content_rect().center() - egui::vec2(100.0, 0.0),
-                |[x, y]| egui::pos2(x, y),
-            );
-            let shown = egui::Area::new(egui::Id::unique(("floating_toolbar", n, name.as_str())))
-                .default_pos(start)
-                .constrain(true)
-                .show(ctx, |ui| {
-                    egui::Frame::window(ui.style())
-                        .inner_margin(ui.spacing().item_spacing.y)
-                        .show(ui, |ui| {
-                            cut_craft_bug_report::mark(ui, "Floating toolbar");
-                            ui.set_max_width(12.0 * ui.spacing().interact_size.y);
-                            let title = ui
-                                .add(
-                                    egui::Label::new(egui::RichText::new(&name).small().strong())
-                                        .selectable(false)
-                                        .sense(egui::Sense::click()),
-                                )
-                                .on_hover_hint(tr!("toolbars-floating-hint"));
-                            self.toolbar_name_menu(&title, n);
-                            self.toolbar_strip(ui, n, Strip::Across);
-                        });
-                });
-            let left = shown.response.rect.left_top();
-            let moved = self.options.toolbars.get(n).is_some_and(|t| {
-                t.at.is_none_or(|[x, y]| (x - left.x).abs() + (y - left.y).abs() > 0.5)
-            });
-            if moved && !ctx.input(|i| i.pointer.any_down()) {
-                if let Some(toolbar) = self.options.toolbars.get_mut(n) {
-                    toolbar.at = Some([left.x, left.y]);
+            let id = toolbar_bar_id(n, &name);
+            let menu = toolbars::toolbar_menu(&self.options.toolbars, n, home);
+            let mut contents = |app: &mut Self, ui: &mut egui::Ui, across: bool| {
+                let strip = if across { Strip::Across } else { Strip::Down };
+                let _ = app.toolbar_strip(ui, n, strip);
+            };
+            let shown = match (place, start) {
+                (Place::Snapped { side }, None) => {
+                    let bar = Bar {
+                        id,
+                        name: &name,
+                        menu: &menu,
+                    };
+                    self.snapped_bar(ui, room, &bar, side, &mut contents)
                 }
+                (Place::Floating(at), Some(start)) => {
+                    let start = bars::start(start, floating, step);
+                    floating += 1;
+                    let bar = Bar {
+                        id,
+                        name: &name,
+                        menu: &menu,
+                    };
+                    self.floating_bar(ui.ctx(), &bar, at, start, &mut contents)
+                }
+                _ => continue,
+            };
+            if let Some(action) = shown.action {
+                self.toolbars.pending = Some(action);
+            }
+            if let Some(moved) = shown.moved
+                && let Some(toolbar) = self.options.toolbars.get_mut(n)
+            {
+                toolbar.place = Place::Floating(moved);
                 self.save_options();
             }
         }
