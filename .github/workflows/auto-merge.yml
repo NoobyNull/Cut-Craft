@@ -10,10 +10,14 @@
 # and Pull requests read/write). With GitHub's built-in token the merge would be a bot push,
 # and GitHub starts no workflows for those, so CI, Help coverage and Languages on main would
 # stop running after each merge.
+#
+# pull_request_target runs this file as it is on main, never a pull request's own copy, so a
+# pull request can't edit the checks below to get at the token. Never add a checkout or run
+# anything from the pull request's branch here.
 name: Auto-merge
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, reopened, ready_for_review, synchronize, edited]
 
 permissions:
