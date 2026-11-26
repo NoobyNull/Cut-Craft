@@ -145,6 +145,7 @@ fn fresh_job(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.options.general.layout = crate::options::WindowLayout::Classic;
     // the last tour's windows closed, so none is left in the next tour's pictures
     (app.tool_manager, app.info, app.part_labels_window) = (None, None, false);
+    app.close_customize();
     // the Design tab down the left (not Sheets, Layers or the Library)
     app.design_tab = 0;
     (app.save_form, app.gcode_view) = (None, None);

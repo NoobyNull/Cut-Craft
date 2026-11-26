@@ -88,6 +88,27 @@ impl Harness {
         self.app.customize.right = at;
     }
 
+    /// Presses the window's button `button`.
+    pub(in super::super) fn customize_press(&mut self, button: &str) {
+        let ctx = self.ctx.clone();
+        self.app.customize_press(&ctx, button);
+    }
+
+    /// The item picked on the window's right.
+    pub(in super::super) fn customize_picked(&self) -> Option<usize> {
+        self.app.customize.right
+    }
+
+    /// An edit waiting in the Options window, not yet applied.
+    pub(in super::super) fn options_edit_waiting(
+        &mut self,
+        edit: impl FnOnce(&mut crate::options::Options),
+    ) {
+        let mut edited = self.app.edited_options().clone();
+        edit(&mut edited);
+        self.app.options_edited(edited);
+    }
+
     /// Whether the window's button `button` can do something now.
     pub(in super::super) fn customize_can(&self, button: &str) -> bool {
         self.app.customize_action(button).is_some()

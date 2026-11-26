@@ -353,8 +353,10 @@ impl CutCraftApp {
         let language =
             (options.language != self.options.language).then(|| options.language.pack.clone());
         options.apply();
-        // the window never changes the toolbars of your own: ones made while it was open stay
+        // the window never changes the toolbars of your own or Favourites: changes made
+        // while it was open (menus, Customize Toolbars) stay
         options.toolbars.clone_from(&self.options.toolbars);
+        options.favourites.clone_from(&self.options.favourites);
         self.options = options;
         self.save_options();
         if let Some(pack) = language {

@@ -38,6 +38,33 @@ fn the_view_menu_and_every_bars_menu_open_it() {
 }
 
 #[test]
+fn a_favourite_added_is_picked_where_it_went_and_kept_through_options_apply() {
+    let mut h = customizing();
+    h.customize_pick(Item::Tool("3d_roughing_toolpath".into()));
+    h.frame(vec![]);
+    click_text(&mut h, "Add →");
+    // Options open with a change waiting while Favourites change
+    h.open_options_at("general");
+    h.frame(vec![]);
+    h.options_edit_waiting(|o| o.general.recent_file_list_size += 1);
+    h.customize_pick(Item::Tool("draw_circle".into()));
+    h.customize_press("add");
+    let items = h.favourite_items();
+    assert_eq!(
+        items[0],
+        Item::Tool("draw_circle".into()),
+        "Create/Edit first"
+    );
+    assert_eq!(h.customize_picked(), Some(0), "the circle, just added");
+    h.apply_options_window();
+    assert_eq!(
+        h.favourite_items().len(),
+        2,
+        "Apply keeps the Favourites added"
+    );
+}
+
+#[test]
 fn options_general_opens_it_too() {
     let mut h = Harness::new();
     h.open_options_at("general");

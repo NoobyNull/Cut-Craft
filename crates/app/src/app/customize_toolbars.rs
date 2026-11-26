@@ -40,6 +40,11 @@ impl CutCraftApp {
         self.customize = Customize::opened();
     }
 
+    /// Closes the Customize Toolbars window, forgetting what it had picked.
+    pub(crate) fn close_customize(&mut self) {
+        self.customize = Customize::default();
+    }
+
     /// Picks `item` on the window's left, as a click there does (the help pictures).
     pub(crate) fn customize_pick(&mut self, item: Item) {
         self.customize.left = Some(item);
@@ -174,14 +179,16 @@ impl CutCraftApp {
         };
         let before = self.options.toolbars.len();
         let bar = self.customize.bar;
+        let added = self.customize.left.clone();
         self.invoke(ctx, &action);
-        let last = self.bar_items(bar).len().checked_sub(1);
+        // where the item added went: Favourites keep Create/Edit ones ahead of toolpath ones
+        let at = added.and_then(|item| self.bar_items(bar).iter().position(|i| *i == item));
         let c = &mut self.customize;
         match button {
             "up" => c.right = c.right.map(|at| at.saturating_sub(1)),
             "down" => c.right = c.right.map(|at| at + 1),
             "remove" => c.right = None,
-            "add" => c.right = last,
+            "add" => c.right = at,
             "new" if self.options.toolbars.len() > before => {
                 self.customize.bar = before;
                 self.customize.right = Some(0);
