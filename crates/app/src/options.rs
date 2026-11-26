@@ -157,9 +157,17 @@ pub struct Options {
     pub canvas_palette: crate::bars::Place,
 }
 
-/// Each tool page's favourite tools, in the order shown, and whether it shows only those.
+/// Each tool page's favourite tools (and whole groups, as `group:<name>`), in the order
+/// shown, and whether it shows only those; and the Favourites bar: its name, if renamed, and
+/// where it sits.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Favourites {
+    /// What it was renamed to; Favourites (in the language in use) until then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Where the Favourites bar sits: floating over the drawing at first.
+    #[serde(default)]
+    pub bar: crate::bars::Place,
     #[serde(default)]
     pub design: Vec<String>,
     #[serde(default)]
@@ -244,6 +252,7 @@ impl Default for Options {
                 canvas_flyouts: CanvasFlyouts::OnHover,
                 snapped_bars: SnappedBars::PushTheDrawingOver,
                 new_bars: NewBars::Floating,
+                add_to_menus: AddToMenus::EachToolbar,
                 show_tips_at_startup: true,
             },
             job_defaults: JobDefaults::default(),

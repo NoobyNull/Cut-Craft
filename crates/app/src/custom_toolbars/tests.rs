@@ -168,3 +168,38 @@ fn a_floating_toolbar_kept_before_bars_could_snap_still_floats_where_it_was() {
     );
     assert_eq!(toolbars[1].place, Place::Layout, "in the layout, as it was");
 }
+
+#[test]
+fn a_menu_lists_each_toolbar_by_name_until_there_are_too_many() {
+    let mut toolbars = vec![];
+    let circle = Item::Tool("draw_circle".into());
+    let items = add_items(&toolbars, &circle, false);
+    assert_eq!(
+        items.iter().map(|i| i.name.as_str()).collect::<Vec<_>>(),
+        ["Add to New Toolbar"]
+    );
+    assert!(act(&mut toolbars, &items[0].action));
+    act(&mut toolbars, "toolbar:new:tool:draw_line");
+    let items = add_items(&toolbars, &circle, false);
+    let names: Vec<&str> = items.iter().map(|i| i.name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "Remove from My Tools",
+            "Add to My Tools 2",
+            "Add to New Toolbar"
+        ]
+    );
+    assert!(act(&mut toolbars, &items[1].action));
+    assert!(toolbars[1].items.contains(&circle));
+    assert!(act(&mut toolbars, &items[0].action), "taken off");
+    assert_eq!(toolbars[0].items, [] as [Item; 0]);
+    // folded by the setting, or once there are more than a handful
+    let folded = add_items(&toolbars, &circle, true);
+    assert_eq!(folded.len(), 1);
+    assert_eq!(folded[0].name, "Add to Toolbar");
+    for n in 0..LISTED {
+        act(&mut toolbars, &format!("toolbar:new:tool:t{n}"));
+    }
+    assert_eq!(add_items(&toolbars, &circle, false).len(), 1, "folded");
+}

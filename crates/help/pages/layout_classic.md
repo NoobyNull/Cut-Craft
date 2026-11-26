@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-26
 see-also: interface_layout, layout_ribbon, layout_rail, layout_canvas, favourites, design, toolpaths
 ---
 
@@ -29,7 +29,8 @@ toolpaths. **F11** and **F12** do the same.
 
 ## Your tools at hand
 
-Right-click a tool and pick **Add to Favourites**. Right-click the **Design** or
+Right-click a tool and pick **Add to Favourites**. Your favourites float over the drawing as
+a bar of their own (right-click its dots to snap it to a side). Right-click the **Design** or
 **Toolpaths** side tab and pick **Show Favourites** to see only those. See
 [Favourites](help:favourites).
 

@@ -7,17 +7,20 @@ see-also: favourites, interface_layout, settings
 
 Put the tools you reach for together on a **toolbar of your own**: single tools, whole
 tool groups, or both, in the order you like. Make as many as you want, say one for signs
-and one for boxes, and name each. [Favourites](help:favourites) stay as they are; your
-toolbars sit alongside them.
+and one for boxes, and name each. [Favourites](help:favourites) is the first of them,
+there from the start: it can be renamed, moved and snapped like the rest, but never
+deleted.
 
 ## Making a toolbar
 
 1. **Right-click** any tool's button or row, in any layout.
-2. Pick **Add to Toolbar ▸ New Toolbar**. It is called **My Tools** (then My Tools 2, and
-   so on) and floats over the drawing at once.
+2. Pick **Add to New Toolbar**. It is called **My Tools** (then My Tools 2, and so on) and
+   floats over the drawing at once.
 
-To add more, right-click another tool and pick **Add to Toolbar ▸** the toolbar's name. A
-tool already on that toolbar is ticked.
+To add more, right-click another tool and pick **Add to** and the toolbar's name, say **Add
+to My Tools**. On a tool already on that toolbar it says **Remove from My Tools**. With more
+than six toolbars they are listed under **Add to Toolbar ▸** instead, or always, if
+**Options ▸ General ▸ Add to menus** says so.
 
 To put a **whole group** on a toolbar, right-click the group instead: its icon in the Rail
 or the Canvas palette, its name under its icons in the Ribbon, or its heading in Classic.

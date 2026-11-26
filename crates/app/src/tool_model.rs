@@ -114,11 +114,16 @@ impl<'a> ToolModel<'a> {
     ) -> Vec<MenuItem> {
         let kind = self.kind_of(id);
         let favourite = self.is_favourite(id, favourites);
-        match place {
+        let mut menu = match place {
             Place::Row => vec![gui::favourite_item(kind, id, favourite)],
             Place::Grid => gui::tool_menu(kind, id, favourite, false, folded),
             Place::Favourites => gui::tool_menu(kind, id, favourite, true, folded),
+        };
+        // Favourites renamed: the menu says so
+        if let (Some(name), Some(first)) = (&favourites.name, menu.first_mut()) {
+            *first = gui::favourite_named(first.clone(), favourite, name);
         }
+        menu
     }
 }
 

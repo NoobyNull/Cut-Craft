@@ -54,8 +54,10 @@ again to close it. **Checks** shows what would stop or spoil the cut before you 
 
 ## Your tools at hand
 
-**Favourites** in the header lists your favourite tools in place of the palette. Right-click
-a tool in a list and pick **Add to Favourites**. Once you install a gadget or add-on, a
+Right-click a tool in a list, or a group's icon, and pick **Add to Favourites**. Your
+favourites float over the drawing as a bar of their own. Right-click its dots and pick
+**Attach to Header** to make them a **Favourites** tab in the header instead, which lists
+them in place of the palette. Once you install a gadget or add-on, a
 **Gadgets** tab comes last. See [Favourites](help:favourites).
 
 The view's own bar (2D or 3D, the split, the sheet, layer and level, and snapping) stays at

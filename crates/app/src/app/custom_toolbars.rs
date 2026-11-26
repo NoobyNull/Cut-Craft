@@ -9,7 +9,7 @@ use super::installed::GADGETS;
 use super::{CutCraftApp, RIBBON_TABS, TOOL_ICON_ROWS, egui, gui};
 use crate::bars::{self, Place};
 use crate::custom_toolbars::{self as toolbars, Item};
-use crate::options::{CanvasFlyouts, NewBars};
+use crate::options::{AddToMenus, CanvasFlyouts, NewBars};
 use crate::tool_names::{group_name, page_tab_name};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
@@ -17,6 +17,17 @@ use cut_craft_i18n::tr;
 /// The Canvas palette's actions, after [`toolbars::ACTION`]: then what to do to where it
 /// sits ([`bars::apply`]).
 pub(super) const PALETTE: &str = "palette:";
+
+/// The Favourites bar's actions, after [`toolbars::ACTION`]: then what to do to where it
+/// sits ([`bars::apply`]).
+pub(super) const FAVOURITES: &str = "favourites:";
+
+/// Favourites, where a toolbar's index is wanted (an open group's list, the name being
+/// typed): never one of your own toolbars'.
+pub(super) const FAVOURITES_BAR: usize = usize::MAX;
+
+/// The built-in tab Favourites has while attached to the layout.
+const FAVOURITES_TAB: &str = "Favourites";
 
 /// The id of toolbar `n`'s bar while it is snapped or floating.
 pub(super) fn toolbar_bar_id(n: usize, name: &str) -> egui::Id {
@@ -76,16 +87,22 @@ impl CutCraftApp {
         if !menu.is_empty() {
             menu.push(gui::MenuItem::separator());
         }
-        menu.push(toolbars::add_menu(&self.options.toolbars, item));
+        let folded = self.options.general.add_to_menus == AddToMenus::UnderAddToToolbar;
+        menu.extend(toolbars::add_items(&self.options.toolbars, item, folded));
         menu
+    }
+
+    /// A group's right-click menu: Add to Favourites, then Add to each toolbar, for the
+    /// whole group.
+    pub(super) fn group_menu(&self, name: &str) -> Vec<gui::MenuItem> {
+        let favourite = self.group_favourite_item(name).into_iter().collect();
+        self.with_toolbar_menu(favourite, &Item::Group(name.to_owned()))
     }
 
     /// A group button's right-click menu: Add to Toolbar for the whole group. The action
     /// picked, if any.
     pub(super) fn group_menu_on(&self, response: &egui::Response, name: &str) -> Option<String> {
-        self.popup(response, || {
-            self.with_toolbar_menu(vec![], &Item::Group(name.to_owned()))
-        })
+        self.popup(response, || self.group_menu(name))
     }
 
     /// A toolbar's name with its menu (rename, float, delete) on a right-click.
@@ -118,15 +135,29 @@ impl CutCraftApp {
         if self.toolbars.ribbon.is_some_and(|n| !docked.contains(&n)) {
             self.toolbars.ribbon = None;
         }
+        // Favourites has a tab only while it is attached to the layout
+        let favourites = self.favourites_in_layout();
+        if !favourites && RIBBON_TABS[self.ribbon_tab] == FAVOURITES_TAB {
+            self.ribbon_tab = 0;
+        }
         let mut clicked = false;
         for (i, tab) in RIBBON_TABS.iter().enumerate() {
-            if *tab == GADGETS && !gadgets {
+            if (*tab == GADGETS && !gadgets) || (*tab == FAVOURITES_TAB && !favourites) {
                 continue;
             }
             let on = self.toolbars.ribbon.is_none() && self.ribbon_tab == i;
-            if ui.selectable_label(on, page_tab_name(tab)).clicked() {
+            let name = if *tab == FAVOURITES_TAB {
+                self.favourites_name()
+            } else {
+                page_tab_name(tab)
+            };
+            let response = ui.selectable_label(on, name);
+            if response.clicked() {
                 (self.ribbon_tab, self.toolbars.ribbon) = (i, None);
                 clicked = true;
+            }
+            if *tab == FAVOURITES_TAB {
+                self.favourites_tab_menu(&response);
             }
         }
         for n in docked {
@@ -231,10 +262,11 @@ impl CutCraftApp {
     /// A toolbar action (`toolbar:…` or `toolbar_rename:…`), kept in the options at once.
     pub(super) fn toolbar_action(&mut self, action: &str) {
         if let Some(n) = action.strip_prefix(toolbars::RENAME) {
-            if let Some(toolbar) = n
-                .parse::<usize>()
-                .ok()
-                .and_then(|n| self.options.toolbars.get(n).map(|t| (n, t.name.clone())))
+            let n = n.parse::<usize>().ok();
+            if n == Some(FAVOURITES_BAR) {
+                self.toolbars.rename = Some((FAVOURITES_BAR, self.favourites_name()));
+            } else if let Some(toolbar) =
+                n.and_then(|n| self.options.toolbars.get(n).map(|t| (n, t.name.clone())))
             {
                 self.toolbars.rename = Some(toolbar);
             }
@@ -243,6 +275,12 @@ impl CutCraftApp {
         let Some(action) = action.strip_prefix(toolbars::ACTION) else {
             return;
         };
+        if let Some(what) = action.strip_prefix(FAVOURITES) {
+            if bars::apply(&mut self.options.favourites.bar, what, true) {
+                self.save_options();
+            }
+            return;
+        }
         if let Some(what) = action.strip_prefix(PALETTE) {
             if bars::apply(&mut self.options.canvas_palette, what, false) {
                 self.save_options();
@@ -280,11 +318,21 @@ impl CutCraftApp {
     /// opens its list, a drag moves an item along, a right-click offers the rest. Whether
     /// a tool was picked.
     pub(super) fn toolbar_strip(&mut self, ui: &mut egui::Ui, n: usize, strip: Strip) -> bool {
-        let Some(items) = self.options.toolbars.get(n).map(|t| t.items.clone()) else {
-            return false;
+        let favourites = n == FAVOURITES_BAR;
+        let items = if favourites {
+            self.favourite_items()
+        } else {
+            let Some(items) = self.options.toolbars.get(n).map(|t| t.items.clone()) else {
+                return false;
+            };
+            items
         };
         if items.is_empty() {
-            ui.weak(tr!("toolbars-empty"));
+            ui.weak(if favourites {
+                tr!("bars-favourites-empty")
+            } else {
+                tr!("toolbars-empty")
+            });
             return false;
         }
         let edge = TOOL_ICON_ROWS * ui.spacing().interact_size.y;
@@ -308,6 +356,9 @@ impl CutCraftApp {
                         picked = Some(id.clone());
                     }
                     let menu = self.popup(response, || {
+                        if favourites {
+                            return self.favourite_item_menu(&items[at]);
+                        }
                         let mut menu = self.row_menu(id);
                         menu.push(gui::MenuItem::separator());
                         menu.extend(toolbars::item_menu(
@@ -323,16 +374,25 @@ impl CutCraftApp {
                 Item::Group(_) => {
                     self.open_group_on(response, (n, at));
                     let menu = self.popup(response, || {
+                        if favourites {
+                            return self.favourite_item_menu(&items[at]);
+                        }
                         toolbars::item_menu(&self.options.toolbars, n, at, self.bar_home())
                     });
                     action = action.or(menu);
                 }
             }
-            action = action.or_else(|| Self::drag_along(ui, response, n, at, strip));
+            // Favourites move along by their menus
+            if !favourites {
+                action = action.or_else(|| Self::drag_along(ui, response, n, at, strip));
+            }
         }
         let listed = self.open_group_list(ui, n, &items, &buttons, strip);
         if let Some(action) = action {
-            if action.starts_with(toolbars::ACTION) || action.starts_with(toolbars::RENAME) {
+            if action.starts_with(toolbars::ACTION)
+                || action.starts_with(toolbars::RENAME)
+                || action.starts_with(gui::FAVOURITE)
+            {
                 self.toolbars.pending = Some(action);
             } else {
                 self.invoke(ui.ctx(), &action);
@@ -553,8 +613,9 @@ impl CutCraftApp {
         start: Option<egui::Pos2>,
     ) {
         let home = self.bar_home();
-        let step = 1.5 * TOOL_ICON_ROWS * ui.spacing().interact_size.y;
-        let mut floating = 0;
+        let step = super::favourites_bar::bar_step(ui);
+        // Favourites first, as the first of the bars
+        let mut floating = self.placed_favourites(ui, room, start);
         for n in 0..self.options.toolbars.len() {
             let Some(toolbar) = self.options.toolbars.get(n) else {
                 break;
@@ -625,6 +686,7 @@ impl CutCraftApp {
             done = Some(false);
         }
         match done {
+            Some(true) if n == FAVOURITES_BAR => self.rename_favourites(&name),
             Some(true) => {
                 let action = format!("{}rename:{n}:{name}", toolbars::ACTION);
                 self.toolbar_action(&action);

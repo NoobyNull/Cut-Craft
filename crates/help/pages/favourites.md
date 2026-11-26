@@ -10,31 +10,46 @@ hunting through every group for them.
 
 ![Right-click a tool's button to add it to your favourites](pictures/basics/favourites.png)
 
-## Adding a tool
+## Adding a tool or a group
 
-1. **Right-click** the tool's button (or its row in the Rail).
+1. **Right-click** the tool's button (or its row in the Rail). To add a **whole group**,
+   right-click its icon in the Rail or the Canvas palette, its name in the Ribbon or its
+   heading in Classic.
 2. Pick **Add to Favourites**.
 
-## Showing your favourites
+## The Favourites bar
 
-Where they show depends on your [window layout](help:interface_layout):
+Your favourites are a bar of their own, the first of your
+[toolbars](help:toolbars). It floats over the drawing near its top left, in every
+[window layout](help:interface_layout), with your Create and Edit tools first and your
+toolpath tools after them. Click a tool to use it; a group opens its list of tools.
 
-- **Ribbon**: open the **Favourites** tab.
-- **Rail**: click the **★** button at the foot of the column of group icons.
+The dots at the bar's start are its **grip**. Drag them to move the bar, or right-click them
+to **Snap to Top**, **Bottom**, **Left** or **Right**, **Lock Position**, **Turn** it, or
+**Rename Toolbar** (say, to "Shop"; menus then say **Add to Shop**). Favourites can never
+be deleted.
+
+Rather have them out of the way? Right-click the dots and pick **Attach to Header** (or
+**Attach to Rail**, **Attach to Design Tab**):
+
+- **Ribbon** and **Canvas**: a **Favourites** tab in the header.
+- **Rail**: the **★** button at the foot of the column of group icons.
 - **Classic**: right-click the **Design** or **Toolpaths** side tab and pick **Show
   Favourites**. That page then shows only your favourites. **Show All Tools** brings every
   tool back.
 
+Right-click the tab or the **★** and pick **Detach** to make it a bar again.
+
 ## Changing them
 
 - To take a tool off, right-click it and pick **Remove from Favourites**.
-- In Ribbon and Classic, right-click a favourite and pick **Move Earlier** or **Move
-  Later** to change their order.
+- Right-click a favourite on the bar (or in the Ribbon and Classic) and pick **Move
+  Earlier** or **Move Later** to change their order. Create and Edit tools stay ahead of
+  toolpath tools.
 
 Favourites are kept between runs and are the same in every layout. In the Ribbon, a
 group's list also lets you pin a tool to show it as an icon (see
 [Ribbon layout](help:layout_ribbon)). To pick another layout,
 use [Interface Layout](help:interface_layout).
 
-Want more than one set, or whole groups of tools together? Make
-[toolbars of your own](help:toolbars).
+Want more than one set? Make [toolbars of your own](help:toolbars).
