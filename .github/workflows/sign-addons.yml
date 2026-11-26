@@ -71,20 +71,27 @@ jobs:
               echo "$repo: no release yet"
               continue
             fi
-            gh release view "$tag" --repo "$repo" --json assets --jq '.assets[].name' > names
+            # the names are read first, so nothing run in the loop can read them from stdin;
+            # a failed listing stops the run (set -e), never reads as "everything is signed"
+            listing=$(gh release view "$tag" --repo "$repo" --json assets --jq '.assets[].name')
+            mapfile -t names <<< "$listing"
+            declare -A have=()
+            for name in "${names[@]}"; do have[$name]=1; done
             rm -rf out && mkdir out
-            while read -r name; do
-              [[ -z $name || $name == *.minisig ]] && continue
-              grep -qxF "$name.minisig" names && continue
+            for name in "${names[@]}"; do
+              [[ -z $name || $name == *.minisig || -n ${have[$name.minisig]:-} ]] && continue
               echo "$repo $tag: signing $name"
               gh release download "$tag" --repo "$repo" --pattern "$name" --dir out
-            done < names
-            if [[ -z "$(ls -A out)" ]]; then
+            done
+            shopt -s nullglob
+            files=(out/*)
+            if (( ${#files[@]} == 0 )); then
               echo "$repo $tag: everything is signed"
               continue
             fi
             scripts/sign-release out
-            gh release upload "$tag" out/*.minisig --repo "$repo" --clobber
-            echo "::notice::$repo $tag: signed $(ls out/*.minisig | wc -l) file(s)"
+            sigs=(out/*.minisig)
+            gh release upload "$tag" "${sigs[@]}" --repo "$repo" --clobber
+            echo "::notice::$repo $tag: signed ${#sigs[@]} file(s)"
           done
-          rm -rf out names
+          rm -rf out
