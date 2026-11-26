@@ -23,6 +23,7 @@ mod drawing_input;
 mod drawn_3d;
 mod edit_apply;
 mod entry;
+mod favourites_bar;
 mod first_run;
 mod fit_import;
 mod follow;

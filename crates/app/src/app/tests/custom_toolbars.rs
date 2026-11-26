@@ -32,30 +32,26 @@ fn with_toolbar(layout: WindowLayout) -> Harness {
         o.general.layout = layout;
         o.general.new_bars = NewBars::InTheLayout;
     });
-    h.choose(
-        |app| app.row_menu("draw_circle"),
-        &["Add to Toolbar", "New Toolbar"],
-    );
+    h.choose(|app| app.row_menu("draw_circle"), &["Add to New Toolbar"]);
     h.frame(vec![]);
     h.frame(vec![]);
     h
 }
 
 #[test]
-fn a_tools_menu_makes_a_toolbar_and_then_ticks_it() {
+fn a_tools_menu_makes_a_toolbar_then_adds_to_it_by_name() {
     let mut h = with_toolbar(WindowLayout::Ribbon);
     let toolbars = &h.options().toolbars;
     assert_eq!(toolbars.len(), 1);
     assert_eq!(toolbars[0].name, "My Tools");
     assert_eq!(toolbars[0].items, [Item::Tool("draw_circle".into())]);
     let menu = h.row_menu("draw_circle");
-    let on = leaf(&menu, &["Add to Toolbar", "My Tools"]);
-    assert!(on.is_checked && !on.is_enabled, "on it already");
-    // another tool goes on the same toolbar from its menu
-    h.choose(
-        |app| app.row_menu("draw_rectangle"),
-        &["Add to Toolbar", "My Tools"],
+    assert!(
+        menu.iter().any(|i| i.name == "Remove from My Tools"),
+        "on it already"
     );
+    // another tool goes on the same toolbar from its menu
+    h.choose(|app| app.row_menu("draw_rectangle"), &["Add to My Tools"]);
     assert_eq!(h.options().toolbars[0].items.len(), 2);
     assert_eq!(h.options().toolbars.len(), 1);
 }
@@ -146,10 +142,7 @@ fn floating(h: &Harness, n: usize) -> Floating {
 fn a_new_toolbar_floats_over_the_drawing_with_no_tab() {
     let mut h = Harness::new();
     h.given_options(|o| o.general.layout = WindowLayout::Ribbon);
-    h.choose(
-        |app| app.row_menu("draw_circle"),
-        &["Add to Toolbar", "New Toolbar"],
-    );
+    h.choose(|app| app.row_menu("draw_circle"), &["Add to New Toolbar"]);
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(matches!(h.options().toolbars[0].place, Place::Floating(_)));
@@ -293,7 +286,7 @@ fn a_group_heading_offers_the_whole_group() {
     h.frame(vec![]);
     let heading = h.text_at("Create Vectors").expect("the group's heading");
     h.right_click(heading);
-    assert!(h.text_at("Add to Toolbar").is_some(), "its menu");
+    assert!(h.text_at("Add to New Toolbar").is_some(), "its menu");
 }
 
 #[test]
@@ -325,7 +318,7 @@ fn a_ribbon_group_name_offers_the_group_on_a_right_click() {
     h.frame(vec![]);
     let name = h.text_at("Create Vectors ▾").expect("the group's name");
     h.right_click(name);
-    assert!(h.text_at("Add to Toolbar").is_some(), "its menu");
+    assert!(h.text_at("Add to New Toolbar").is_some(), "its menu");
     assert!(h.text_at("Draw Circle").is_none(), "not its list");
 }
 

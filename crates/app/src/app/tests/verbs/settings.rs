@@ -55,6 +55,27 @@ impl Harness {
         self.ctx.memory(|m| m.area_rect(id))
     }
 
+    /// Where the Favourites bar was drawn last, while it floats or lies over the drawing.
+    pub(in super::super) fn favourites_bar_rect(&self) -> Option<egui::Rect> {
+        let id = crate::app::favourites_bar::favourites_bar_id();
+        self.ctx.memory(|m| m.area_rect(id))
+    }
+
+    /// The Favourites bar's tools and groups, in order.
+    pub(in super::super) fn favourite_items(&self) -> Vec<crate::custom_toolbars::Item> {
+        self.app.favourite_items()
+    }
+
+    /// A Canvas palette group's right-click menu.
+    pub(in super::super) fn group_menu(&self, name: &str) -> Vec<gui::MenuItem> {
+        self.app.group_menu(name)
+    }
+
+    /// The Favourites bar's grip menu.
+    pub(in super::super) fn favourites_menu(&self) -> Vec<gui::MenuItem> {
+        self.app.favourites_menu()
+    }
+
     /// Where the 2D view was drawn last.
     pub(in super::super) fn view_rect(&self) -> egui::Rect {
         self.app

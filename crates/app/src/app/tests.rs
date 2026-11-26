@@ -15,6 +15,7 @@ mod collisions;
 mod custom_toolbars;
 mod did_you_know;
 mod drawing;
+mod favourites_bar;
 mod help_pages;
 mod how_to;
 mod interface;
@@ -97,6 +98,9 @@ impl Harness {
         // the tests were written against the Classic window; a test of another layout
         // picks it
         h.app.options.general.layout = crate::options::WindowLayout::Classic;
+        // and with Favourites in the layout, not floating over the drawing; a test of the
+        // Favourites bar floats it
+        h.app.options.favourites.bar = crate::bars::Place::Layout;
         // previews appear cut at once unless a test plays one
         h.app.display.animate_preview = false;
         // slow jobs finish in place, as quick ones do, unless a test waits on one

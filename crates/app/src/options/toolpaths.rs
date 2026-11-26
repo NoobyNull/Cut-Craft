@@ -1,8 +1,8 @@
 //! Toolpath settings, the questions Cut Craft asks, job defaults, General and Import.
 
 use super::{
-    CanvasFlyouts, Deserialize, Display, FileDialogDefault, JsonSchema, NewBars, OtherWays,
-    RibbonIcons, Serialize, SnappedBars, WindowLayout, egui, on,
+    AddToMenus, CanvasFlyouts, Deserialize, Display, FileDialogDefault, JsonSchema, NewBars,
+    OtherWays, RibbonIcons, Serialize, SnappedBars, WindowLayout, egui, on,
 };
 
 /// Toolpath settings.
@@ -334,6 +334,11 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "New toolbars start")]
     pub new_bars: NewBars,
+    /// How a tool's right-click menu offers your toolbars: Add to each one by its name
+    /// (under Add to Toolbar once there are more than six), or always under Add to Toolbar
+    #[serde(default)]
+    #[schemars(title = "Add to menus")]
+    pub add_to_menus: AddToMenus,
     /// Open a short Did You Know? tip each time Cut Craft starts, a different one each
     /// time. Help ▸ Did You Know? shows them whenever you like
     #[serde(default = "on")]

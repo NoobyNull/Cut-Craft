@@ -214,6 +214,44 @@ pub fn apply(toolbars: &mut Vec<Toolbar>, action: &str) -> bool {
     }
 }
 
+/// How many of your toolbars a tool's menu lists one by one before it folds them all into
+/// Add to Toolbar ▸.
+pub const LISTED: usize = 6;
+
+/// What a tool's or group's right-click menu offers for your toolbars: Add to (or Remove
+/// from) each by its name, then Add to New Toolbar. `folded` (Options ▸ General ▸ Add to
+/// menus), or with more than [`LISTED`] toolbars, all of that is under Add to Toolbar ▸.
+pub fn add_items(toolbars: &[Toolbar], item: &Item, folded: bool) -> Vec<MenuItem> {
+    if folded || toolbars.len() > LISTED {
+        return vec![add_menu(toolbars, item)];
+    }
+    let key = item.key();
+    let mut items: Vec<MenuItem> = toolbars
+        .iter()
+        .enumerate()
+        .map(|(n, t)| {
+            let bar = t.name.as_str();
+            // called what you called it, in every language
+            match t.items.iter().position(|i| i == item) {
+                Some(at) => MenuItem::with_action(
+                    &cut_craft_i18n::tr!("bars-remove-from", bar = bar),
+                    &format!("{ACTION}remove:{n}:{at}"),
+                ),
+                None => MenuItem::with_action(
+                    &cut_craft_i18n::tr!("bars-add-to", bar = bar),
+                    &format!("{ACTION}add:{n}:{key}"),
+                ),
+            }
+            .named()
+        })
+        .collect();
+    items.push(MenuItem::with_action(
+        "Add to New Toolbar",
+        &format!("{ACTION}new:{key}"),
+    ));
+    items
+}
+
 /// The Add to Toolbar submenu for `item`: each toolbar by name (ticked and greyed where it
 /// is on it already), then New Toolbar.
 pub fn add_menu(toolbars: &[Toolbar], item: &Item) -> MenuItem {

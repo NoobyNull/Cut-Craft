@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-26
 see-also: interface_layout, layout_ribbon, layout_canvas, layout_classic, favourites, find_tool
 ---
 
@@ -27,8 +27,9 @@ Click the same group icon again to close its list.
 
 ## Your tools at hand
 
-Right-click a tool in a list and pick **Add to Favourites**. The **★** button under the
-groups lists your favourites. Once you install a gadget or add-on, its button comes last.
+Right-click a tool in a list and pick **Add to Favourites**. Your favourites float over the
+drawing as a bar of their own; right-click its dots and pick **Attach to Rail** to list them
+under the **★** button under the groups instead. Once you install a gadget or add-on, its button comes last.
 See [Favourites](help:favourites).
 
 To pick another layout, press [Interface Layout](help:interface_layout).

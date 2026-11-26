@@ -210,6 +210,21 @@ pub fn favourite_item(page: crate::pages::Page, id: &str, favourite: bool) -> Me
     }
 }
 
+/// A tool's Add to Favourites (or Remove from Favourites) once Favourites is called `name`:
+/// Add to (or Remove from) that name, in the language in use.
+pub fn favourite_named(item: MenuItem, favourite: bool, name: &str) -> MenuItem {
+    let words = if favourite {
+        cut_craft_i18n::tr!("bars-remove-from", bar = name)
+    } else {
+        cut_craft_i18n::tr!("bars-add-to", bar = name)
+    };
+    MenuItem {
+        name: words,
+        ..item
+    }
+    .named()
+}
+
 /// Folding each group of tools that do one job different ways into one button, or spreading
 /// them out: then `true` or `false` (Options ▸ General ▸ Fold tool groups into one button).
 pub const FOLD_TOOL_GROUPS: &str = "fold_tool_groups:";

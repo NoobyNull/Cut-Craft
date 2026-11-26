@@ -278,16 +278,21 @@ impl CutCraftApp {
                                 self.invoke(ui.ctx(), &action);
                             }
                         }
-                        // after the groups, so none of their buttons moves for it
-                        let star = egui::Button::new(egui::RichText::new("★").size(0.8 * edge))
-                            .min_size(egui::vec2(edge, edge))
-                            .selected(self.rail.open == List::Favourites);
-                        if ui
-                            .add(star)
-                            .on_hover_hint(tr!("layouts-favourites-the-tools-you-keep"))
-                            .clicked()
-                        {
-                            self.rail.toggle(List::Favourites);
+                        // after the groups, so none of their buttons moves for it; only
+                        // while Favourites is attached to the Rail, not a bar of its own
+                        if self.favourites_in_layout() {
+                            let star = egui::Button::new(egui::RichText::new("★").size(0.8 * edge))
+                                .min_size(egui::vec2(edge, edge))
+                                .selected(self.rail.open == List::Favourites);
+                            let star = ui
+                                .add(star)
+                                .on_hover_hint(tr!("layouts-favourites-the-tools-you-keep"));
+                            if star.clicked() {
+                                self.rail.toggle(List::Favourites);
+                            }
+                            self.favourites_tab_menu(&star);
+                        } else if self.rail.open == List::Favourites {
+                            self.rail.close();
                         }
                         // then the toolbars of your own, and last of all, once something is
                         // installed, Gadgets

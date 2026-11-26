@@ -139,7 +139,9 @@ Bars of tools (the Canvas palette and [your own toolbars](help:toolbars)) can be
 side of the drawing. **General ▸ Bars snapped to a side** picks whether the drawing makes room
 for them (**Push the drawing over**, the first choice) or they lie over its edge (**Over the
 drawing**). **General ▸ New toolbars start** picks whether a toolbar you make floats over the
-drawing (the first choice) or goes in the layout.
+drawing (the first choice) or goes in the layout. **General ▸ Add to menus** picks whether a
+tool's right-click menu lists **Add to** each toolbar by name (the first choice; past six
+toolbars they go under **Add to Toolbar**) or always puts them under **Add to Toolbar**.
 
 ![The Ribbon layout, light theme on the left and dark on the right](pictures/layouts/ribbon-light-and-dark.png)
 

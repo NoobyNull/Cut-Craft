@@ -363,6 +363,17 @@ pub enum SnappedBars {
     OverTheDrawing,
 }
 
+/// How a tool's right-click menu offers your toolbars.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AddToMenus {
+    /// Add to each toolbar by its name; past six toolbars, under Add to Toolbar
+    #[default]
+    EachToolbar,
+    /// Always under Add to Toolbar
+    UnderAddToToolbar,
+}
+
 /// Where a bar starts when it is made.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]

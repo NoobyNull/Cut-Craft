@@ -207,6 +207,14 @@ setting-floating-487cdb = Floating
 setting-over-the-drawing-near-its-5f2914 = Over the drawing, near its top left; drag its grip anywhere
 setting-in-the-layout-11f391 = In the layout
 setting-in-the-layout-a-tab-cfc83a = In the layout: a tab in the header, a list in the Rail, a section in Classic
+setting-add-to-menus-84abe9 = Add to menus
+setting-how-a-tool-s-right-babfb7 =
+    How a tool's right-click menu offers your toolbars: Add to each one by its name
+    (under Add to Toolbar once there are more than six), or always under Add to Toolbar
+setting-each-toolbar-c3e5f3 = Each toolbar
+setting-add-to-each-toolbar-by-8c1045 = Add to each toolbar by its name; past six toolbars, under Add to Toolbar
+setting-under-add-to-toolbar-88996c = Under add to toolbar
+setting-always-under-add-to-toolbar-3226f5 = Always under Add to Toolbar
 setting-show-a-tip-when-cut-8faee5 = Show a tip when Cut Craft starts
 setting-open-a-short-did-you-06c331 =
     Open a short Did You Know? tip each time Cut Craft starts, a different one each

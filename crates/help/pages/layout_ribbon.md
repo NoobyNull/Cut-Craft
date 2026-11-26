@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-26
 see-also: interface_layout, layout_rail, layout_canvas, layout_classic, favourites, find_tool
 ---
 
@@ -47,7 +47,9 @@ short.
 
 ## Your tools at hand
 
-Right-click any tool and pick **Add to Favourites**, then open the **Favourites** tab. Once
+Right-click any tool and pick **Add to Favourites**. Your favourites float over the drawing
+as a bar of their own; right-click its dots and pick **Attach to Header** to make them the
+**Favourites** tab instead (see [Toolbars of Your Own](help:toolbars)). Once
 you install a gadget or add-on, a **Gadgets** tab appears at the end. See
 [Favourites](help:favourites).
 
