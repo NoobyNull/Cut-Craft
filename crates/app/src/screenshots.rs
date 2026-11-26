@@ -53,6 +53,9 @@ const SCENES: &[Scene] = &[
     ("rotary-imported-as-it-is", |app, _| app.form = None),
     // Help: Toolpaths ▸ Previewing a rotary job
     ("rotary-turning-preview", rotary_turning),
+    // Help: Moving around the 2D view ▸ Rotary jobs (the seams and the wrap bands)
+    ("rotary-wrap-bands", rotary_wrap_bands),
+    ("rotary-wrap-bands-dark", |_, _| {}),
     // Help: Toolpaths ▸ Looking at the G-code
     ("view-gcode", view_gcode),
     // Help: Updates (one-click install and relaunch)
@@ -87,7 +90,7 @@ const SCENES: &[Scene] = &[
     }),
     // Help: 3D View ▸ Changing a model's height (each builds on the one before)
     ("height-start", height_start),
-    ("height-buttons", |app, ctx| {
+    ("height-buttons", |app, _| {
         // one click on the medallion: picked, outlined, its height buttons shown
         let medallion = app
             .doc
@@ -96,7 +99,7 @@ const SCENES: &[Scene] = &[
             .find(|(_, k)| k.name == "Medallion")
             .map(|(&id, _)| id);
         app.doc.selected_components = medallion.into_iter().collect();
-        app.view_action(ctx, "transform");
+        app.toggle_transform();
     }),
     ("height-taller", height_taller),
     // Help: Material Setup ▸ Model Position in Material
@@ -159,6 +162,8 @@ const SCENES: &[Scene] = &[
             app.acknowledged.insert(f.message);
         }
     }),
+    ("save-anyway-errors", save_anyway_errors),
+    ("machine-damage", machine_damage),
     ("tool-number-taken", tool_number_taken),
     // Help: Post-Processor Management (the filters, then Edit Capabilities)
     ("post-filters", |app, ctx| post_window(app, ctx, false)),
@@ -193,14 +198,15 @@ const SCENES: &[Scene] = &[
     // Help: Changing settings (Apply, Cancel and Close)
     ("options-not-applied", options_not_applied),
     ("options-apply-question", |app, _| {
-        app.options_closing = true;
+        app.options_editor.window.closing = true;
     }),
     ("snapping-not-applied", snapping_not_applied),
     // Help: Moving the views (Options ▸ Mouse and Shortcuts, Trackpad mode and Invert)
     ("options-mouse-controls", |app, ctx| {
-        (app.snap_window, app.snap_draft, app.post_window) = (false, None, None);
+        app.snap.close();
+        app.post_window = None;
         options_not_applied(app, ctx);
-        app.options_goto = Some(super::shortcuts_page::CATEGORY);
+        app.options_editor.open_at(super::shortcuts_page::CATEGORY);
         let mut edited = app.options.clone();
         (edited.controls.trackpad, edited.controls.invert_drag_y) = (true, true);
         app.options_edited(edited);
@@ -208,8 +214,7 @@ const SCENES: &[Scene] = &[
     // Help: Changing settings ▸ Job Defaults
     ("options-job-defaults", |app, ctx| {
         (app.form, app.tool_manager, app.materials_window) = (None, None, None);
-        app.options_closing = false;
-        app.options_draft = None;
+        app.options_editor.close();
         app.open_job_defaults();
         ctx.set_embed_viewports(true);
     }),
@@ -230,15 +235,13 @@ const SCENES: &[Scene] = &[
     // Help: Confirmation Choices
     ("options-confirmations", |app, ctx| {
         everyday(app);
-        app.options_window = true;
-        app.options_goto = Some("confirmations");
+        app.options_editor.open_at("confirmations");
         ctx.set_embed_viewports(true);
     }),
     // Help: Using Cut Craft in another language (Options ▸ Language)
     ("options-language", |app, ctx| {
         everyday(app);
-        app.options_window = true;
-        app.options_goto = Some("language");
+        app.options_editor.open_at("language");
         // an official pack as it shows once installed: who translated it, how much is done
         let pack = crate::languages::Pack {
             id: "language-ru".into(),
@@ -260,8 +263,7 @@ const SCENES: &[Scene] = &[
     // Help: Screen readers (Options ▸ Appearance, where the text size is)
     ("options-appearance", |app, ctx| {
         everyday(app);
-        app.options_window = true;
-        app.options_goto = Some("appearance");
+        app.options_editor.open_at("appearance");
         ctx.set_embed_viewports(true);
     }),
     // Help: Help Contents (the Help window open on it)
@@ -279,7 +281,7 @@ const SCENES: &[Scene] = &[
     ("bug-report-form", |app, ctx| {
         ctx.set_embed_viewports(true);
         (app.info, app.form, app.tool_manager) = (None, None, None);
-        (app.snap_window, app.snap_draft) = (false, None);
+        app.snap.close();
         app.first_run = None;
         cut_craft_bug_report::open_here(ctx);
     }),
@@ -288,7 +290,7 @@ const SCENES: &[Scene] = &[
         height_start(app, ctx);
     }),
     // Help: Transform ▸ Which way the handles go (the move cross along X and Y in 3D)
-    ("transform-axis-handles", |app, ctx| {
+    ("transform-axis-handles", |app, _| {
         let medallion = app
             .doc
             .components
@@ -296,7 +298,7 @@ const SCENES: &[Scene] = &[
             .find(|(_, k)| k.name == "Medallion")
             .map(|(&id, _)| id);
         app.doc.selected_components = medallion.into_iter().collect();
-        app.view_action(ctx, "transform");
+        app.toggle_transform();
     }),
     // Help: Orientate 3D Model ▸ Turning the model with the rings
     ("turn-rings", |app, ctx| {
@@ -332,7 +334,7 @@ fn post_window(app: &mut CutCraftApp, ctx: &egui::Context, rotary: bool) {
 fn help_window(app: &mut CutCraftApp, topic: &'static str, search: &str) {
     app.updates = crate::update::Updates::default();
     app.form = None;
-    search.clone_into(&mut app.help_search);
+    search.clone_into(&mut app.help.search);
     app.info = Some(super::Info::Help(topic));
 }
 
@@ -362,7 +364,7 @@ fn notes(app: &mut CutCraftApp, ctx: &egui::Context, text: &str, preview: bool, 
     if app.doc.toolpaths.is_empty() {
         app.form = None;
         app.doc = cut_craft_core::document::Document::default();
-        (app.simulation, app.playback) = (None, None);
+        (app.preview.material, app.player.playback) = (None, None);
         draw_shapes(app);
         toolpaths(app, ctx);
         app.view = View::TwoD;
@@ -382,7 +384,7 @@ fn notes(app: &mut CutCraftApp, ctx: &egui::Context, text: &str, preview: bool, 
 /// started from how long the last one took.
 fn progress_window(app: &mut CutCraftApp, _: &egui::Context) {
     app.info = None;
-    (app.snap_window, app.snap_draft) = (false, None);
+    app.snap.close();
     let kind = "screenshots:progress-window";
     cut_craft_core::eta::record(kind, 150.0);
     let (keep, wait) = std::sync::mpsc::channel::<()>();
@@ -406,7 +408,7 @@ fn checks_job(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.form = None;
     // the help scenes' window closed, the Toolpaths page not pinned over the windows
     app.info = None;
-    app.help_search.clear();
+    app.help.search.clear();
     app.pages.set_pinned(super::Page::Toolpaths, false);
     app.doc = cut_craft_core::document::Document::default();
     draw_shapes(app);
@@ -428,15 +430,15 @@ fn checks_job(app: &mut CutCraftApp, ctx: &egui::Context) {
 
 /// Snapping Options (F4) with Smart snapping unticked and not applied yet.
 fn snapping_not_applied(app: &mut CutCraftApp, _: &egui::Context) {
-    (app.options_window, app.options_draft, app.options_closing) = (false, None, false);
+    app.options_editor.close();
     // Material Setup's page put away, so nothing covers the window
     app.form = None;
     app.pages.set_pinned(super::Page::Toolpaths, false);
     app.view = View::TwoD;
-    app.snap_window = true;
+    app.snap.open = true;
     let mut edited = app.options.snapping.clone();
     edited.smart_snapping = !edited.smart_snapping;
-    app.snap_draft = Some(edited);
+    app.snap.edited(&app.options.snapping, edited);
 }
 
 /// Edit ▸ Options on Appearance with the dark theme picked and not applied yet.
@@ -444,8 +446,7 @@ fn options_not_applied(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.updates = crate::update::Updates::default();
     app.gcode_view = None;
     app.info = None;
-    app.options_window = true;
-    app.options_goto = Some("appearance");
+    app.options_editor.open_at("appearance");
     let mut edited = app.options.clone();
     edited.appearance.theme = crate::options::Theme::Dark;
     app.options_edited(edited);
@@ -456,14 +457,14 @@ fn options_not_applied(app: &mut CutCraftApp, ctx: &egui::Context) {
 /// The everyday help pages' start: a new blank job in the 2D view, every window and form
 /// put away and nothing pinned over the view.
 fn everyday(app: &mut CutCraftApp) {
-    (app.options_window, app.options_closing, app.options_draft) = (false, false, None);
-    (app.snap_window, app.snap_closing, app.snap_draft) = (false, false, None);
+    app.options_editor.close();
+    app.snap.close();
     (app.form, app.info, app.gcode_view, app.save_form) = (None, None, None, None);
     (app.search, app.guide_props, app.first_run) = (None, None, None);
     (app.machine_window, app.post_window) = (None, None);
     (app.tool_manager, app.materials_window) = (None, None);
     app.updates = crate::update::Updates::default();
-    (app.simulation, app.playback) = (None, None);
+    (app.preview.material, app.player.playback) = (None, None);
     app.pages.set_pinned(super::Page::Toolpaths, false);
     // a new, unchanged job: nothing to ask about saving, the view fitted to it
     app.reset_job();
@@ -524,10 +525,53 @@ fn checks_found(app: &mut CutCraftApp, ctx: &egui::Context) {
     checks_job(app, ctx);
 }
 
-/// The Tool Database: a bit given a tool number another bit has.
+/// Save Anyway asking about a job saved past errors: one that will not run, one ticked in
+/// the list already, and a warning to read.
+fn save_anyway_errors(app: &mut CutCraftApp, _: &egui::Context) {
+    let form = app
+        .save_form
+        .take()
+        .unwrap_or_else(|| app.default_save_form());
+    app.gcode_view = None;
+    let wont_run = "Profile: End Mill has no feed rate, so the machine would not move while \
+                    cutting. Set the feed rate in the toolpath's bit settings";
+    let crash = "Pocket: a rapid move at X 40 Y 20 goes 2.0 mm into the material. Raise the \
+                 clearance (Z1) in Job Setup, or recalculate the toolpath";
+    let warning = "Pocket is out of date: recalculate it so it cuts what the design shows now";
+    app.acknowledged.insert(crash.to_owned());
+    let asking = super::output::Asking {
+        problems: [wont_run, crash, warning].map(str::to_owned).to_vec(),
+        errors: [wont_run, crash].map(str::to_owned).to_vec(),
+        wont_run: vec![wont_run.to_owned()],
+    };
+    app.ask_save_anyway(&form, asking, false);
+}
+
+/// Save Toolpaths with a job bigger than the bed: refused, with no tick (Protect the
+/// Machine).
+fn machine_damage(app: &mut CutCraftApp, _: &egui::Context) {
+    app.save_anyway = None;
+    app.gcode_view = None;
+    app.save_form = Some(app.default_save_form());
+    let bed = cut_craft_core::preflight::Finding::damage(
+        cut_craft_core::preflight::Check::Bed,
+        "The toolpaths cover 900 mm × 600 mm, more than the bed of Shop Router (800 mm × \
+         600 mm). Make the job smaller, split it with Toolpath Tiling (or make its tiles \
+         smaller), or pick the right machine"
+            .to_owned(),
+    );
+    for checks in &mut app.save_checks {
+        if let Some(found) = &mut checks.found {
+            found.retain(|f| f.check != cut_craft_core::preflight::Check::Bed);
+            found.insert(0, bed.clone());
+        }
+    }
+}
+
+/// The Bit Library: a bit given a bit number another bit has.
 fn tool_number_taken(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.save_form = None;
-    // nothing pinned over the Tool Database's window
+    // nothing pinned over the Bit Library's window
     app.pages.set_pinned(super::Page::Toolpaths, false);
     if let Some(first) = app.tools.tools.first_mut() {
         first.number = 2;
@@ -553,7 +597,7 @@ fn model_position(
     app.updates = crate::update::Updates::default();
     if app.form.as_ref().is_none_or(|f| f.id != "material_setup") {
         app.doc = cut_craft_core::document::Document::default();
-        (app.simulation, app.playback) = (None, None);
+        (app.preview.material, app.player.playback) = (None, None);
         model(app, ctx);
         app.invoke(ctx, "material_setup");
     }
@@ -573,7 +617,7 @@ fn model_position(
 fn z_zero(app: &mut CutCraftApp, ctx: &egui::Context, z_zero: ZZero, datum: Datum) {
     app.updates = crate::update::Updates::default();
     app.form = None;
-    (app.simulation, app.playback) = (None, None);
+    (app.preview.material, app.player.playback) = (None, None);
     app.doc = cut_craft_core::document::Document::default();
     (app.doc.job.z_zero, app.doc.job.datum) = (z_zero, datum);
     model(app, ctx);
@@ -587,12 +631,12 @@ fn z_zero(app: &mut CutCraftApp, ctx: &egui::Context, z_zero: ZZero, datum: Datu
 /// A Profile toolpath calculated, then Calculate pressed again with nothing changed: the
 /// form says it is already up to date and offers Calculate as New.
 fn calculate_again(app: &mut CutCraftApp, ctx: &egui::Context) {
-    (app.options_window, app.options_closing, app.options_draft) = (false, false, None);
-    (app.snap_window, app.snap_closing, app.snap_draft) = (false, false, None);
+    app.options_editor.close();
+    app.snap.close();
     app.form = None;
     app.gcode_view = None;
     app.updates = crate::update::Updates::default();
-    (app.simulation, app.playback) = (None, None);
+    (app.preview.material, app.player.playback) = (None, None);
     app.doc = cut_craft_core::document::Document::default();
     app.view = View::TwoD;
     draw_shapes(app);
@@ -852,7 +896,7 @@ fn toolpaths(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.framing = crate::view3d::Framing::default().zoomed_about(egui::Vec2::ZERO, ZOOM_3D);
 }
 
-/// The Tool Database, a tool picked.
+/// The Bit Library, a tool picked.
 fn tool_database(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.invoke(ctx, "reset_preview");
     app.view = View::TwoD;
@@ -902,12 +946,12 @@ fn rail(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.form = None;
     app.view = View::TwoD;
     app.options.general.layout = WindowLayout::Rail;
-    app.rail_group = app
-        .tool_model()
-        .all_groups()
-        .iter()
-        .position(|g| g.name == "Create Vectors");
-    app.rail_pinned = true;
+    let create = (app.tool_model().all_groups().iter()).position(|g| g.name == "Create Vectors");
+    app.rail.open = create.map_or(
+        super::rail_list::List::Closed,
+        super::rail_list::List::Group,
+    );
+    app.rail.pinned = true;
     app.invoke(ctx, "draw_circle");
 }
 
@@ -936,6 +980,31 @@ fn canvas(app: &mut CutCraftApp, ctx: &egui::Context) {
 }
 
 /// A full 3D model imported into a rotary job: shown turned round the axis in the stock.
+/// A rotary job's 2D view: two slanted lines running off the top seam and coming back in at
+/// the bottom, a circle across the bottom seam and one in the middle; the first line picked,
+/// so its ghost is picked too.
+fn rotary_wrap_bands(app: &mut CutCraftApp, _: &egui::Context) {
+    use cut_craft_core::document::{Along, Job};
+    use cut_craft_core::geometry::Path;
+    everyday(app);
+    app.doc.job = Job::rotary(300.0, 60.0, Along::X);
+    let turn = std::f64::consts::PI * 60.0;
+    let mut c = cut_craft_core::Change::builder(&app.doc);
+    let line = c.add(Path::polyline(
+        &[Point::new(60.0, 15.0), Point::new(130.0, turn + 35.0)],
+        false,
+    ));
+    c.add(Path::polyline(
+        &[Point::new(150.0, 15.0), Point::new(220.0, turn + 35.0)],
+        false,
+    ));
+    c.add(Path::circle(Point::new(35.0, 4.0), 22.0));
+    c.add(Path::circle(Point::new(260.0, 110.0), 20.0));
+    c.select([line]);
+    app.record(Ok(c.finish()), "Drew");
+    app.camera = None;
+}
+
 fn rotary_import(app: &mut CutCraftApp, ctx: &egui::Context) {
     app.options.general.layout = crate::options::WindowLayout::Classic;
     app.form = None;
@@ -1002,10 +1071,10 @@ fn rotary_turning(app: &mut CutCraftApp, _: &egui::Context) {
     app.display.animate_preview = true;
     let ids: Vec<_> = app.doc.toolpaths.keys().copied().collect();
     app.play(&ids, true, |app| {
-        app.playing = false;
+        app.player.playing = false;
         let length =
-            (app.playback.as_ref()).map_or(0.0, cut_craft_core::playback::Playback::length);
-        app.playback_goal = Some(0.75 * length);
+            (app.player.playback.as_ref()).map_or(0.0, cut_craft_core::playback::Playback::length);
+        app.player.goal = Some(0.75 * length);
     });
     app.view = View::ThreeD;
     app.framing = crate::view3d::Framing::default();

@@ -24,6 +24,8 @@ pub(super) enum Now {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Outcome {
     Passed,
+    /// Found a risk of damage to the machine: never saved or sent while it is so.
+    Damage,
     /// Found something to read and tick.
     Warning,
     /// Found something that must be fixed before saving.
@@ -44,7 +46,9 @@ pub(super) fn running(check: Check, phase: Option<Phase>) -> Now {
 /// How `check` came out, from what was `found` and the checks `skipped`.
 pub(super) fn outcome(check: Check, found: &[Finding], skipped: &[(Check, String)]) -> Outcome {
     let mine = || found.iter().filter(|f| f.check == check);
-    if mine().any(|f| f.severity == Severity::Error) {
+    if mine().any(|f| f.severity == Severity::Damage) {
+        Outcome::Damage
+    } else if mine().any(|f| f.severity == Severity::Error) {
         Outcome::MustFix
     } else if mine().next().is_some() {
         Outcome::Warning
@@ -71,6 +75,10 @@ pub(super) fn summary(found: &[Finding], skipped: &[(Check, String)]) -> String 
     let warnings = count(Outcome::Warning);
     if warnings > 0 {
         parts.push(tr!("check-list-count-to-read", count = warnings));
+    }
+    let damage = count(Outcome::Damage);
+    if damage > 0 {
+        parts.push(tr!("check-list-count-damage", count = damage));
     }
     let errors = count(Outcome::MustFix);
     if errors > 0 {
@@ -125,7 +133,10 @@ impl CutCraftApp {
             }
             Some(found) => {
                 ui.label(summary(found, skipped));
-                if found.iter().any(|f| f.severity != Severity::Error)
+                if found.iter().any(|f| f.severity == Severity::Damage) {
+                    ui.colored_label(ui.visuals().error_fg_color, tr!("check-list-refused"));
+                }
+                if (found.iter()).any(|f| f.severity < Severity::Error)
                     && !self.all_acknowledged(found)
                 {
                     ui.colored_label(
@@ -137,7 +148,7 @@ impl CutCraftApp {
                     // what needs a look first, then what passed, then what was not checked
                     let mut order = Check::ALL;
                     order.sort_by_key(|&c| match outcome(c, found, skipped) {
-                        Outcome::MustFix => 0,
+                        Outcome::Damage | Outcome::MustFix => 0,
                         Outcome::Warning => 1,
                         Outcome::Passed => 2,
                         Outcome::NotChecked => 3,
@@ -170,6 +181,7 @@ impl CutCraftApp {
         let (mark, colour) = match result {
             Outcome::Passed => ("✔", egui::Color32::from_rgb(0x3c, 0xa0, 0x4a)),
             Outcome::Warning => ("⚠", visuals.warn_fg_color),
+            Outcome::Damage => ("⛔", visuals.error_fg_color),
             Outcome::MustFix => ("✖", visuals.error_fg_color),
             Outcome::NotChecked => ("–", visuals.weak_text_color()),
         };
@@ -189,21 +201,34 @@ impl CutCraftApp {
             ui.horizontal(|ui| {
                 ui.add_space(STATUS_WIDTH + ui.spacing().item_spacing.x);
                 ui.vertical(|ui| {
-                    if f.severity == Severity::Error {
+                    // a risk of damage to the machine has no tick: only its switch lets it past
+                    if f.severity == Severity::Damage {
                         ui.colored_label(
                             visuals.error_fg_color,
-                            tr!("check-list-must-fix-message", message = f.message.clone()),
-                        );
+                            tr!("check-list-damage-message", message = f.message.clone()),
+                        )
+                        .on_hover_hint(tr!("check-list-switch-off-to-save"));
                         return;
                     }
                     let mut ticked = self.acknowledged.contains(&f.message);
-                    let text = egui::RichText::new(format!("⚠ {}", f.message))
-                        .color(visuals.warn_fg_color);
-                    if ui
-                        .checkbox(&mut ticked, text)
-                        .on_hover_hint(tr!("check-list-tick-to-say-you-have"))
-                        .changed()
-                    {
+                    // an error is ticked like a warning, in red: the operator decides
+                    let (text, hint) = if f.severity == Severity::Error {
+                        (
+                            egui::RichText::new(tr!(
+                                "check-list-must-fix-message",
+                                message = f.message.clone()
+                            ))
+                            .color(visuals.error_fg_color),
+                            tr!("check-list-tick-to-save-with-error"),
+                        )
+                    } else {
+                        (
+                            egui::RichText::new(format!("⚠ {}", f.message))
+                                .color(visuals.warn_fg_color),
+                            tr!("check-list-tick-to-say-you-have"),
+                        )
+                    };
+                    if ui.checkbox(&mut ticked, text).on_hover_hint(hint).changed() {
                         if ticked {
                             self.acknowledged.insert(f.message.clone());
                         } else {

@@ -58,7 +58,7 @@ impl CutCraftApp {
         self.forget_gone_group();
         let job = self.shown_job();
         self.follow_view_2d(ui);
-        let mut canvas = Canvas::new(ui, &job, self.camera);
+        let mut canvas = Canvas::new(ui, &job, self.camera, self.wrap());
         self.clipart_dropped_2d(ui, &canvas);
         let area = canvas.area;
         self.zoom_and_pan(ui, &mut canvas);
@@ -164,6 +164,12 @@ impl CutCraftApp {
         self.act_2d(ui, gesture, &canvas, reach, area, modes);
     }
 
+    /// A rotary job's wrap, as the 2D view shows it: none on a flat job, or with Options ▸
+    /// Appearance's rotary wrap bands off.
+    pub(super) fn wrap(&self) -> Option<view2d::Wrap> {
+        view2d::Wrap::of(&self.shown_job(), self.options.appearance.rotary_wrap)
+    }
+
     /// Whether the sheet has nothing on it yet: no vectors, pictures or 3D components.
     pub(super) fn nothing_drawn(&self) -> bool {
         self.doc.vectors.is_empty() && self.doc.bitmaps.is_empty() && self.doc.components.is_empty()
@@ -194,12 +200,12 @@ impl CutCraftApp {
         let size = ui.text_style_height(&egui::TextStyle::Body);
         let mut text = egui::text::LayoutJob::default();
         text.append(
-            EMPTY_SHEET_TITLE,
+            &t!(EMPTY_SHEET_TITLE),
             0.0,
             egui::TextFormat::simple(egui::FontId::proportional(size * 1.4), colour),
         );
         text.append(
-            &format!("\n{EMPTY_SHEET_HINT}"),
+            &format!("\n{}", t!(EMPTY_SHEET_HINT)),
             0.0,
             egui::TextFormat::simple(egui::FontId::proportional(size), colour),
         );
@@ -223,7 +229,7 @@ impl CutCraftApp {
             .show(ui.ctx(), |ui| {
                 ui.horizontal(|ui| {
                     if !recent.is_empty() {
-                        ui.menu_button(EMPTY_SHEET_RECENT, |ui| {
+                        ui.menu_button(t!(EMPTY_SHEET_RECENT), |ui| {
                             for (i, path) in recent.iter().enumerate() {
                                 if ui
                                     .button(super::file_name(path))
@@ -237,7 +243,7 @@ impl CutCraftApp {
                         ui.weak("·");
                     }
                     if ui
-                        .link(EMPTY_SHEET_SAMPLE)
+                        .link(t!(EMPTY_SHEET_SAMPLE))
                         .on_hover_hint(tr!("start-empty-sheet-sample-tip"))
                         .clicked()
                     {

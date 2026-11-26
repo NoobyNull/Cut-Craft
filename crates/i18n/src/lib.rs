@@ -302,6 +302,86 @@ pub fn key_of(prefix: &str, words: &str) -> String {
     key
 }
 
+/// `english` in the language in use: a text with no name of its own, known by its English
+/// words (`text.ftl`, keyed by [`text_key`] with the `text` prefix). Written `t!("…")`.
+pub fn text(english: &str) -> String {
+    tr_or(&text_key("text", english), english)
+}
+
+/// A text known by its English words, in the language in use: `t!("Clear with bigger bits
+/// first")`, or a `&str` constant's: `t!(INSIDE_GROUP)`. For text that is only words; a
+/// sentence with a value put in uses a key of its own (`tr!("status-exported", path = …)`).
+/// `text.ftl` holds every one (the app's tests check, in every crate).
+#[macro_export]
+macro_rules! t {
+    ($english:literal) => {
+        $crate::text($english)
+    };
+    ($constant:ident) => {
+        $crate::text($constant)
+    };
+    ($constant:path) => {
+        $crate::text($constant)
+    };
+}
+
+/// The key of a piece of text known by its English words, for text that has no name of its
+/// own (a setting's label or tooltip): `prefix`, its first five words, and a short check of
+/// all of it, so two texts that start alike never share a key (`setting-cut-depth-1a2b3c`).
+/// Changed English gets a new key, so a translation of the old words never shows for it.
+pub fn text_key(prefix: &str, english: &str) -> String {
+    let start: Vec<&str> = english
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .take(5)
+        .collect();
+    // FNV-1a: the same check on every computer and in every version
+    let mut hash: u32 = 0x811c_9dc5;
+    for byte in english.bytes() {
+        hash ^= u32::from(byte);
+        hash = hash.wrapping_mul(0x0100_0193);
+    }
+    format!(
+        "{}-{:06x}",
+        key_of(prefix, &start.join(" ")),
+        hash & 0x00ff_ffff
+    )
+}
+
+/// A text as a Fluent value, for writing English `.ftl` files from the code's words: each line indented under the key, braces and a line's leading
+/// `[`, `*` or `.` written as literals, so Fluent reads back exactly these words.
+pub fn ftl_value(text: &str) -> String {
+    let lines: Vec<String> = text
+        .lines()
+        .map(|line| {
+            let mut out = String::new();
+            for (i, c) in line.chars().enumerate() {
+                if matches!(c, '{' | '}') || (i == 0 && matches!(c, '[' | '*' | '.')) {
+                    out.push_str("{\"");
+                    out.push(c);
+                    out.push_str("\"}");
+                } else {
+                    out.push(c);
+                }
+            }
+            out
+        })
+        .collect();
+    if lines.len() == 1 {
+        format!(" {}", lines[0])
+    } else {
+        let mut out = String::new();
+        for line in lines {
+            out.push('\n');
+            if !line.is_empty() {
+                out.push_str("    ");
+                out.push_str(&line);
+            }
+        }
+        out
+    }
+}
+
 /// The words for a key, in the language in use: `tr!("start-recent")`, or with values
 /// `tr!("start-whats-new", version = env!("CARGO_PKG_VERSION"))`. A length or other measured
 /// number goes in already written in the job's units; a count that picks a plural goes in as
@@ -596,6 +676,18 @@ start-whats-new = Neu in v{ $version }
             key_of("group", "Join, Combine and Trim"),
             "group-join-combine-and-trim"
         );
+    }
+
+    #[test]
+    fn a_text_key_starts_with_its_words_and_tells_alike_texts_apart() {
+        let key = text_key("setting", "Cut depth: how deep the bit goes, from the top");
+        assert!(key.starts_with("setting-cut-depth-how-deep-the-"), "{key}");
+        assert_eq!(
+            key,
+            text_key("setting", "Cut depth: how deep the bit goes, from the top")
+        );
+        assert_ne!(text_key("setting", "Depth"), text_key("setting", "depth"));
+        assert_ne!(text_key("setting", "Depth"), text_key("setting", "Depth."));
     }
 
     // One test switches languages, so the others never see another language mid-test.

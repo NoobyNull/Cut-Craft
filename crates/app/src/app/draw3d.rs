@@ -80,19 +80,19 @@ impl CutCraftApp {
     /// while the document and job stay as they are; `None` while a preview shows, which is
     /// hit as [`Self::surface_3d`] has it.
     pub(super) fn drawing_surface(&mut self) -> Option<Arc<Material>> {
-        if self.simulation.is_some() || self.playback.is_some() || self.doc.components.is_empty() {
+        if self.preview.material.is_some()
+            || self.player.playback.is_some()
+            || self.doc.components.is_empty()
+        {
             return None;
         }
         let cells = self.options.performance.still_cells();
         let key = (self.history.revision(), self.doc.job, cells);
-        if let Some((kept, model)) = &self.drawn_on
-            && *kept == key
-        {
+        if let Some(model) = self.meshes.drawn_on.get(&key) {
             return Some(Arc::clone(model));
         }
         let model = Arc::new(self.fine_surface());
-        self.drawn_on = Some((key, Arc::clone(&model)));
-        Some(model)
+        Some(Arc::clone(self.meshes.drawn_on.keep(key, model)))
     }
 
     /// What drawing tool `id` would make with `gesture`, as the 2D view previews it.

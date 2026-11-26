@@ -1,5 +1,5 @@
 //! Merged Toolpath: the toolpaths shown in the toolpath list when Apply is pressed (tick the
-//! ones to merge there), all using one tool, made into one, with their cuts
+//! ones to merge there), all using one bit, made into one, with their cuts
 //! in whichever of the orders asked for leaves the least travelling between them, each
 //! part's cuts together when asked; and Ungroup, which takes a merged toolpath apart again.
 
@@ -21,8 +21,8 @@ pub struct Params {
     /// (it is marked out of date when one of them changes: recalculate it then, and the
     /// hidden ones out of date are recalculated first). Those
     /// toolpaths are then hidden, so saving the shown toolpaths does not cut them twice. They
-    /// must use one tool, and all is cut with the first one's feeds and speed: a toolpath
-    /// whose copy of that tool is set differently is warned of
+    /// must use one bit, and all is cut with the first one's feeds and speed: a toolpath
+    /// whose copy of that bit is set differently is warned of
     pub name: String,
     /// The toolpaths to merge (none: the ones shown in the toolpath list when Apply is
     /// pressed). Not on the form: tick the toolpaths to merge in the toolpath list
@@ -83,6 +83,21 @@ impl Default for Params {
             shortest_path: true,
             merge_by_part: false,
         }
+    }
+}
+
+/// Refused when one of `sources` holds the bit off the turning axis: that goes move by move
+/// with its own moves, and put in another order its places across would no longer match.
+fn refuse_held_off(sources: &[&Toolpath]) -> Result<(), CommandError> {
+    match sources
+        .iter()
+        .find(|t| t.across.iter().any(|a| a.abs() > 1e-9))
+    {
+        Some(held) => Err(CommandError::Failed(format!(
+            "{} holds the bit off the turning axis, so it can't be merged: leave it as it is, or hide it before merging",
+            held.name
+        ))),
+        None => Ok(()),
     }
 }
 
@@ -283,7 +298,7 @@ fn nearest_first(mut left: Vec<Cut>) -> Vec<Cut> {
     order
 }
 
-/// What the merged toolpath warns of: each source whose tool, named as `first`'s, has other
+/// What the merged toolpath warns of: each source whose bit, named as `first`'s, has other
 /// settings (feeds, speed or the bit's size), which merging replaces with `first`'s.
 fn tool_differences(first: &Toolpath, sources: &[&Toolpath]) -> Vec<String> {
     let (a, mut notes) = (&first.tool, vec![]);
@@ -305,7 +320,7 @@ fn tool_differences(first: &Toolpath, sources: &[&Toolpath]) -> Vec<String> {
         if !fields.is_empty() {
             notes.push(format!(
                 "{} uses {} with a different {}: the merged toolpath cuts it all with {}'s \
-                 settings. Edit the tool in one of them to match if that is not right",
+                 settings. Edit the bit in one of them to match if that is not right",
                 source.name,
                 b.name,
                 fields.join(", "),
@@ -371,10 +386,11 @@ impl Command for MergedToolpath {
         }
         if let Some(other) = sources.iter().find(|t| t.tool.name != first.tool.name) {
             return Err(CommandError::Failed(format!(
-                "only toolpaths with the same tool merge: {} uses {} and {} uses {}. Show only toolpaths that use one tool",
+                "only toolpaths with the same bit merge: {} uses {} and {} uses {}. Show only toolpaths that use one bit",
                 first.name, first.tool.name, other.name, other.tool.name
             )));
         }
+        refuse_held_off(&sources)?;
         let notes = tool_differences(first, &sources);
         let in_order: Vec<Cut> = sources.iter().flat_map(|t| cuts(t)).collect();
         let height = doc.job.height;
@@ -651,6 +667,19 @@ mod tests {
     }
 
     #[test]
+    fn toolpaths_holding_the_bit_off_the_axis_do_not_merge() {
+        let mut doc = two();
+        let id = *doc.toolpaths.keys().last().unwrap();
+        let mut held = doc.toolpaths[&id].clone();
+        held.across = vec![3.0; held.moves.len()];
+        let mut c = Change::builder(&doc);
+        c.replace_toolpath(id, held);
+        doc.apply(&c.finish()).unwrap();
+        let err = MergedToolpath::run(&doc, &Params::default()).unwrap_err();
+        assert!(err.to_string().contains("off the turning axis"), "{err}");
+    }
+
+    #[test]
     fn a_same_named_tool_with_other_settings_merges_with_a_warning_naming_them() {
         let mut doc = two();
         let mut t = doc.toolpaths[&EntityId(2)].clone();
@@ -691,7 +720,7 @@ mod tests {
         let why = MergedToolpath::run(&doc, &Params::default())
             .unwrap_err()
             .to_string();
-        assert!(why.contains("same tool"), "{why}");
+        assert!(why.contains("same bit"), "{why}");
     }
 
     fn starts(t: &Toolpath) -> Vec<(f64, f64)> {

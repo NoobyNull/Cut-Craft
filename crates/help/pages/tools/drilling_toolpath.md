@@ -28,3 +28,5 @@ see-also: drill_bank_toolpath, profile_toolpath
    ![Step 5](pictures/drilling_toolpath/step-5.png)
 
 For holes bigger than the bit, cut them with a [Profile](help:profile_toolpath) set to Inside instead.
+
+The **Bit** box on the form says which bit cuts it: **Select…** picks another from the [Bit Library](help:tool_database), and **Edit…** changes its sizes, feeds and speeds there.

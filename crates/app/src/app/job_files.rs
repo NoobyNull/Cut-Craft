@@ -4,176 +4,177 @@
 use super::actions::{DONT_SAVE, SAVE};
 use super::{
     APP_NAME, CutCraftApp, Dialog, Document, History, JOB_EXTENSION, OpenForm, Screen, Session,
-    Shown, TEMPLATE, Value, View, egui, file_dialog, file_name, files, filtered_dialog, form, gui,
+    Shown, TEMPLATE, Value, View, egui, file_dialog, file_name, files, filtered_dialog, form,
     job_dialog, message_dialog, saving_path, template_dialog, toolpath_template_dialog,
 };
 
 impl CutCraftApp {
-    pub(super) fn file_action(&mut self, id: &str) {
-        match id {
-            // a new job opens blank, made with Options ▸ Job Defaults; the classic flow
-            // starts it in Job Setup
-            "new" if !self.options.job_defaults.classic_startup => {
-                if self.confirm_discard() {
-                    self.start_blank_job();
-                    self.status
-                        .set_message(&format!("New job: {}", self.material_summary()));
-                }
-            }
-            "new" => {
-                if self.confirm_discard() {
-                    self.reset_job();
-                    // the material being set up shows in the 2D view
-                    self.view = View::TwoD;
-                    self.start_command("job_setup");
-                    if let Some(form) = &mut self.form {
-                        form.new_job = true;
-                    }
-                    self.screen = Screen::NewJob;
-                }
-            }
-            "open" => {
-                if self.confirm_discard()
-                    && let Some(path) = job_dialog().pick_file()
-                {
-                    self.open_path(&path);
-                }
-            }
-            "close" => {
-                if self.confirm_discard() {
-                    if self.options.job_defaults.classic_startup {
-                        self.reset_job();
-                        self.screen = Screen::Start;
-                    } else {
-                        // no start page: a blank job to carry on with
-                        self.start_blank_job();
-                    }
-                }
-            }
-            "save" => match self.session.path.clone() {
-                Some(path) => self.save_to(&path),
-                None => self.file_action("save_as"),
-            },
-            "save_as" => self.save_as(),
-            "import_vectors_bitmap" | "import_component_3d_model" => {
-                let which = if id == "import_component_3d_model" {
-                    Dialog::ImportModel
-                } else {
-                    Dialog::ImportVectorsOrPicture
-                };
-                if let Some(path) = filtered_dialog(which, &self.registry).pick_file() {
-                    self.import_file(&path);
-                }
-            }
-            "import_cut_list" => {
-                if let Some(path) =
-                    filtered_dialog(Dialog::ImportCutList, &self.registry).pick_file()
-                {
-                    self.import_cut_list(&path);
-                }
-            }
-            "add_clipart_folder" => {
-                if let Some(folder) = file_dialog().pick_folder()
-                    && let Err(e) = self.clipart.add(folder)
-                {
-                    self.status.set_message(&e);
-                }
-            }
-            "segment_3d_model_file" => {
-                // the segmenting form, on an STL picked first
-                if let Some(path) =
-                    filtered_dialog(Dialog::SegmentModel, &self.registry).pick_file()
-                {
-                    self.start_command("segment_3d_model");
-                    if let Some(form) = self.form.as_mut().filter(|f| f.id == "segment_3d_model") {
-                        form.params["file"] = Value::from(path.display().to_string());
-                    }
-                }
-            }
-            "import_toolpaths_file" => {
-                // G-code read back as toolpaths: the form opens on the file picked, to say
-                // which tool cut it
-                if let Some(path) =
-                    filtered_dialog(Dialog::ImportToolpaths, &self.registry).pick_file()
-                {
-                    self.import_toolpaths_from(&path);
-                }
-            }
-            "install_post_processor" => {
-                if let Some(path) =
-                    filtered_dialog(Dialog::InstallPostProcessor, &self.registry).pick_file()
-                {
-                    self.install_post(&path);
-                }
-            }
-            _ => unreachable!("not a file action: {id}"),
+    /// New: a new job opens blank, made with Options ▸ Job Defaults; the classic flow starts
+    /// it in Job Setup.
+    pub(super) fn new_job(&mut self) {
+        if !self.confirm_discard() {
+            return;
+        }
+        if !self.options.job_defaults.classic_startup {
+            self.start_blank_job();
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-new-job",
+                material = self.material_summary()
+            ));
+            return;
+        }
+        self.reset_job();
+        // the material being set up shows in the 2D view
+        self.view = View::TwoD;
+        self.start_command("job_setup");
+        if let Some(form) = &mut self.form {
+            form.new_job = true;
+        }
+        self.screen = Screen::NewJob;
+    }
+
+    /// Open: a saved job, unsaved work asked about first.
+    pub(super) fn open_job(&mut self) {
+        if self.confirm_discard()
+            && let Some(path) = job_dialog().pick_file()
+        {
+            self.open_path(&path);
         }
     }
 
-    /// Job and toolpath templates, saved and loaded through the templates folder.
-    pub(super) fn template_action(&mut self, id: &str) {
-        match id {
-            "save_as_template" => {
-                if let Some(path) = template_dialog()
-                    .set_file_name(format!("template.{TEMPLATE}"))
-                    .save_file()
-                    && let Some(path) = saving_path(&path, &[TEMPLATE])
-                {
-                    match cut_craft_core::file::write_atomic(
-                        &path,
-                        &cut_craft_core::file::save_job(&self.doc),
-                    ) {
-                        Ok(()) => self
-                            .status
-                            .set_message(&format!("Saved template {}", path.display())),
-                        Err(e) => self
-                            .status
-                            .set_message(&crate::messages::could_not_save(&path, &e)),
-                    }
-                }
+    pub(super) fn close_job(&mut self) {
+        if self.confirm_discard() {
+            if self.options.job_defaults.classic_startup {
+                self.reset_job();
+                self.screen = Screen::Start;
+            } else {
+                // no start page: a blank job to carry on with
+                self.start_blank_job();
             }
-            "save_selected_toolpath_as_template" | "save_all_visible_toolpaths_as_template" => {
-                let ids: Vec<_> = if id == "save_selected_toolpath_as_template" {
-                    self.selected_toolpath.into_iter().collect()
-                } else {
-                    self.doc
-                        .toolpaths
-                        .iter()
-                        .filter(|(_, t)| t.visible)
-                        .map(|(&i, _)| i)
-                        .collect()
-                };
-                if let Some(path) = toolpath_template_dialog()
-                    .set_file_name(format!("toolpaths.{}", files::TOOLPATH_TEMPLATE_EXTENSION))
-                    .save_file()
-                    && let Some(path) = saving_path(&path, &[files::TOOLPATH_TEMPLATE_EXTENSION])
-                {
-                    let template = files::toolpath_template(&self.doc, &ids);
-                    let message = match cut_craft_core::file::write_atomic(&path, &template) {
-                        Ok(()) => format!("Saved toolpath template {}", path.display()),
-                        Err(e) => crate::messages::could_not_save(&path, &e),
-                    };
-                    self.status.set_message(&message);
-                }
+        }
+    }
+
+    /// Save: under the job's own name, or asking for one the first time.
+    pub(super) fn save_job(&mut self) {
+        match self.session.path.clone() {
+            Some(path) => self.save_to(&path),
+            None => self.save_as(),
+        }
+    }
+
+    /// A drawing, picture or model picked in the file window `which` opens on.
+    pub(super) fn import_picked(&mut self, which: Dialog) {
+        if let Some(path) = filtered_dialog(which, &self.registry).pick_file() {
+            self.import_file(&path);
+        }
+    }
+
+    pub(super) fn import_cut_list_picked(&mut self) {
+        if let Some(path) = filtered_dialog(Dialog::ImportCutList, &self.registry).pick_file() {
+            self.import_cut_list(&path);
+        }
+    }
+
+    pub(super) fn add_clipart_folder(&mut self) {
+        if let Some(folder) = file_dialog().pick_folder()
+            && let Err(e) = self.clipart.add(folder)
+        {
+            self.status.set_message(&e);
+        }
+    }
+
+    /// Segment 3D Model: the segmenting form, on an STL picked first.
+    pub(super) fn segment_model_file(&mut self) {
+        if let Some(path) = filtered_dialog(Dialog::SegmentModel, &self.registry).pick_file() {
+            self.start_command("segment_3d_model");
+            if let Some(form) = self.form.as_mut().filter(|f| f.id == "segment_3d_model") {
+                form.params["file"] = Value::from(path.display().to_string());
             }
-            "load_template" => {
-                if let Some(path) = toolpath_template_dialog().pick_file() {
-                    let change = std::fs::read(&path)
-                        .map_err(|e| e.to_string())
-                        .and_then(|bytes| files::load_toolpath_template(&self.doc, &bytes))
-                        .map_err(cut_craft_core::CommandError::Failed);
-                    self.record(change, &format!("Loaded {}", path.display()));
-                }
+        }
+    }
+
+    /// G-code read back as toolpaths: the form opens on the file picked, to say which tool
+    /// cut it.
+    pub(super) fn import_toolpaths_picked(&mut self) {
+        if let Some(path) = filtered_dialog(Dialog::ImportToolpaths, &self.registry).pick_file() {
+            self.import_toolpaths_from(&path);
+        }
+    }
+
+    pub(super) fn install_post_picked(&mut self) {
+        if let Some(path) =
+            filtered_dialog(Dialog::InstallPostProcessor, &self.registry).pick_file()
+        {
+            self.install_post(&path);
+        }
+    }
+
+    /// Save As Template: the job saved into the templates folder.
+    pub(super) fn save_job_template(&mut self) {
+        if let Some(path) = template_dialog()
+            .set_file_name(format!("template.{TEMPLATE}"))
+            .save_file()
+            && let Some(path) = saving_path(&path, &[TEMPLATE])
+        {
+            match cut_craft_core::file::write_atomic(
+                &path,
+                &cut_craft_core::file::save_job(&self.doc),
+            ) {
+                Ok(()) => self.status.set_message(&cut_craft_i18n::tr!(
+                    "status-saved-template",
+                    path = path.display().to_string()
+                )),
+                Err(e) => self
+                    .status
+                    .set_message(&crate::messages::could_not_save(&path, &e)),
             }
-            "new_from_template" => {
-                // like New and Open: unsaved work is asked about first
-                if self.confirm_discard()
-                    && let Some(path) = template_dialog().pick_file()
-                {
-                    self.open_path(&path);
-                }
-            }
-            _ => unreachable!("not a template action: {id}"),
+        }
+    }
+
+    /// A toolpath template: of every toolpath shown in the list (`all_shown`), else of the
+    /// selected one.
+    pub(super) fn save_toolpath_template(&mut self, all_shown: bool) {
+        let ids: Vec<_> = if all_shown {
+            self.doc
+                .toolpaths
+                .iter()
+                .filter(|(_, t)| t.visible)
+                .map(|(&i, _)| i)
+                .collect()
+        } else {
+            self.selected_toolpath.into_iter().collect()
+        };
+        if let Some(path) = toolpath_template_dialog()
+            .set_file_name(format!("toolpaths.{}", files::TOOLPATH_TEMPLATE_EXTENSION))
+            .save_file()
+            && let Some(path) = saving_path(&path, &[files::TOOLPATH_TEMPLATE_EXTENSION])
+        {
+            let template = files::toolpath_template(&self.doc, &ids);
+            let message = match cut_craft_core::file::write_atomic(&path, &template) {
+                Ok(()) => format!("Saved toolpath template {}", path.display()),
+                Err(e) => crate::messages::could_not_save(&path, &e),
+            };
+            self.status.set_message(&message);
+        }
+    }
+
+    /// Load Toolpath Template: the toolpaths saved in a template added to this job.
+    pub(super) fn load_toolpath_template(&mut self) {
+        if let Some(path) = toolpath_template_dialog().pick_file() {
+            let change = std::fs::read(&path)
+                .map_err(|e| e.to_string())
+                .and_then(|bytes| files::load_toolpath_template(&self.doc, &bytes))
+                .map_err(cut_craft_core::CommandError::Failed);
+            self.record(change, &format!("Loaded {}", path.display()));
+        }
+    }
+
+    /// New from Template: like New and Open, unsaved work is asked about first.
+    pub(super) fn new_from_template(&mut self) {
+        if self.confirm_discard()
+            && let Some(path) = template_dialog().pick_file()
+        {
+            self.open_path(&path);
         }
     }
 
@@ -194,8 +195,10 @@ impl CutCraftApp {
             }
         }
         let Some(cmd) = self.registry.get(id) else {
-            self.status
-                .set_message(&format!("{}: not implemented yet", gui::title_case(id)));
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-not-made-yet",
+                tool = crate::tool_names::name_of(&self.registry, id)
+            ));
             return;
         };
         let page = self.tool_model().kind_of(cmd.id());
@@ -573,12 +576,12 @@ impl CutCraftApp {
             self.drop_file(path);
             return;
         }
-        self.file_action("new");
+        self.new_job();
         if self.screen == Screen::NewJob {
             self.import_after_setup = Some(path.to_owned());
-            self.status.set_message(&format!(
-                "Set up the material, then OK makes the job and imports {} into it",
-                file_name(path)
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-set-up-then-import",
+                file = file_name(path).clone()
             ));
         }
     }
@@ -591,10 +594,9 @@ impl CutCraftApp {
             (self.recovery_path, self.recovery_lock) = (Some(own), lock);
         } else {
             (self.recovery_path, self.recovery_lock) = (None, None);
-            self.status.set_message(&format!(
-                "Warning: unsaved work cannot be copied for recovery, because {} cannot be \
-                 written. Save often",
-                dir.display()
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-no-recovery-copies",
+                path = dir.display().to_string()
             ));
         }
     }
@@ -628,9 +630,10 @@ impl CutCraftApp {
         };
         match files::write_recovery(&own, &bytes, &kept_note) {
             Ok(()) => files::remove_recovery(&left, true),
-            Err(e) => self
-                .status
-                .set_message(&format!("could not keep the recovery copy: {e}")),
+            Err(e) => self.status.set_message(&cut_craft_i18n::tr!(
+                "status-recovery-copy-not-kept",
+                error = e.to_string()
+            )),
         }
         self.doc = doc;
         self.session = Session::unsaved_at(note.path);
@@ -640,14 +643,12 @@ impl CutCraftApp {
                 .set_message(&super::tr!("update-your-unsaved-work-is-back"));
         } else {
             // Save goes back to the job's own file when it had one
-            let save = if self.session.path.is_some() {
-                "Save"
-            } else {
-                "Save As"
-            };
-            self.status.set_message(&format!(
-                "Recovered unsaved work from the last run: save it (File ▸ {save}) or close it"
-            ));
+            self.status
+                .set_message(&cut_craft_i18n::tr!(if self.session.path.is_some() {
+                    "status-recovered-save"
+                } else {
+                    "status-recovered-save-as"
+                }));
         }
         true
     }
@@ -669,24 +670,22 @@ impl CutCraftApp {
         (self.camera, self.view_tool) = (None, None);
         (
             self.selected_toolpath,
-            self.simulation,
-            self.simulation_coarse,
-            self.fine_3d,
-            self.surface_gpu,
-            self.rough_3d,
-        ) = (None, None, None, None, None, None);
-        self.turned_3d = None;
+            self.preview.material,
+            self.preview.coarse,
+        ) = (None, None, None);
+        (self.meshes.surface_gpu, self.meshes.turned) = (None, None);
+        self.meshes.fine.clear();
+        self.meshes.rough.clear();
         // the old job's preview playback, its controls and its undo go with it
-        (self.playback, self.kept_playback, self.before_preview) = (None, None, None);
-        (self.playing, self.playback_goal, self.playback_shown) = (false, None, None);
-        (self.playback_view, self.playback_gpu) = (None, None);
-        self.preview_side = self.doc.bottom_side;
+        self.player.close();
+        self.preview.before = None;
+        self.preview.side = self.doc.bottom_side;
         // the G-code shown, and a save waiting or asked about, were the job that was open
         self.gcode_view = None;
         self.save_anyway = None;
         self.save_after = None;
         self.form_back = None;
-        self.checks_accepted.clear();
+        self.saving.forget();
         self.clear_recovery();
     }
 
@@ -743,7 +742,7 @@ impl CutCraftApp {
                 self.options.default_job = Some(job);
                 self.save_options();
                 self.status
-                    .set_message("New jobs will start with these settings");
+                    .set_message(&cut_craft_i18n::tr!("status-new-jobs-start-so"));
             }
             Err(e) => form.error = Some(e),
         }
@@ -767,7 +766,8 @@ impl CutCraftApp {
                 (self.history, self.session) = Default::default();
                 self.picked_constraint = None;
                 self.screen = Screen::Job;
-                self.status.set_message("New job created");
+                self.status
+                    .set_message(&cut_craft_i18n::tr!("status-new-job-created"));
                 self.status.current_tool = self.tool_label("select");
                 if let Some(path) = self.import_after_setup.take() {
                     self.import_file(&path);
@@ -796,9 +796,10 @@ impl CutCraftApp {
             && let Some(path) = saving_path(&path, format.extensions)
         {
             let result = files::export(&self.registry, id, &self.doc, &path);
-            self.status.set_message(
-                &result.map_or_else(|e| e, |()| format!("Exported {}", path.display())),
-            );
+            self.status.set_message(&result.map_or_else(
+                |e| e,
+                |()| cut_craft_i18n::tr!("status-exported", path = path.display().to_string()),
+            ));
         }
     }
 
@@ -821,7 +822,7 @@ impl CutCraftApp {
     }
 
     /// File ▸ Save As: the job saved under the name and folder the person picks.
-    fn save_as(&mut self) {
+    pub(super) fn save_as(&mut self) {
         let (folder, name) = self.save_as_suggestion();
         let dialog = filtered_dialog(Dialog::SaveJob, &self.registry).set_file_name(name);
         let dialog = match folder {

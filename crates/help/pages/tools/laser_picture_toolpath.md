@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-24
 see-also: laser_cut_fill_toolpath, photo_vcarve_toolpath
 ---
 
@@ -32,3 +32,5 @@ see-also: laser_cut_fill_toolpath, photo_vcarve_toolpath
    ![Step 6](pictures/laser_picture_toolpath/step-6.png)
 
 When it looks right, [save it for your laser](help:save_toolpaths).
+
+The laser is picked like a bit: **Select…** under **Bit** lists only the lasers in the [Bit Library](help:tool_database), and their kerf and speed come with it.

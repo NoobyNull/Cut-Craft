@@ -1,7 +1,7 @@
 //! The app's fixed values (sizes, timings, built-in names, links and services) and the small
 //! records its state keeps.
 
-use super::{EntityId, Material, Units, egui, files, shortcut, view3d};
+use super::{EntityId, Material, Units, egui, files, shortcut};
 
 /// Model ▸ Model Resolution's items, the resolution each sets and its name.
 /// Edit ▸ Units' items: action, units and name.
@@ -41,114 +41,6 @@ pub(super) const CARVE_AREA_ALPHA: f32 = 0.35;
 /// Orientate 3D Model's rotation rings round the model, as a share of its longest side.
 pub(super) const RING_SHARE: f64 = 0.6;
 
-pub(super) const BUILT_INS: [&str; 106] = [
-    "setup_material",
-    "import_into_shape",
-    "try_sample_project",
-    "machine_files",
-    "first_run_setup",
-    "draw_rectangle_from_center",
-    "draw_circle_from_edge",
-    "tool_changer",
-    "find_tool",
-    "activate_layer_of_selection",
-    "machine_configuration",
-    "add_machine",
-    "install_offline_package",
-    "search_for_machine_online",
-    "post_processor_management",
-    "paste_in_place",
-    "edit_text",
-    "join_straight_line",
-    "join_smooth_curve",
-    "join_move_end_points",
-    "import_vectors",
-    "export_vectors",
-    "open_folder",
-    "open_clipart_folder",
-    "component_levels",
-    "clipart_library",
-    "edit_toolpath",
-    "create_shape_round",
-    "create_shape_angled",
-    "create_shape_smooth",
-    "create_shape_flat",
-    "left_to_right",
-    "right_to_left",
-    "top_to_bottom",
-    "bottom_to_top",
-    "delete_all_guides",
-    "lock_all_existing_guides",
-    "unlock_all_existing_guides",
-    "options",
-    "segment_3d_model_file",
-    "import_toolpaths_file",
-    "print_job_sheet",
-    "import_cut_list",
-    "snap_options",
-    "node_edit",
-    "transform",
-    "measure_inspect",
-    "print",
-    "save_all_visible_toolpaths_as_template",
-    "load_template",
-    "save_selected_toolpath_as_template",
-    "save_as_template",
-    "new_from_template",
-    "create_component_from_toolpath_preview",
-    "toolpath_summary",
-    "refresh_2d_view",
-    "cut",
-    "copy",
-    "paste",
-    "increment_and_save",
-    "open_application_data_folder",
-    "keyboard_shortcuts",
-    "help_contents",
-    "did_you_know",
-    "credits",
-    "about_cut_craft",
-    "check_for_updates",
-    "addons",
-    "open_gadgets_folder",
-    "undo",
-    "redo",
-    "exit",
-    "new",
-    "open",
-    "save",
-    "save_as",
-    "import_vectors_bitmap",
-    "import_component_3d_model",
-    "recalculate_toolpath",
-    "recalculate_visible_toolpaths",
-    "recalculate_all_toolpaths",
-    "delete_toolpath",
-    "save_toolpaths",
-    "install_post_processor",
-    "close",
-    "select",
-    "select_all_vectors_on_current_layer",
-    "job_size_and_position",
-    "show_toolpaths_tab",
-    "design_layout",
-    "machining_layout",
-    "interface_layout",
-    "pan",
-    "zoom_box",
-    "zoom_to_job",
-    "zoom_to_drawing",
-    "zoom_selected",
-    "tool_database",
-    "preview_toolpath",
-    "preview_all_toolpaths",
-    "preview_visible_toolpaths",
-    "undo_last_preview",
-    "save_shaded_image",
-    "edit_object",
-    "job_sheet_editor",
-    "reset_preview",
-];
 /// Where every Report a Bug Here… goes: Cut Craft's own repository.
 pub(super) const BUG_REPO: &str = "NoobyNull/Cut-Craft";
 /// Cut Craft's crash-report service, where the crash logs of people who said yes go: a
@@ -290,7 +182,7 @@ pub(super) struct GuideProps {
 /// A toolpath's row in the Toolpath Summary: its id, name, time, whether it is shown, and
 /// its notes.
 /// Each toolpath's cutting time, minutes: the shown ones cut one after another from the
-/// job's home (getting to each and its tool change included), a hidden one on its own; and
+/// job's home (getting to each and its bit change included), a hidden one on its own; and
 /// the whole job's, the trip back home included.
 #[derive(Debug, Default)]
 pub(crate) struct CutTimes {
@@ -341,33 +233,9 @@ pub(super) const SCROLL_NOTCH: f32 = 50.0;
 /// How much a wheel notch grows the sculpting brush, or its strength; with Ctrl, finer.
 pub(super) const BRUSH_STEP: f64 = 0.1;
 pub(super) const BRUSH_FINE_STEP: f64 = 0.02;
-/// The layout keys: F11 designing (Design pinned), F12 machining (Toolpaths pinned); and
-/// the keys of actions with no menu item: N Node Edit, F1 help, F2 and F3 the views.
-pub(super) const LAYOUT_KEYS: [(&str, &str); 6] = [
-    ("design_layout", "F11"),
-    ("machining_layout", "F12"),
-    ("node_edit", "N"),
-    ("tool_help", "F1"),
-    ("view_2d", "F2"),
-    ("view_3d", "F3"),
-];
-/// The names of [`LAYOUT_KEYS`]' actions that no menu names.
-pub(super) const KEY_ACTION_NAMES: [(&str, &str); 3] = [
-    ("tool_help", "Help on the Open Tool"),
-    ("view_2d", "2D View"),
-    ("view_3d", "3D View"),
-];
-/// The view buttons over the top right of the 2D view: action, label and icon.
-pub(super) const VIEW_BUTTONS: [(&str, &str, &str); 4] = [
-    ("pan", "Pan", "view/pan.png"),
-    ("zoom_box", "Zoom Box", "view/zoom_box.png"),
-    ("zoom_to_job", "Zoom to Job", "view/zoom_to_job.png"),
-    (
-        "zoom_selected",
-        "Zoom to Selection",
-        "view/zoom_selected.png",
-    ),
-];
+/// The view buttons over the top right of the 2D view, by action: each one's name and icon
+/// are its [`crate::app::built_ins`] entry's.
+pub(super) const VIEW_BUTTONS: [&str; 4] = ["pan", "zoom_box", "zoom_to_job", "zoom_selected"];
 /// Scrolling a view's height divided by this doubles the zoom.
 // ponytail: fixed rate until a preferences dialog exists
 pub(crate) const VIEW_ZOOM_QUARTERS: f32 = 4.0;
@@ -385,15 +253,6 @@ pub(super) const STARTUP_TASKS: [(&str, &str); 4] = [
 pub(crate) fn menu_key(name: &str) -> String {
     cut_craft_i18n::key_of("menu", name)
 }
-/// The top bar's split and snapping toggles.
-pub(super) const TOP_BAR_TOGGLES: [&str; 6] = [
-    "split_stacked",
-    "split_side_by_side",
-    "split_picture",
-    "toggle_geometry_snapping",
-    "toggle_smart_snapping",
-    "toggle_grid_snapping",
-];
 /// The level menu's Select Components and Export as 3D Clipart: these, then the level's id.
 pub const SELECT_LEVEL: &str = "select_level_components:";
 pub const EXPORT_LEVEL: &str = "export_level_clipart:";
@@ -403,23 +262,9 @@ pub(super) const LINE_SCALE: f32 = 1.5;
 /// Easy-to-read UI fonts, the first installed used; egui's own stay behind for symbols.
 pub(super) const UI_FONTS: [&str; 5] =
     ["Noto Sans", "Open Sans", "DejaVu Sans", "Segoe UI", "Arial"];
-/// A preview starts at ten times the machine's own speed (×1: each move at its tool's feed
+/// A preview starts at ten times the machine's own speed (×1: each move at its bit's feed
 /// or plunge rate, rapids at the Toolpath Summary's rapid rate).
 pub(crate) const PLAYBACK_SPEED: f64 = 10.0;
-/// What a playing preview's GPU surface was made from: the playback's revision, the detail,
-/// the job's revision, the wrap and whether the sides are drawn.
-pub(super) type PlaybackGpuKey = (u64, usize, u64, Option<view3d::Wrap>, bool);
-/// A frame's time for cutting a playing preview: the window still answers at once.
-pub(super) const PLAYBACK_BUDGET: std::time::Duration = std::time::Duration::from_millis(30);
-/// How often a playing preview's 3D view is made again from the cut so far: at full detail
-/// that takes a while, so not every frame (the tool still moves every frame).
-pub(super) const PLAYBACK_REDRAW: std::time::Duration = std::time::Duration::from_millis(100);
-
-/// A frame's time for a jump (the Progress slider, Run to Retract): more than for playing,
-/// so it gets there within a second or so; the window answers less often meanwhile.
-pub(super) fn jump_budget(budget: std::time::Duration) -> std::time::Duration {
-    budget * 4
-}
 /// How many times faster than the machine a preview can play: a long finishing toolpath
 /// takes hours at the machine's speed.
 pub(super) const PLAYBACK_SPEEDS: std::ops::RangeInclusive<f64> = 0.25..=1000.0;

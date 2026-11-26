@@ -22,14 +22,14 @@ Every move the saved G-code makes:
   position for the first one.
 - **The trip back home** after the last toolpath. It is in the job's total, not in a
   toolpath's own time.
-- **Tool changes**: each time the next toolpath uses another bit. A change by hand counts
+- **Bit changes**: each time the next toolpath uses another bit. A change by hand counts
   2 minutes and a change by the tool changer counts 15 seconds. Change these with **Bit
   change by hand** and **Bit change by tool changer** in **Edit ▸ Options ▸ Toolpaths**. A
   bit loaded in the machine's tool changer counts as the quick change, and any other bit
   counts as a change by hand.
 - **Drill dwells**: the wait at the bottom of each peck when a Drilling toolpath asks for one.
 
-A toolpath's own time includes getting to it and its tool change. That way, the toolpath
+A toolpath's own time includes getting to it and its bit change. That way, the toolpath
 times add up to the job's total apart from the trip home.
 
 ## Speeding up, slowing down and corners

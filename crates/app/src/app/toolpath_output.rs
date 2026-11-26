@@ -52,16 +52,6 @@ impl CutCraftApp {
         self.output().not_kept_out(doc, plan)
     }
 
-    /// The job with its toolpaths thinned to their tolerances, as they are saved; refused
-    /// when a toolpath of `plan`, as saved, would cut into a keep-out zone.
-    #[cfg(test)]
-    pub(super) fn thinned_for_saving(
-        &self,
-        plan: &[Vec<EntityId>],
-    ) -> Result<super::Document, String> {
-        self.output().thinned(plan)
-    }
-
     /// The names of the keep-out zones `toolpath` cuts into (its cutter's edge reaching
     /// one) or rapids over.
     pub(super) fn zones_entered(
@@ -110,36 +100,31 @@ impl CutCraftApp {
         (!refused.is_empty()).then(|| format!("{KEEP_OUT_REFUSED}: {}. {way}", refused.join("; ")))
     }
 
-    pub(super) fn toolpath_action(&mut self, id: &str) {
-        match id {
-            "recalculate_toolpath" => {
-                if let Some(id) = self.selected_toolpath {
-                    self.recalculate_in_background(vec![id], "Toolpath recalculated", |_| {});
-                }
-            }
-            // the cascade: Recalculate on each shown toolpath
-            "recalculate_visible_toolpaths" => {
-                let shown = self.doc.toolpaths.iter().filter(|(_, t)| t.visible);
-                let ids: Vec<EntityId> = shown.map(|(&id, _)| id).collect();
-                self.recalculate_in_background(ids, "Visible toolpaths recalculated", |_| {});
-            }
-            "recalculate_all_toolpaths" => {
-                let ids: Vec<EntityId> = self.doc.toolpaths.keys().copied().collect();
-                self.recalculate_in_background(ids, "All toolpaths recalculated", |_| {});
-            }
-            // the toolpath list's button: the Delete Toolpath command on the selected one
-            "delete_toolpath" => {
-                if let Some(id) = self.selected_toolpath.take()
-                    && let Err(e) =
-                        self.apply("delete_toolpath", &serde_json::json!({ "toolpath": id }))
-                {
-                    self.status.set_message(&e);
-                }
-            }
-            "save_toolpaths" => {
-                self.save_form = Some(self.default_save_form());
-            }
-            _ => unreachable!("not a toolpath action: {id}"),
+    /// Recalculate Toolpath: the selected one, worked out again.
+    pub(super) fn recalculate_selected(&mut self) {
+        if let Some(id) = self.selected_toolpath {
+            self.recalculate_in_background(vec![id], "Toolpath recalculated", |_| {});
+        }
+    }
+
+    /// Recalculate Visible Toolpaths: the cascade, Recalculate on each shown toolpath.
+    pub(super) fn recalculate_shown(&mut self) {
+        let shown = self.doc.toolpaths.iter().filter(|(_, t)| t.visible);
+        let ids: Vec<EntityId> = shown.map(|(&id, _)| id).collect();
+        self.recalculate_in_background(ids, "Visible toolpaths recalculated", |_| {});
+    }
+
+    pub(super) fn recalculate_all(&mut self) {
+        let ids: Vec<EntityId> = self.doc.toolpaths.keys().copied().collect();
+        self.recalculate_in_background(ids, "All toolpaths recalculated", |_| {});
+    }
+
+    /// The toolpath list's button: the Delete Toolpath command on the selected one.
+    pub(super) fn delete_selected_toolpath(&mut self) {
+        if let Some(id) = self.selected_toolpath.take()
+            && let Err(e) = self.apply("delete_toolpath", &serde_json::json!({ "toolpath": id }))
+        {
+            self.status.set_message(&e);
         }
     }
 
@@ -232,7 +217,9 @@ impl CutCraftApp {
             return;
         };
         let Some(choice) = choice else {
-            return self.status.set_message("Toolpaths not saved");
+            return self
+                .status
+                .set_message(&cut_craft_i18n::tr!("status-toolpaths-not-saved"));
         };
         if remember {
             self.options.confirmations.earlier_gcode = choice;
@@ -253,11 +240,19 @@ impl CutCraftApp {
         path: &std::path::Path,
         earlier: &[std::path::PathBuf],
     ) {
+        if let Err(e) = self.still_as_checked() {
+            return self.status.set_message(&e);
+        }
         let archiving = choice == crate::options::EarlierGcode::Archive;
         let made = chrono::Local::now().naive_local();
         let vars = self.note_variables();
         let output = self.output();
-        let texts = || output.texts(form, post, path, made, &vars);
+        let errors = self.saving.errors();
+        let off = output.protection_off();
+        let texts = || {
+            let texts = output.texts(form, post, path, made, &vars)?;
+            Ok(output::marked(texts, errors, off.as_deref()))
+        };
         match output::write_over(texts, path, earlier, archiving, made) {
             Ok(over) => {
                 let after = over.archived.map_or_else(String::new, |folder| {
@@ -282,6 +277,12 @@ impl CutCraftApp {
         }
     }
 
+    /// The toolpaths the form saves that are left out of its files, having no moves.
+    pub(super) fn left_out(&self, form: &SaveForm) -> Vec<String> {
+        self.form_post(form)
+            .map_or_else(|_| vec![], |post| self.output().left_out(form, &post))
+    }
+
     /// Once the G-code files `written` are saved at `path`: the job sheet beside them when
     /// the form says so, and the status bar saying what was saved, then `after`.
     fn saved(
@@ -293,6 +294,7 @@ impl CutCraftApp {
     ) {
         let (_, name) = self.project();
         let done = self.output().saved_message(written, path);
+        let done = output::with_left_out(done, &self.left_out(form));
         let result = if form.job_sheet {
             let folder = path.parent().unwrap_or(std::path::Path::new("."));
             let outputs = (written.iter())
@@ -316,7 +318,7 @@ impl CutCraftApp {
         sending: bool,
     ) -> Option<cut_craft_post::Post> {
         // a Save Anyway answer is for this save only, whichever way it ends
-        let accepted = std::mem::take(&mut self.checks_accepted);
+        let accepted = self.saving.start();
         let post = match self.form_post(form) {
             Ok(post) => post,
             Err(e) => {
@@ -332,26 +334,31 @@ impl CutCraftApp {
             }
         };
         let Some(found) = self.save_checks(&plan, form.changes).map(<[_]>::to_vec) else {
-            self.status.set_message(if self.checking() {
-                "Still checking the toolpaths before cutting: save again once the checks finish"
-            } else if self.busy.is_some() {
-                "The toolpaths are checked before cutting once the work running now is done: save again then"
-            } else {
-                "The checks before cutting were cancelled: press Check Again, then save"
-            });
+            self.status
+                .set_message(&cut_craft_i18n::tr!(if self.checking() {
+                    "status-still-checking"
+                } else if self.busy.is_some() {
+                    "status-checked-after-work"
+                } else {
+                    "status-checks-cancelled"
+                }));
             return None;
         };
         match output::verdict(&found, &self.acknowledged, &accepted) {
-            output::Verdict::Refused(refused) => {
-                self.status.set_message(&refused);
+            output::Verdict::Refused(damage) => {
+                self.status.set_message(&output::refusal(&damage));
                 None
             }
-            output::Verdict::Ask(problems) => {
+            output::Verdict::Ask(asking) => {
                 // asked over the window: the answer saves (or sends) again
-                self.ask_save_anyway(form, problems, sending);
+                self.ask_save_anyway(form, asking, sending);
                 None
             }
-            output::Verdict::Go => Some(post),
+            output::Verdict::Go => {
+                // answered Save Anyway for these: the files say so at the top
+                self.saving.go(output::errors(&found), self.now_checked());
+                Some(post)
+            }
         }
     }
 
@@ -395,8 +402,8 @@ impl CutCraftApp {
         Ok(sheet)
     }
 
-    /// Saves the form's plan through `post` at `path`, unless the checks before cutting
-    /// find an error, and says what was saved: Save Toolpaths' Save short of its dialogs.
+    /// Saves the form's plan through `post` at `path`, its warnings answered, unless the
+    /// checks before cutting find an error (Save Anyway asks), and says what was saved: Save Toolpaths' Save short of its dialogs.
     #[cfg(test)]
     pub(super) fn save_toolpaths_to(
         &self,
@@ -405,9 +412,20 @@ impl CutCraftApp {
         path: &std::path::Path,
     ) -> Result<String, String> {
         let plan = self.plan(form, post)?;
-        match output::refused(&self.preflight(&plan, form.changes)) {
-            Some(refused) => Err(refused),
-            None => self.write_toolpaths(form, post, path),
+        let found = self.preflight(&plan, form.changes);
+        // the warnings answered, as a script's tests mostly want: the errors still ask
+        let errors = output::errors(&found);
+        let warnings: Vec<String> = (found.iter())
+            .map(|f| f.message.clone())
+            .filter(|m| !errors.contains(m))
+            .collect();
+        match output::verdict(&found, &self.acknowledged, &warnings) {
+            output::Verdict::Refused(damage) => Err(output::refusal(&damage)),
+            output::Verdict::Ask(asking) => Err(format!(
+                "Save Anyway asks first: {}",
+                asking.errors.join("; ")
+            )),
+            output::Verdict::Go => self.write_toolpaths(form, post, path),
         }
     }
 
@@ -476,6 +494,7 @@ impl CutCraftApp {
             }
             self.save_checks.push(key.clone());
             let doc = self.doc.clone();
+            let tolerances = self.options.toolpaths.clone();
             let ids: Vec<EntityId> = plan.iter().flatten().copied().collect();
             let limits = self.check_limits(&ids, changes);
             let mut no_changer: Vec<_> = self.no_tool_changer_for(changes).into_iter().collect();
@@ -488,6 +507,8 @@ impl CutCraftApp {
                 super::CHECKING,
                 "check",
                 move || {
+                    // checked as saved: each toolpath thinned to its tolerance
+                    let doc = tolerances.thinned(&doc);
                     let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> =
                         ids.iter().filter_map(|id| doc.toolpaths.get(id)).collect();
                     let mut found = cut_craft_core::preflight::check(&doc, &toolpaths, &limits);
@@ -541,12 +562,11 @@ impl CutCraftApp {
         changes: files::ToolChanges,
     ) -> Vec<cut_craft_core::preflight::Finding> {
         let ids: Vec<EntityId> = plan.iter().flatten().copied().collect();
-        let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> = ids
-            .iter()
-            .filter_map(|id| self.doc.toolpaths.get(id))
-            .collect();
+        let doc = self.options.toolpaths.thinned(&self.doc);
+        let toolpaths: Vec<&cut_craft_core::toolpath::Toolpath> =
+            ids.iter().filter_map(|id| doc.toolpaths.get(id)).collect();
         let limits = self.check_limits(&ids, changes);
-        let mut found = cut_craft_core::preflight::check(&self.doc, &toolpaths, &limits);
+        let mut found = cut_craft_core::preflight::check(&doc, &toolpaths, &limits);
         found.extend(self.no_tool_changer_for(changes));
         found
     }
@@ -581,8 +601,22 @@ impl CutCraftApp {
         post: &cut_craft_post::Post,
         path: &std::path::Path,
     ) -> Result<Vec<std::path::PathBuf>, String> {
+        self.still_as_checked()?;
         let made = chrono::Local::now().naive_local();
-        output::write(&self.toolpath_texts(form, post, path, made)?)
+        let texts = self.toolpath_texts(form, post, path, made)?;
+        let off = self.output().protection_off();
+        output::write(&output::marked(texts, self.saving.errors(), off.as_deref()))
+    }
+
+    /// Whether the job and machine are still as the save under way was checked for: an
+    /// error, and nothing written, when they changed while it waited on a question.
+    fn still_as_checked(&self) -> Result<(), String> {
+        self.saving.still_as_checked(self.now_checked())
+    }
+
+    /// The job revision and active machine, as a save is checked for.
+    pub(super) fn now_checked(&self) -> super::saving_checks::Checked {
+        (self.history.revision(), self.machines.active)
     }
 
     /// The files the form's plan makes through `post` at `path`, with their G-code as made
@@ -621,13 +655,14 @@ impl CutCraftApp {
                     library: None,
                     holding: m.holding(),
                     rotary: m.has_rotary().then_some(m.rotary_axis),
+                    protect: m.protect,
                 });
         limits.left = Some(self.options.confirmations.left());
         limits
     }
 
     /// [`Self::limits`] for checking the toolpaths `ids` saved with `changes`: the tool
-    /// changer's slots only when it changes the tools, and the Tool Database's copy of
+    /// changer's slots only when it changes the tools, and the Bit Library's copy of
     /// each of their bits, to compare with.
     pub(super) fn check_limits(
         &self,
@@ -704,6 +739,12 @@ impl CutCraftApp {
         let mut params = params.clone();
         if let (Value::Object(map), Ok(around)) = (&mut params, serde_json::to_value(around)) {
             map.insert("surroundings".into(), around);
+            if ROTARY_CARRIED.contains(&id) {
+                map.insert(
+                    "whole_blank".into(),
+                    self.options.toolpaths.advanced_rotary.into(),
+                );
+            }
         }
         params
     }
@@ -724,5 +765,20 @@ pub(super) const CLIP_SETTING: &str =
     "Edit ▸ Options ▸ Toolpath Settings ▸ Clip toolpaths at keep-out zones";
 
 /// Rotary toolpaths, given the machine's holder, chuck and tailstock to keep clear of.
-pub(super) const ROTARY_SURROUNDED: [&str; 2] =
-    ["rotary_machining_toolpath", "rotary_lathe_toolpath"];
+pub(super) const ROTARY_SURROUNDED: [&str; 6] = [
+    "rotary_roughing_toolpath",
+    "rotary_finishing_toolpath",
+    "rotary_locked_angles_toolpath",
+    "rotary_details_toolpath",
+    "rotary_machining_toolpath",
+    "rotary_lathe_toolpath",
+];
+
+/// Rotary toolpaths that cut only what the toolpaths above them leave, unless Settings'
+/// advanced rotary mode is on.
+pub(super) const ROTARY_CARRIED: [&str; 4] = [
+    "rotary_roughing_toolpath",
+    "rotary_finishing_toolpath",
+    "rotary_locked_angles_toolpath",
+    "rotary_details_toolpath",
+];

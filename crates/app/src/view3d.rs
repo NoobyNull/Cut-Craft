@@ -1106,8 +1106,8 @@ pub fn turned_outline(screen: impl Fn(DVec3) -> Pos2, tip: DVec3, rings: &[[f64;
 
 /// A playing preview's tool as the parts it is drawn in, tip first, each the side of a
 /// [`turned_outline`] (out from the axis, up from the tip, mm): its cutting end (a V-bit's cone, a
-/// ball nose's ball) up to the top of its flutes, then its neck and shank, as the Tool
-/// Database draws it (a guess where a length is not set). Empty for a tool with no size.
+/// ball nose's ball) up to the top of its flutes, then its neck and shank, as the Bit
+/// Library draws it (a guess where a length is not set). Empty for a tool with no size.
 pub fn tool_parts(tool: &cut_craft_core::toolpath::Tool) -> Vec<Vec<[f64; 2]>> {
     // ponytail: every fourth point of the edge is round enough at a preview's size
     const EVERY: usize = 4;

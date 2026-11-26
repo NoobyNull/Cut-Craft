@@ -42,7 +42,7 @@ impl ToolShape {
     }
 }
 
-/// The units a tool's feed and plunge rates are shown in. Rates are kept
+/// The units a bit's feed and plunge rates are shown in. Rates are kept
 /// in mm/min whatever the tool shows them in.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -112,7 +112,7 @@ pub struct CuttingData {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Tool {
     pub name: String,
-    /// The Tool Database's name format its name is made from (`{Tool Type} {Diameter|F}`,
+    /// The Bit Library's name format its name is made from (`{Bit Type} {Diameter|F}`,
     /// see [`crate::tool_names`]); empty for a name typed as it is (added with name formats)
     #[serde(default, skip_serializing_if = "String::is_empty")]
     #[schemars(skip)]
@@ -199,12 +199,12 @@ pub struct Tool {
     /// A drill (a twist or brad-point bit, as a vendor's tool library lists them): it cuts
     /// only straight down, so a toolpath form other than Drilling says so in red when it is
     /// picked, and the checks before cutting warn of it. Ticked as Drill only beside the
-    /// Tool Type in the Tool Database (added with drills from tool libraries)
+    /// Bit Type in the Bit Library (added with drills from tool libraries)
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[schemars(skip)]
     pub drill_only: bool,
-    /// Its tool number, for the post's `[T]` on a machine without a tool changer, and the
-    /// holder Load by Tool Number puts it in; 0 for none (added with tool numbers)
+    /// Its bit number, for the post's `[T]` on a machine without a tool changer, and the
+    /// holder Load by Bit Number puts it in; 0 for none (added with bit numbers)
     #[serde(default, skip_serializing_if = "is_zero")]
     #[schemars(skip)]
     pub number: u32,
@@ -223,7 +223,7 @@ pub struct Tool {
     #[serde(default, skip_serializing_if = "is_nothing")]
     #[schemars(skip)]
     pub last_pass: f64,
-    /// The Tool Database group it sits in, `/` between levels (`Metric Tools/End Mills`);
+    /// The Bit Library group it sits in, `/` between levels (`Metric Bits/End Mills`);
     /// empty at the top (added with tool groups)
     #[serde(default, skip_serializing_if = "String::is_empty")]
     #[schemars(skip)]
@@ -362,7 +362,7 @@ impl Tool {
         self.known_flute_length()
     }
 
-    /// The My Tools group a tool copied in from a catalogue (or added) goes in: its maker,
+    /// The My Bits group a tool copied in from a catalogue (or added) goes in: its maker,
     /// then its type, as `Amana/V-Bits` (`Generic/...` with no maker).
     pub fn own_group(&self) -> String {
         let maker = self.manufacturer.trim().replace('/', "-");
@@ -373,7 +373,7 @@ impl Tool {
             ToolShape::VBit => "V-Bits",
             ToolShape::RadiusedEndMill => "Radiused End Mills",
             ToolShape::ThreadMill => "Thread Mills",
-            ToolShape::FormTool => "Form Tools",
+            ToolShape::FormTool => "Form Bits",
             ToolShape::SurfacingBit => "Surfacing Bits",
             ToolShape::Laser => "Lasers",
         };
@@ -462,7 +462,7 @@ impl Tool {
     }
 
     /// Whether it keeps cutting data for `material` (always, for the default): the
-    /// Tool Database greys the tools that do not.
+    /// Bit Library greys the tools that do not.
     pub fn has_data_for(&self, material: &str) -> bool {
         // its own: data a material only borrows from its class is not set for it
         material.is_empty()
@@ -750,8 +750,8 @@ impl Tool {
         }
     }
 
-    /// Whether it is a laser: the Laser tool type, or a laser toolpath's tool from before
-    /// lasers were a tool type (an end mill named as a laser, with no spindle).
+    /// Whether it is a laser: the Laser bit type, or a laser toolpath's bit from before
+    /// lasers were a bit type (an end mill named as a laser, with no spindle).
     pub fn is_laser(&self) -> bool {
         self.shape == ToolShape::Laser
             || (self.spindle_speed == 0.0 && self.name.to_lowercase().starts_with("laser"))

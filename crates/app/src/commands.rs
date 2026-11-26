@@ -199,6 +199,10 @@ pub fn registry() -> Registry {
     r.add::<cmd_engrave_part_names::EngravePartNames>();
     r.add::<cmd_import_toolpaths::ImportToolpaths>();
     r.add::<cmd_quick_trace::QuickTrace>();
+    r.add::<cmd_rotary_roughing_toolpath::RotaryRoughingToolpath>();
+    r.add::<cmd_rotary_finishing_toolpath::RotaryFinishingToolpath>();
+    r.add::<cmd_rotary_locked_angles_toolpath::RotaryLockedAnglesToolpath>();
+    r.add::<cmd_rotary_details_toolpath::RotaryDetailsToolpath>();
     r.add::<cmd_rotary_machining_toolpath::RotaryMachiningToolpath>();
     r.add::<cmd_rotary_lathe_toolpath::RotaryLatheToolpath>();
     r.add_exporter::<fmt_export_svg::ExportSvg>();
@@ -331,7 +335,7 @@ mod tests {
         for command in registry.commands() {
             let id = command.id();
             check(format!("{id} name"), command.meta().label);
-            if let Some(about) = crate::gui::about(id) {
+            if let Some(about) = crate::gui::english_about(id) {
                 check(format!("{id} description"), about);
             }
             let mut texts = Vec::new();
@@ -346,9 +350,9 @@ mod tests {
         for entry in registry.importers() {
             check(format!("{} file kind", entry.id), entry.format.label);
         }
-        for (id, label, about) in crate::gui::BUILT_IN_ABOUTS {
-            check(format!("{id} name"), label);
-            check(format!("{id} description"), about);
+        for b in crate::app::built_ins::BUILT_INS {
+            check(format!("{} name", b.id), b.name);
+            check(format!("{} description", b.id), b.about);
         }
         let schemas = [
             ("Options", schemars::schema_for!(crate::options::Options)),

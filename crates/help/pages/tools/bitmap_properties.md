@@ -31,4 +31,4 @@ To move a picture roughly, you don't need this form: drag the picture in the 2D 
 - **Width** and **Height**: its size on the job.
 
 To fade the picture in the 2D view, use **Appearance** on the 3D view's right-click menu. See
-[Import Vectors / Bitmap](help:import_vectors) for bringing a picture in.
+[Import Vectors or Picture](help:import_vectors_bitmap) for bringing a picture in.

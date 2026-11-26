@@ -10,6 +10,7 @@ license-file.workspace = true
 testing = []
 
 [dependencies]
+cut-craft-i18n.workspace = true
 cut-craft-priority.workspace = true
 base64.workspace = true
 fontdb = "0.16"

@@ -9,9 +9,6 @@ use super::{
     Point, Rect, ViewTool, egui, gui, handles,
 };
 
-/// How a drawing tool's step ends: a shape it drew can be edited again.
-pub(super) const EDIT_DRAWN: &str = "; Shift-click one this tool drew to edit it";
-
 impl CutCraftApp {
     /// Transform mode while dragging: the selection as the handle would leave it, else the
     /// selection window.
@@ -192,7 +189,7 @@ impl CutCraftApp {
         moved.rect = Rect::new(picture.rect.min + by, picture.rect.max + by);
         let mut c = Change::builder(&self.doc);
         c.replace_bitmap(id, moved);
-        self.record(Ok(c.finish()), "Moved the picture");
+        self.record(Ok(c.finish()), &t!("Moved the picture"));
     }
 
     /// Transform mode: a drag from a handle transforms the selection, any other drag
@@ -207,7 +204,7 @@ impl CutCraftApp {
             Some(Gesture::Dropped { drag, shift }) => {
                 if let Some(t) = self.handle_drag(ui, drag, reach) {
                     let change = Change::transform_selected(&self.doc, |_| t);
-                    self.record(change, "Transformed");
+                    self.record(change, &t!("Transformed"));
                 } else {
                     let window = Rect::new(drag.start, drag.end);
                     let ids = self.doc.window(window, drag.end.x < drag.start.x);
@@ -272,60 +269,55 @@ impl CutCraftApp {
     /// tool's next click or drag (a polyline's by how far it has got), or selecting's.
     pub(super) fn step_hint(&self, modes: Modes) -> Option<String> {
         match self.view_tool {
-            Some(ViewTool::Pan) => return Some("Pan: drag to move the view".into()),
+            Some(ViewTool::Pan) => return Some(t!("Pan: drag to move the view")),
             Some(ViewTool::ZoomBox) => {
-                return Some("Zoom Box: drag a box round what to zoom in on".into());
+                return Some(t!("Zoom Box: drag a box round what to zoom in on"));
             }
             Some(ViewTool::NodeEdit) => {
-                return Some(
+                return Some(t!(
                     "Node Editing: click a node to pick it, or drag a box round nodes (Shift adds); \
                      drag a picked node to move them; right-click for more"
-                        .into(),
-                );
+                ));
             }
             Some(ViewTool::Measure) => {
-                return Some(
+                return Some(t!(
                     "Measure: drag from one point to another to measure, or click a vector to \
                      inspect it"
-                        .into(),
-                );
+                ));
             }
             Some(ViewTool::Transform) => {
-                return Some(
+                return Some(t!(
                     "Transform: drag a handle to scale or rotate, the middle to move; click the \
                      middle for the rotation handles"
-                        .into(),
-                );
+                ));
             }
             None => {}
         }
         if modes.tracing {
-            return Some(
+            return Some(t!(
                 "Trace Bitmap: drag a box over the picture to trace that part, or click a colour \
                  to trace it"
-                    .into(),
-            );
+            ));
         }
         if modes.filleting {
-            return Some(
+            return Some(t!(
                 "Create Fillets: click a sharp corner to round it, or a fillet to take it out"
-                    .into(),
-            );
+            ));
         }
         if modes.placing_tabs {
-            return Some(
+            return Some(t!(
                 "Tabs: click a selected vector to add a tab, click a tab to take it off, drag a \
                  tab to move it"
-                    .into(),
-            );
+            ));
         }
         if modes.joining_ends {
             return Some(if self.join_ends_first().is_some() {
-                "Join Open Ends: now click the end to join it to (the same vector's other end \
+                t!(
+                    "Join Open Ends: now click the end to join it to (the same vector's other end \
                  closes it); Escape or a click on the first end lets it go"
-                    .into()
+                )
             } else {
-                "Join Open Ends: click the end of an open vector (each has a circle on it)".into()
+                t!("Join Open Ends: click the end of an open vector (each has a circle on it)")
             });
         }
         // a form whose tool wants a selection it has not got says what to select
@@ -345,21 +337,19 @@ impl CutCraftApp {
         if !modes.handled {
             None
         } else if self.doc.inside_group.is_some() {
-            Some(INSIDE_GROUP.into())
+            Some(t!(INSIDE_GROUP))
         } else if self.nothing_drawn() {
-            Some(EMPTY_SHEET_STEP.into())
+            Some(t!(EMPTY_SHEET_STEP))
         } else if self.doc.selection.is_empty() {
-            Some(
+            Some(t!(
                 "Click a vector to select it, Shift-click to add more, or drag a box round \
                  several (right to left takes those it touches too)"
-                    .into(),
-            )
+            ))
         } else {
-            Some(
+            Some(t!(
                 "Drag the selection to move it, a handle to scale or rotate; Shift-click to add \
                  or take away"
-                    .into(),
-            )
+            ))
         }
     }
 
@@ -367,43 +357,45 @@ impl CutCraftApp {
     /// started); for any other drawing tool, its description and a drag; nothing for a tool
     /// that is not drawn with the mouse.
     pub(super) fn drawing_step(&self, id: &str, polyline_empty: bool) -> Option<String> {
-        let drag = |what: &str| Some(format!("{what}{EDIT_DRAWN}"));
+        let edit = t!("; Shift-click one this tool drew to edit it");
+        let drag = |what: &str| Some(format!("{what}{edit}"));
         match id {
-            "draw_polyline" if polyline_empty => Some(
-                "Draw Polyline: click the first point (drag for a curved span)".into(),
-            ),
-            "draw_polyline" => Some(
+            "draw_polyline" if polyline_empty => Some(t!(
+                "Draw Polyline: click the first point (drag for a curved span)"
+            )),
+            "draw_polyline" => Some(t!(
                 "Click the next point (drag for a curved span); click the first point to close it, \
                  or double-click, right-click, Space or Escape to finish it open; Backspace takes a point back; \
                  or type the next one (20, x,y or 90A 20L) and press Enter"
-                    .into(),
-            ),
-            "draw_rectangle" => drag("Draw Rectangle: drag from one corner to the opposite one"),
-            "draw_circle" => drag("Draw Circle: drag from the centre out to the radius"),
-            "draw_ellipse" => drag("Draw Ellipse: drag a box for it to fit"),
-            "draw_polygon" => drag("Draw Polygon: drag from the centre out to a corner"),
-            "draw_star" => drag("Draw Star: drag from the centre out to a point"),
-            "dimensions" => drag("Dimensions: drag from the first point to the second"),
-            "draw_freehand" => Some("Draw Freehand: drag to draw".into()),
-            "sculpt" => Some("Sculpting: drag over the model to work it with the brush".into()),
-            "cross_section" => Some("Cross Section: drag a line across the model".into()),
-            "interactive_vector_trim" => Some(
+            )),
+            "draw_rectangle" => drag(&t!(
+                "Draw Rectangle: drag from one corner to the opposite one"
+            )),
+            "draw_circle" => drag(&t!("Draw Circle: drag from the centre out to the radius")),
+            "draw_ellipse" => drag(&t!("Draw Ellipse: drag a box for it to fit")),
+            "draw_polygon" => drag(&t!("Draw Polygon: drag from the centre out to a corner")),
+            "draw_star" => drag(&t!("Draw Star: drag from the centre out to a point")),
+            "dimensions" => drag(&t!("Dimensions: drag from the first point to the second")),
+            "draw_freehand" => Some(t!("Draw Freehand: drag to draw")),
+            "sculpt" => Some(t!(
+                "Sculpting: drag over the model to work it with the brush"
+            )),
+            "cross_section" => Some(t!("Cross Section: drag a line across the model")),
+            "interactive_vector_trim" => Some(t!(
                 "Trim: click a piece of a vector to cut it away back to the crossings either \
                  side, or drag across pieces to cut each one"
-                    .into(),
-            ),
-            "draw_text" => Some(
+            )),
+            "draw_text" => Some(t!(
                 "Draw Text: click to place the text; click between two letters to bring them \
                  together (Shift: apart, Ctrl: by more); Shift-click text to edit it"
-                    .into(),
-            ),
+            )),
             id => gui::about(id)
                 .filter(|_| {
                     self.registry
                         .get(id)
                         .is_some_and(cut_craft_core::DynCommand::interactive)
                 })
-                .map(|about| format!("{about}: drag in the view")),
+                .map(|about| cut_craft_i18n::tr!("status-drag-in-the-view", about = about)),
         }
     }
 

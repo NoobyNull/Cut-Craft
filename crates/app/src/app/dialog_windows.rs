@@ -2,18 +2,18 @@
 //! STL, previews and saving straight away.
 
 use super::views::{TICK_TO_SAVE, files_section, post_combo, tool_changes_section};
-use super::{CutCraftApp, Drag, EntityId, Info, Path, dialog_size, egui, saving_path};
+use super::{CutCraftApp, Drag, EntityId, Path, dialog_size, egui, saving_path};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
 
 impl CutCraftApp {
     /// Machine ▸ Tool Changer…: the active machine's tool changer, each holder loaded with a
-    /// tool from the Tool Database, or all at once by their tool numbers.
+    /// tool from the Bit Library, or all at once by their bit numbers.
     pub(super) fn tool_changer_window(&mut self, ctx: &egui::Context) {
         if !self.tool_changer_window {
             return;
         }
-        // a tool changer holds My Tools only, not a catalogue's
+        // a tool changer holds My Bits only, not a catalogue's
         let tools: Vec<(String, u32)> = self
             .tools
             .my_tools()
@@ -38,7 +38,7 @@ impl CutCraftApp {
         if changed {
             self.tool_changer_changed();
         }
-        // a holder's Select…: Select Tool, on the tool in it; its Select loads the holder
+        // a holder's Select…: Select Bit, on the tool in it; its Select loads the holder
         if let Some(slot) = select {
             let current = self
                 .machines
@@ -99,21 +99,6 @@ impl CutCraftApp {
         self.save_toolpaths(&form);
     }
 
-    /// The Help windows, Toolpath Summary and Snapping Options.
-    pub(super) fn open_window(&mut self, id: &str) {
-        self.info = match id {
-            "keyboard_shortcuts" => Some(Info::Shortcuts),
-            "credits" => Some(Info::Credits),
-            "toolpath_summary" => Some(Info::Summary),
-            "about_cut_craft" => Some(Info::About),
-            "help_contents" => Some(Info::Help("contents")),
-            _ => {
-                self.snap_window = true;
-                return;
-            }
-        };
-    }
-
     /// Save Toolpaths: the machine and post, which toolpaths go in which file, and Save.
     pub(super) fn save_toolpaths_window(&mut self, ctx: &egui::Context) {
         use crate::files::SaveMode;
@@ -150,9 +135,6 @@ impl CutCraftApp {
             .as_ref()
             .map_or_else(|_| vec![], |p| self.not_checked(p, form.changes));
         let mut again = false;
-        let errors = found
-            .as_deref()
-            .is_some_and(|f| super::output::refused(f).is_some());
         let (id, size) = (egui::Id::unique("save_toolpaths"), dialog_size(ctx));
         cut_craft_bug_report::dialog(ctx, id, "Save Toolpaths", size, &mut open, |ui| {
             ui.strong(tr!("views-machine-and-post-processor"));
@@ -200,8 +182,12 @@ impl CutCraftApp {
             ui.add_space(ui.spacing().item_spacing.y);
             // ticked in the list this frame counts at once
             let unticked = found.as_deref().is_some_and(|f| !self.all_acknowledged(f));
-            let ready = plan.is_ok() && !errors && found.is_some() && !unticked;
-            pressed = self.save_buttons(ui, ready, errors, unticked);
+            // what could damage the machine is never saved or sent, ticked or not
+            let refused = found
+                .as_deref()
+                .is_some_and(|f| !super::output::refused(f).is_empty());
+            let ready = plan.is_ok() && found.is_some() && !unticked && !refused;
+            pressed = self.save_buttons(ui, ready, unticked);
         });
         if again {
             self.check_again();
@@ -248,7 +234,6 @@ impl CutCraftApp {
         &self,
         ui: &mut egui::Ui,
         ready: bool,
-        errors: bool,
         unticked: bool,
     ) -> (
         bool,
@@ -259,12 +244,8 @@ impl CutCraftApp {
         let (mut save, mut send, mut manage, mut view) = (false, false, None, false);
         ui.horizontal(|ui| {
             let response = ui.add_enabled(ready, egui::Button::new(tr!("views-save-toolpaths")));
-            save = if errors {
-                response
-                    .on_disabled_hover_text(tr!("views-fix-the-problems-marked-must"))
-                    .clicked()
-            } else if unticked {
-                response.on_disabled_hover_text(TICK_TO_SAVE).clicked()
+            save = if unticked {
+                response.on_disabled_hover_text(t!(TICK_TO_SAVE)).clicked()
             } else {
                 response.clicked()
             };
@@ -276,12 +257,10 @@ impl CutCraftApp {
                     egui::Button::new(tr!("views-send-to-machine")),
                 )
                 .on_hover_hint(tr!("views-save-the-files-straight-onto"));
-            send = if reachable && unticked && !errors {
-                response.on_disabled_hover_text(TICK_TO_SAVE).clicked()
+            send = if reachable && unticked {
+                response.on_disabled_hover_text(t!(TICK_TO_SAVE)).clicked()
             } else if reachable {
-                response
-                    .on_disabled_hover_text(tr!("views-fix-the-problems-marked-must-2"))
-                    .clicked()
+                response.clicked()
             } else {
                 response
                     .on_disabled_hover_text(super::send::NO_MACHINE_FOLDER)
@@ -601,7 +580,7 @@ impl CutCraftApp {
         let result = std::fs::write(&path, fmt_export_as_stl::binary_stl(triangles));
         self.status.set_message(&result.map_or_else(
             |e| format!("{}: {e}", path.display()),
-            |()| format!("Exported {}", path.display()),
+            |()| cut_craft_i18n::tr!("status-exported", path = path.display().to_string()),
         ));
     }
 }

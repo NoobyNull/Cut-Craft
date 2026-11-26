@@ -72,9 +72,9 @@ pub(super) fn hovered(ctx: &egui::Context) -> Option<Tip> {
 /// complaint (a missing toolpath, a bad setting) is no step at all.
 pub(super) fn step_from_error(error: &CommandError) -> Option<String> {
     match error {
-        CommandError::NothingSelected => Some(SELECT_FIRST.to_owned()),
+        CommandError::NothingSelected => Some(cut_craft_core::error_words(SELECT_FIRST)),
         CommandError::Failed(why) if why.to_lowercase().starts_with("select ") => {
-            Some(capitalised(why))
+            Some(capitalised(&cut_craft_core::error_words(why)))
         }
         CommandError::Failed(_) | CommandError::InvalidParams(_) => None,
     }
@@ -136,7 +136,7 @@ impl CutCraftApp {
     /// (a page's icons, the Rail's rows, a flyout's list) goes through here.
     pub(super) fn with_guidance(&self, response: egui::Response, id: &str) -> egui::Response {
         let label = self.tool_label(id);
-        let mut about = crate::gui::about(id).unwrap_or(&label).to_owned();
+        let mut about = crate::gui::about(id).unwrap_or(label);
         // a shape drawn more than one way says where its other ways are
         if let Some(ways) = self.ways_note(id) {
             about = format!("{about}\n\n{ways}");
@@ -166,7 +166,7 @@ impl CutCraftApp {
             .form
             .as_ref()
             .and_then(|f| gui_about(f.id))
-            .map_or_else(String::new, |about| body(&label, about));
+            .map_or_else(String::new, |about| body(&label, &about));
         Tip {
             label,
             about,
@@ -227,7 +227,7 @@ impl CutCraftApp {
 }
 
 /// See [`crate::gui::about`].
-fn gui_about(id: &str) -> Option<&'static str> {
+fn gui_about(id: &str) -> Option<String> {
     crate::gui::about(id)
 }
 

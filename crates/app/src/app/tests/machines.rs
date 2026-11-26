@@ -8,7 +8,7 @@ fn a_drill_bank_toolpath_drills_with_the_machines_bank_and_says_when_there_is_no
     use cut_craft_core::drill_bank::DrillBank;
     use cut_craft_core::geometry::{Path, Point};
     let mut h = Harness::new();
-    let mut c = cut_craft_core::Change::builder(&h.app.doc);
+    let mut c = cut_craft_core::Change::builder(h.doc());
     let holes: Vec<_> = (0..3)
         .map(|i| {
             c.add(Path::circle(
@@ -18,34 +18,33 @@ fn a_drill_bank_toolpath_drills_with_the_machines_bank_and_says_when_there_is_no
         })
         .collect();
     c.select(holes);
-    h.app.doc.apply(&c.finish()).unwrap();
+    h.given(&c.finish());
     // no machine: the form opens and the toolpath says where the bank is set up
-    h.app.invoke(&h.ctx, "drill_bank_toolpath");
-    let params = h.app.form.as_ref().expect("its form").params.clone();
-    let err = h.app.apply("drill_bank_toolpath", &params).unwrap_err();
+    h.invoke("drill_bank_toolpath");
+    let params = h.form_settings().clone();
+    let err = h.run("drill_bank_toolpath", &params).unwrap_err();
     assert!(err.contains("Machine Configuration"), "{err}");
     // a machine with a bank of three: one plunge drills all three
-    h.app.machines.add();
-    h.app.machines.active_mut().unwrap().drill_bank = Some(DrillBank::new(3, 0, 32.0, 5.0));
-    h.app.invoke(&h.ctx, "drill_bank_toolpath");
-    let params = h.app.form.as_ref().unwrap().params.clone();
-    h.app.apply("drill_bank_toolpath", &params).unwrap();
-    h.app.form = None;
-    let (&id, toolpath) = h.app.doc.toolpaths.iter().next().unwrap();
+    h.given_machine();
+    h.edit_machine(|m| m.drill_bank = Some(DrillBank::new(3, 0, 32.0, 5.0)));
+    h.invoke("drill_bank_toolpath");
+    let params = h.form_settings().clone();
+    h.run("drill_bank_toolpath", &params).unwrap();
+    h.close_form();
+    let (&id, toolpath) = h.doc().toolpaths.iter().next().unwrap();
     assert_eq!(toolpath.drill_bank.as_ref().unwrap().hits.len(), 1);
     // editing it again picks up the bank as the machine has it now
-    h.app.machines.active_mut().unwrap().drill_bank = Some(DrillBank::new(2, 0, 32.0, 5.0));
-    h.app.selected_toolpath = Some(id);
-    h.app.invoke(&h.ctx, "edit_toolpath");
-    let form = h.app.form.as_ref().expect("the toolpath's form");
+    h.edit_machine(|m| m.drill_bank = Some(DrillBank::new(2, 0, 32.0, 5.0)));
+    h.select_toolpath(id);
+    h.invoke("edit_toolpath");
     assert_eq!(
-        form.params["bank"]["horizontal"].as_array().unwrap().len(),
+        h.form_value("bank")["horizontal"].as_array().unwrap().len(),
         2
     );
     // Cut Craft's own posts have no drill bank blocks: saving says so
-    let post = h.app.output_post().unwrap();
+    let post = h.output_post().unwrap();
     let out = std::env::temp_dir().join(format!("cut-craft-bank-{}.nc", std::process::id()));
-    let err = files::save_through(&post, &h.app.slots(), &h.app.doc, &out, None).unwrap_err();
+    let err = h.save_through(&post, &out).unwrap_err();
     assert!(err.contains("SETUP_DRILL_BANK"), "{err}");
     let _ = std::fs::remove_file(out);
 }
@@ -54,7 +53,7 @@ fn a_drill_bank_toolpath_drills_with_the_machines_bank_and_says_when_there_is_no
 fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 40.0, 40.0);
-    h.app.invoke(&h.ctx, "pocket_toolpath");
+    h.invoke("pocket_toolpath");
     // the section, drawn on its own (it is below the fold of the pocket form)
     let ctx = egui::Context::default();
     let mut section = serde_json::json!({});
@@ -63,7 +62,7 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
             rest_section(
                 ui,
                 &mut section,
-                &h.app.tools,
+                h.tool_database(),
                 &[],
                 cut_craft_core::document::Units::Mm,
             )
@@ -74,9 +73,9 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
             .iter()
             .any(|c| matches!(&c.shape, egui::Shape::Text(t) if t.galley.text() == text))
     };
-    assert!(drawn("Rest Machining") && drawn("Add a tool…"));
-    let mut params = h.app.form.as_ref().unwrap().params.clone();
-    h.app.apply("pocket_toolpath", &params).unwrap();
+    assert!(drawn("Rest Machining") && drawn("Add a bit…"));
+    let mut params = h.form_settings().clone();
+    h.run("pocket_toolpath", &params).unwrap();
     // how far it cuts: a pocket links its rings at depth, so moves alone undercount it
     let cut_length = |t: &cut_craft_core::toolpath::Toolpath| -> f64 {
         t.moves
@@ -85,12 +84,12 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
             .map(|w| w[0].to.distance(w[1].to))
             .sum()
     };
-    let whole = cut_length(h.app.doc.toolpaths.values().last().unwrap());
-    let mut big = h.app.form.as_ref().unwrap().params["tool"].clone();
+    let whole = cut_length(h.doc().toolpaths.values().last().unwrap());
+    let mut big = h.form_value("tool").clone();
     big["diameter"] = Value::from(params["tool"]["diameter"].as_f64().unwrap() * 4.0);
     params["rest"] = serde_json::json!({ "after": [big], "minimum_detail": 0.0, "overlap": 0.0 });
-    h.app.apply("pocket_toolpath", &params).unwrap();
-    let rest = h.app.doc.toolpaths.values().last().unwrap();
+    h.run("pocket_toolpath", &params).unwrap();
+    let rest = h.doc().toolpaths.values().last().unwrap();
     assert!(
         cut_length(rest) < whole,
         "{} of {whole} mm cut",
@@ -105,11 +104,11 @@ fn any_toolpath_rest_machines_after_the_tools_named_in_its_form() {
 #[test]
 fn f11_designs_and_f12_machines() {
     let mut h = Harness::new();
-    assert_eq!(h.app.pages, Pages::design_layout());
+    assert_eq!(h.pages(), &Pages::design_layout());
     h.frame(vec![key(Key::F12)]);
-    assert_eq!(h.app.pages, Pages::machining_layout());
+    assert_eq!(h.pages(), &Pages::machining_layout());
     h.frame(vec![key(Key::F11)]);
-    assert_eq!(h.app.pages, Pages::design_layout());
+    assert_eq!(h.pages(), &Pages::design_layout());
 }
 
 #[test]
@@ -117,27 +116,27 @@ fn an_installed_post_is_kept_and_the_machine_saves_through_it() {
     let mut h = Harness::new();
     let dir = std::env::temp_dir().join(format!("cut-craft-app-posts-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    h.app.posts = cut_craft_machines::Library::new(Some(dir.join("posts")));
+    h.given_posts_folder(dir.join("posts"));
     let file = dir.join("mine.pp");
     std::fs::create_dir_all(&dir).unwrap();
     let text = cut_craft_post::BUILT_IN[0]
         .1
         .replace("Cut Craft FluidNC ATC (mm)", "My Router (mm)");
     std::fs::write(&file, text).unwrap();
-    h.app.install_post(&file);
-    assert_eq!(h.app.machines.machines.len(), 1, "a machine to use it");
-    assert_eq!(h.app.output_post().unwrap().name, "My Router (mm) (*.nc)");
+    h.install_post(&file);
+    assert_eq!(h.machines().len(), 1, "a machine to use it");
+    assert_eq!(h.output_post().unwrap().name, "My Router (mm) (*.nc)");
     // installed again: kept beside the first as a dated copy, the machine left as it was
-    h.app.install_post(&file);
-    let said = h.app.status.message.clone();
+    h.install_post(&file);
+    let said = h.status_message().to_owned();
     assert!(
         said.starts_with("Installed as My Router (mm) (copy 1) ("),
         "{said}"
     );
-    assert_eq!(h.app.output_post().unwrap().name, "My Router (mm) (*.nc)");
+    assert_eq!(h.output_post().unwrap().name, "My Router (mm) (*.nc)");
     std::fs::remove_file(&file).unwrap();
     assert!(
-        h.app.output_post().is_ok(),
+        h.output_post().is_ok(),
         "kept in the custom posts, not read from where it was"
     );
     // the Machine menu opens its windows; the online ones stay greyed (on a screen tall
@@ -148,11 +147,11 @@ fn an_installed_post_is_kept_and_the_machine_saves_through_it() {
         "post_processor_management",
         "add_machine",
     ] {
-        assert!(h.app.available(id), "{id}");
-        h.app.invoke(&h.ctx, id);
+        assert!(h.available(id), "{id}");
+        h.invoke(id);
         h.frame(vec![]);
     }
-    assert!(h.app.machine_window.is_some() && h.app.post_window.is_some());
+    assert!(h.machines_being_edited().is_some() && h.post_window_open());
     assert!(h.text_at("Associated Post-Processors").is_some());
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -162,12 +161,12 @@ fn toolpaths_save_through_the_default_fluidnc_post_until_one_is_installed() {
     use cut_craft_core::document::{Along, Job};
     let mut h = Harness::new();
     assert_eq!(
-        h.app.output_post().unwrap().name,
+        h.output_post().unwrap().name,
         "Cut Craft FluidNC ATC (mm) (*.nc)"
     );
-    h.app.doc.job = Job::rotary(300.0, 50.0, Along::X);
+    h.given_document(|d| d.job = Job::rotary(300.0, 50.0, Along::X));
     assert_eq!(
-        h.app.output_post().unwrap().name,
+        h.output_post().unwrap().name,
         "Cut Craft FluidNC ATC Rotary A, G93 (mm) (*.nc)"
     );
 }
@@ -177,22 +176,22 @@ fn machine_configuration_says_when_changes_wait_and_apply_keeps_them() {
     let mut h = Harness::new();
     // tall enough for the whole window, buttons and all
     h.window = vec2(1280.0, 2000.0);
-    h.app.invoke(&h.ctx, "machine_configuration");
+    h.invoke("machine_configuration");
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
-    let before = h.app.machines.machines.len();
-    h.app.machine_window.as_mut().unwrap().draft.add();
+    let before = h.machines().len();
+    h.add_machine_in_window();
     h.frame(vec![]);
     assert!(
         h.text_at(super::options_apply::NOT_APPLIED).is_some(),
         "{:?}",
         h.texts()
     );
-    assert_eq!(h.app.machines.machines.len(), before, "not kept yet");
+    assert_eq!(h.machines().len(), before, "not kept yet");
     click_button(&mut h, "Apply");
-    assert_eq!(h.app.machines.machines.len(), before + 1, "kept");
-    assert!(h.app.machine_window.is_some(), "still open");
+    assert_eq!(h.machines().len(), before + 1, "kept");
+    assert!(h.machines_being_edited().is_some(), "still open");
     h.frame(vec![]);
     assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
 }
@@ -202,30 +201,20 @@ fn an_offline_package_installs_its_machines_once() {
     let mut h = Harness::new();
     let package =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../machines/genmitsu.json");
-    h.app.install_package(&package);
-    let installed = h.app.machines.machines.len();
+    h.install_package(&package);
+    let installed = h.machines().len();
     assert!(installed > 0, "the package's machines are added");
-    assert!(
-        h.app
-            .machines
-            .machines
-            .iter()
-            .all(|m| m.name.starts_with("Genmitsu"))
-    );
-    h.app.install_package(&package);
+    assert!(h.machines().iter().all(|m| m.name.starts_with("Genmitsu")));
+    h.install_package(&package);
+    assert_eq!(h.machines().len(), installed, "installing again adds none");
+    h.install_package(&package.with_file_name("README.md"));
     assert_eq!(
-        h.app.machines.machines.len(),
-        installed,
-        "installing again adds none"
-    );
-    h.app.install_package(&package.with_file_name("README.md"));
-    assert_eq!(
-        h.app.machines.machines.len(),
+        h.machines().len(),
         installed,
         "not a package: nothing added"
     );
     for id in ["install_offline_package", "search_for_machine_online"] {
-        assert!(h.app.available(id), "{id}");
+        assert!(h.available(id), "{id}");
     }
 }
 
@@ -235,61 +224,65 @@ fn rotary_jobs_need_a_4th_axis_and_save_through_the_post_wrapping_their_side() {
     let mut h = Harness::new();
     let package =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../machines/genmitsu.json");
-    h.app.install_package(&package);
-    let wraps = |app: &CutCraftApp| app.output_post().map(|p| p.wraps().map(str::to_owned));
-    assert_eq!(wraps(&h.app), Ok(None), "a flat job: the flat default");
-    h.app.doc.job = Job::rotary(300.0, 50.0, Along::X);
-    let why = wraps(&h.app).unwrap_err();
+    h.install_package(&package);
+    let wraps = |h: &Harness| h.output_post().map(|p| p.wraps().map(str::to_owned));
+    assert_eq!(wraps(&h), Ok(None), "a flat job: the flat default");
+    h.given_document(|d| d.job = Job::rotary(300.0, 50.0, Along::X));
+    let why = wraps(&h).unwrap_err();
     assert!(why.contains("Standard GRBL supports only 3 axes"), "{why}");
-    h.app.machines.active_mut().unwrap().firmware = Some(cut_craft_machines::Firmware::GrblHal);
-    let why = wraps(&h.app).unwrap_err();
+    h.edit_machine(|m| m.firmware = Some(cut_craft_machines::Firmware::GrblHal));
+    let why = wraps(&h).unwrap_err();
     assert!(why.contains("tick its 4th axis"), "{why}");
-    let names: Vec<String> = h.app.posts.entries().into_iter().map(|e| e.name).collect();
-    let machine = h.app.machines.active_mut().unwrap();
-    machine.rotary = true;
-    machine.add_rotary_posts(&names);
-    let firmware = machine.firmware();
-    machine.firmware = Some(cut_craft_machines::Firmware::Grbl);
-    let why = wraps(&h.app).unwrap_err();
+    let names: Vec<String> = h.posts().entries().into_iter().map(|e| e.name).collect();
+    let mut firmware = None;
+    h.edit_machine(|machine| {
+        machine.rotary = true;
+        machine.add_rotary_posts(&names);
+        firmware = Some(machine.firmware());
+        machine.firmware = Some(cut_craft_machines::Firmware::Grbl);
+    });
+    let firmware = firmware.unwrap();
+    let why = wraps(&h).unwrap_err();
     assert!(why.contains("Standard GRBL supports only 3 axes"), "{why}");
     // the firmware is said first, with the tick off or no posts at all
-    let machine = h.app.machines.active_mut().unwrap();
-    let (posts, ticked) = (std::mem::take(&mut machine.posts), machine.rotary);
-    machine.rotary = false;
-    let why = wraps(&h.app).unwrap_err();
+    let mut kept = None;
+    h.edit_machine(|machine| {
+        kept = Some((std::mem::take(&mut machine.posts), machine.rotary));
+        machine.rotary = false;
+    });
+    let (posts, ticked) = kept.unwrap();
+    let why = wraps(&h).unwrap_err();
     assert!(why.contains("Standard GRBL supports only 3 axes"), "{why}");
-    let machine = h.app.machines.active_mut().unwrap();
-    (machine.posts, machine.rotary) = (posts, ticked);
-    h.app.machines.active_mut().unwrap().firmware = Some(firmware)
-        .filter(|f| f.has_a_axis())
-        .or(Some(cut_craft_machines::Firmware::GrblHal));
+    h.edit_machine(|machine| {
+        (machine.posts, machine.rotary) = (posts, ticked);
+        machine.firmware = Some(firmware)
+            .filter(|f| f.has_a_axis())
+            .or(Some(cut_craft_machines::Firmware::GrblHal));
+    });
     assert_eq!(
-        wraps(&h.app),
+        wraps(&h),
         Ok(Some("Y".into())),
         "Y goes round a cylinder along X"
     );
-    h.app.doc.job = Job::rotary(300.0, 50.0, Along::Y);
-    assert_eq!(wraps(&h.app), Ok(Some("X".into())));
-    h.app.doc.job = Job::default();
-    assert_eq!(wraps(&h.app), Ok(None), "flat jobs keep the flat default");
+    h.given_document(|d| d.job = Job::rotary(300.0, 50.0, Along::Y));
+    assert_eq!(wraps(&h), Ok(Some("X".into())));
+    h.given_document(|d| d.job = Job::default());
+    assert_eq!(wraps(&h), Ok(None), "flat jobs keep the flat default");
 }
 
 #[test]
 fn a_crash_is_not_offered_when_crash_logs_are_not_to_be_sent() {
     let mut h = Harness::new();
-    h.app.options.bug_reports.crash_logs = crate::options::CrashLogs::DontSend;
-    let ctx = h.ctx.clone();
-    h.app.offer_crash(&ctx, CRASH.into());
+    h.given_options(|o| o.bug_reports.crash_logs = crate::options::CrashLogs::DontSend);
+    h.crashed_last_time(CRASH.into());
     h.frame(vec![]);
     h.frame(vec![]);
-    assert!(!h.app.reporter.is_open(), "no report");
+    assert!(!h.bug_report_open(), "no report");
     assert!(
-        h.app
-            .status
-            .message
+        h.status_message()
             .starts_with("Cut Craft closed with an error last time."),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
 }
 
@@ -314,7 +307,6 @@ fn a_post_that_cannot_change_tools_saves_a_file_for_each_tool_named_after_it() {
     let dir = std::env::temp_dir().join(format!("cut-craft-per-tool-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let done = h
-        .app
         .save_toolpaths_to(&form, &plain, &dir.join("sign.nc"))
         .unwrap();
     assert!(done.starts_with("Saved 2 toolpath files"), "{done}");
@@ -332,11 +324,12 @@ fn short_names_never_send_two_files_under_one_name() {
     let card = std::env::temp_dir().join(format!("cut-craft-short-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&card);
     std::fs::create_dir_all(&card).unwrap();
-    h.app.machines.add();
-    let machine = h.app.machines.active_mut().unwrap();
-    machine.send_to.folder = card.display().to_string();
-    machine.send_to.short_names = true;
-    h.app.session.path = Some(std::path::PathBuf::from("/jobs/Oak sign front.ccjob"));
+    h.given_machine();
+    h.edit_machine(|machine| {
+        machine.send_to.folder = card.display().to_string();
+        machine.send_to.short_names = true;
+    });
+    h.given_job_path(std::path::PathBuf::from("/jobs/Oak sign front.ccjob"));
     // a post that can't change tools writes one file per tool, Oak sign front_1_6_mm... and
     // Oak sign front_2_3_mm...: cut to 8 letters both are Oaksignf.nc
     let plain = cut_craft_post::Post::parse(
@@ -355,7 +348,7 @@ fn short_names_never_send_two_files_under_one_name() {
     };
     let store = Folder::new(&card);
     let never = |_: &[String]| panic!("nothing there to replace yet");
-    let done = h.app.send_to(&form, &plain, &store, &never).unwrap();
+    let done = h.send_to(&form, &plain, &store, &never).unwrap();
     assert!(done.starts_with("Sent 3 files"), "{done}");
     let folder = store.list(&[]).unwrap()[0].name.clone();
     let names: Vec<String> = store
@@ -408,8 +401,8 @@ fn nothing_is_sent_while_the_machine_runs_a_job() {
     let card = std::env::temp_dir().join(format!("cut-craft-cutting-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&card);
     std::fs::create_dir_all(card.join("Sign")).unwrap();
-    h.app.machines.add();
-    h.app.machines.active_mut().unwrap().send_to.folder = card.display().to_string();
+    h.given_machine();
+    h.edit_machine(|m| m.send_to.folder = card.display().to_string());
     let form = SaveForm {
         mode: crate::files::SaveMode::VisibleToOneFile,
         group: false,
@@ -418,10 +411,10 @@ fn nothing_is_sent_while_the_machine_runs_a_job() {
         changes: crate::files::ToolChanges::ToolChanger,
         job_sheet: false,
     };
-    let post = h.app.form_post(&form).unwrap();
+    let post = h.form_post(&form).unwrap();
     let store = Cutting(Folder::new(&card));
     let never = |_: &[String]| panic!("not asked");
-    let refused = h.app.send_to(&form, &post, &store, &never).unwrap_err();
+    let refused = h.send_to(&form, &post, &store, &never).unwrap_err();
     assert!(
         refused.starts_with("Not sent: The machine is running a job"),
         "{refused}"
@@ -474,10 +467,10 @@ fn machine_files_uploads_renames_makes_folders_and_deletes_only_on_the_second_as
 #[test]
 fn a_machine_without_a_files_folder_says_where_to_set_it() {
     let mut h = Harness::new();
-    h.app.machines.add();
-    h.app.invoke(&h.ctx, "machine_files");
-    assert!(h.app.machine_files.is_none());
-    assert_eq!(h.app.status.message, super::send::NO_MACHINE_FOLDER);
+    h.given_machine();
+    h.invoke("machine_files");
+    assert!(!h.machine_files_open());
+    assert_eq!(h.status_message(), super::send::NO_MACHINE_FOLDER);
 }
 
 #[test]
@@ -488,9 +481,9 @@ fn a_machines_file_that_cannot_be_read_is_said_kept_aside_and_never_saved_over()
     let path = dir.join("machines.json");
     let broken = b"{\"machines\": [{\"width\": \"wide\"}]}";
     std::fs::write(&path, broken).unwrap();
-    h.app.load_machines_at(&path);
-    assert_eq!(h.app.machines.machines, vec![]);
-    let said = h.app.status.message.clone();
+    h.load_machines_from(&path);
+    assert_eq!(h.machines(), []);
+    let said = h.status_message().to_owned();
     assert!(said.contains("could not be read"), "{said}");
     assert!(said.contains("machines.json.bad"), "{said}");
     assert_eq!(
@@ -498,13 +491,13 @@ fn a_machines_file_that_cannot_be_read_is_said_kept_aside_and_never_saved_over()
         broken
     );
     // a machine added now is not saved over the file
-    h.app.machines.add();
-    h.app.machines_changed("Machine added");
+    h.given_machine();
+    h.keep_machines("Machine added");
     assert_eq!(std::fs::read(&path).unwrap(), broken);
     assert!(
-        h.app.status.message.contains("not saved"),
+        h.status_message().contains("not saved"),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -537,7 +530,7 @@ fn machine_files_asks_before_uploading_over_a_file_already_on_the_machine() {
 #[test]
 fn selecting_a_post_makes_it_the_one_the_machine_saves_through() {
     let mut h = Harness::new();
-    h.app.machines.add();
+    h.given_machine();
     let first = cut_craft_post::Post::parse(cut_craft_post::BUILT_IN[0].1)
         .unwrap()
         .name;
@@ -547,18 +540,17 @@ fn selecting_a_post_makes_it_the_one_the_machine_saves_through() {
         .find(|p| p.wraps().is_none() && p.name != first)
         .unwrap()
         .name;
-    h.app.machines.active_mut().unwrap().posts = vec![first.clone()];
-    h.app
-        .post_outcome(cut_craft_machines::PostOutcome::Select(second.clone()));
-    let machine = h.app.machines.active().unwrap();
+    h.edit_machine(|m| m.posts = vec![first.clone()]);
+    h.pick_post(cut_craft_machines::PostOutcome::Select(second.clone()));
+    let machine = h.machine().unwrap();
     assert_eq!(machine.post(), Some(second.as_str()));
-    assert_eq!(h.app.output_post().unwrap().name, second, "what Save uses");
-    let machine = h.app.machines.active().unwrap();
+    assert_eq!(h.output_post().unwrap().name, second, "what Save uses");
+    let machine = h.machine().unwrap();
     assert!(machine.posts.contains(&first), "the others stay listed");
     assert!(
-        h.app.status.message.contains("now saves through"),
+        h.status_message().contains("now saves through"),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
 }
 
@@ -570,17 +562,17 @@ fn machine_configuration_s_install_offline_package_adds_to_the_machines_being_ed
     package.add();
     package.machines[0].name = "Packaged Router".into();
     package.save(&file).unwrap();
-    h.app.invoke(&h.ctx, "machine_configuration");
+    h.invoke("machine_configuration");
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Machine Configuration Management").is_some());
-    h.app.machine_outcome_install(&file);
-    let draft = &h.app.machine_window.as_ref().unwrap().draft;
+    h.install_package_in_machine_window(&file);
+    let draft = h.machines_being_edited().unwrap();
     assert!(draft.machines.iter().any(|m| m.name == "Packaged Router"));
     assert!(
-        h.app.status.message.contains("Installed 1"),
+        h.status_message().contains("Installed 1"),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
     let _ = std::fs::remove_file(file);
 }
@@ -589,9 +581,9 @@ fn machine_configuration_s_install_offline_package_adds_to_the_machines_being_ed
 fn selecting_a_post_that_does_not_suit_the_open_job_says_which_post_it_saves_through() {
     use cut_craft_core::document::{Along, Job};
     let mut h = Harness::new();
-    h.app.machines.add();
-    let entries = h.app.posts.entries();
-    let load = |name: &str| h.app.posts.load(name).unwrap();
+    h.given_machine();
+    let entries = h.posts().entries();
+    let load = |name: &str| h.posts().load(name).unwrap();
     let flat = (entries.iter())
         .find(|e| load(&e.name).wraps().is_none())
         .unwrap()
@@ -602,16 +594,16 @@ fn selecting_a_post_that_does_not_suit_the_open_job_says_which_post_it_saves_thr
         .unwrap()
         .name
         .clone();
-    let machine = h.app.machines.active_mut().unwrap();
-    machine.rotary = true;
-    machine.firmware = Some(cut_craft_machines::Firmware::FluidNc);
-    machine.posts = vec![round.clone()];
+    h.edit_machine(|machine| {
+        machine.rotary = true;
+        machine.firmware = Some(cut_craft_machines::Firmware::FluidNc);
+        machine.posts = vec![round.clone()];
+    });
     // a rotary job: a flat post picked is the default for flat jobs only
-    h.app.doc.job = Job::rotary(300.0, 50.0, Along::X);
-    h.app
-        .post_outcome(cut_craft_machines::PostOutcome::Select(flat.clone()));
-    let message = h.app.status.message.clone();
-    assert_eq!(h.app.output_post().unwrap().name, round);
+    h.given_document(|d| d.job = Job::rotary(300.0, 50.0, Along::X));
+    h.pick_post(cut_craft_machines::PostOutcome::Select(flat.clone()));
+    let message = h.status_message().to_owned();
+    assert_eq!(h.output_post().unwrap().name, round);
     assert!(
         message.contains(&format!("saves flat jobs through {flat}")),
         "{message}"
@@ -623,17 +615,14 @@ fn selecting_a_post_that_does_not_suit_the_open_job_says_which_post_it_saves_thr
         "{message}"
     );
     // a flat job: the picked one is used, and said plainly
-    h.app.doc.job = Job::default();
-    h.app
-        .post_outcome(cut_craft_machines::PostOutcome::Select(flat.clone()));
-    assert_eq!(h.app.output_post().unwrap().name, flat);
+    h.given_document(|d| d.job = Job::default());
+    h.pick_post(cut_craft_machines::PostOutcome::Select(flat.clone()));
+    assert_eq!(h.output_post().unwrap().name, flat);
     assert!(
-        h.app
-            .status
-            .message
+        h.status_message()
             .contains(&format!("now saves through {flat}")),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
 }
 
@@ -642,17 +631,17 @@ fn a_rotary_job_s_z_zero_reads_turning_axis_not_machine_bed() {
     use cut_craft_core::document::{Along, Job};
     for form in ["material_setup", "job_setup"] {
         let mut h = Harness::new();
-        h.app.doc.job = Job::rotary(300.0, 50.0, Along::X);
-        h.app.invoke(&h.ctx, form);
+        h.given_document(|d| d.job = Job::rotary(300.0, 50.0, Along::X));
+        h.invoke(form);
         for _ in 0..3 {
             h.frame(vec![]);
         }
         assert!(h.text_at("Turning Axis").is_some(), "{form}");
         assert!(h.text_at("Machine Bed").is_none(), "{form}");
         // a flat job keeps the bed
-        h.app.form = None;
-        h.app.doc.job = Job::default();
-        h.app.invoke(&h.ctx, form);
+        h.close_form();
+        h.given_document(|d| d.job = Job::default());
+        h.invoke(form);
         for _ in 0..3 {
             h.frame(vec![]);
         }
@@ -674,7 +663,7 @@ fn print_is_one_honest_item_and_no_post_database_update() {
     }
     let h = Harness::new();
     let mut all = Vec::new();
-    for menu in &h.app.current_menus().menus {
+    for menu in &h.menu_bar().menus {
         actions(&menu.items, &mut all);
     }
     assert!(
@@ -685,7 +674,7 @@ fn print_is_one_honest_item_and_no_post_database_update() {
     let prints: Vec<_> = all.iter().filter(|(_, a)| a == "print").collect();
     assert_eq!(prints.len(), 1, "{prints:?}");
     assert_eq!(prints[0].0, "Print (opens a PDF)...");
-    assert!(h.app.available("print"));
+    assert!(h.available("print"));
 }
 
 /// A rotary job's Machine Bed is the turning axis: half the blank under its top, and on the
@@ -714,8 +703,7 @@ fn a_rotary_jobs_3d_origin_is_on_the_axis_for_machine_bed() {
 fn laser_and_rotary_toolpaths_show_only_on_a_machine_that_has_them() {
     let mut h = Harness::new();
     let found = |h: &Harness, text: &str| {
-        h.app
-            .search_matches(text)
+        h.find_tools(text)
             .into_iter()
             .map(|(id, _)| id)
             .collect::<Vec<_>>()
@@ -723,15 +711,16 @@ fn laser_and_rotary_toolpaths_show_only_on_a_machine_that_has_them() {
     assert!(found(&h, "laser").is_empty(), "no machine: no laser");
     assert!(!found(&h, "rotary").contains(&"rotary_lathe_toolpath"));
     assert!(found(&h, "pocket").contains(&"pocket_toolpath"));
-    h.app.machines.add();
+    h.given_machine();
     assert!(
         found(&h, "laser").is_empty(),
         "a machine with no laser fitted"
     );
-    let machine = h.app.machines.active_mut().unwrap();
-    machine.laser = true;
-    machine.controller = "grblHAL".into();
-    machine.rotary = true;
+    h.edit_machine(|machine| {
+        machine.laser = true;
+        machine.controller = "grblHAL".into();
+        machine.rotary = true;
+    });
     assert_eq!(
         found(&h, "laser"),
         ["laser_cut_fill_toolpath", "laser_picture_toolpath"]
@@ -739,7 +728,7 @@ fn laser_and_rotary_toolpaths_show_only_on_a_machine_that_has_them() {
     assert!(found(&h, "rotary").contains(&"rotary_lathe_toolpath"));
     // on the Toolpaths page too
     crate::marks::switch_on(&h.ctx);
-    h.app.pages.set_pinned(Page::Toolpaths, true);
+    h.pin(Page::Toolpaths);
     let shown = |h: &mut Harness, id: &str| {
         let mark = format!("tool:{id}");
         crate::marks::forget(&h.ctx, &mark);
@@ -749,15 +738,47 @@ fn laser_and_rotary_toolpaths_show_only_on_a_machine_that_has_them() {
     };
     assert!(shown(&mut h, "laser_picture_toolpath"));
     assert!(shown(&mut h, "rotary_machining_toolpath"));
-    h.app.machines.active_mut().unwrap().laser = false;
+    h.edit_machine(|m| m.laser = false);
     assert!(!shown(&mut h, "laser_picture_toolpath"));
     assert!(shown(&mut h, "pocket_toolpath"));
     // a laser toolpath opened on a machine without one is said to be so, never refused
     let lacks = crate::app::machine_fit::lacks(None, cut_craft_core::Needs::Laser).unwrap();
-    h.app.invoke(&h.ctx, "laser_cut_fill_toolpath");
+    h.invoke("laser_cut_fill_toolpath");
     h.frame(vec![]);
     assert!(h.text_at(lacks).is_some(), "said in red");
-    h.app.machines.active_mut().unwrap().laser = true;
+    h.edit_machine(|m| m.laser = true);
     h.frame(vec![]);
     assert!(h.text_at(lacks).is_none());
+}
+
+#[test]
+fn the_lathe_form_says_how_fast_a_turns_and_when_the_machine_caps_it() {
+    use cut_craft_core::document::{Along, Job};
+    let mut h = Harness::new();
+    h.given_document(|d| d.job = Job::rotary(100.0, 40.0, Along::X));
+    h.invoke("rotary_lathe_toolpath");
+    h.set_form_value("/tool/feed_rate", 1000.0.into());
+    h.set_form_value("/holding_stub", 8.0.into());
+    // a machine whose top A speed isn't known: the rate, plainly
+    let (note, capped) = h.lathe_a_speed_note().unwrap();
+    assert!(!capped, "{note}");
+    assert!(note.contains("14324°/min"), "{note}");
+    // one that turns A at most 3600°/min can't keep up within 15.9 mm of the axis
+    let package =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../machines/genmitsu.json");
+    h.install_package(&package);
+    h.edit_machine(|machine| {
+        machine.rotary = true;
+        machine.firmware = Some(cut_craft_machines::Firmware::GrblHal);
+        machine.rotary_axis.max_rate = 3600.0;
+    });
+    let (note, capped) = h.lathe_a_speed_note().unwrap();
+    assert!(capped, "{note}");
+    assert!(
+        note.contains("3600°/min") && note.contains("15.9"),
+        "{note}"
+    );
+    // no note on other forms
+    h.invoke("rotary_roughing_toolpath");
+    assert_eq!(h.lathe_a_speed_note(), None);
 }

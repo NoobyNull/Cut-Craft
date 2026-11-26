@@ -43,8 +43,14 @@ impl CutCraftApp {
         let last = (tool == Some("draw_polyline"))
             .then(|| self.polyline.points.last().copied())
             .flatten();
-        let find =
+        // on a rotary job the ghosts past each seam snap too, as the drawing they copy
+        let wrap = self.wrap();
+        let plain =
             |from: Option<Point>, at: Point| self.options.snapping.find(&self.doc, from, at, reach);
+        let find = |from: Option<Point>, at: Point| match wrap {
+            Some(w) => w.snap(at, from, plain),
+            None => plain(from, at),
+        };
         let to = |hit: Option<Snap>, at: Point| hit.map_or(at, |h| h.at);
         let mut marker = None;
         // where a point was placed on a snap: kept there once drawn
@@ -288,14 +294,14 @@ impl CutCraftApp {
     /// Snapping Options: what drawing and node drags snap to.
     pub(super) fn snap_options_window(&mut self, ctx: &egui::Context) {
         use cut_craft_bug_report::unapplied::{self, Answer, Button};
-        let mut open = self.snap_window;
+        let mut open = self.snap.open;
         let schema = serde_json::to_value(schemars::schema_for!(cut_craft_core::snap::SnapOptions))
             .expect("a schema serialises");
         let fields = crate::form::fields(&schema);
-        let shown = self.snap_draft.as_ref().unwrap_or(&self.options.snapping);
+        let shown = self.snap.shown(&self.options.snapping);
         let mut values = serde_json::to_value(shown).expect("options serialise");
-        let dirty = self.snap_draft.is_some();
-        let closing = self.snap_closing;
+        let dirty = self.snap.dirty();
+        let closing = self.snap.closing;
         let (mut edited, mut button, mut answer) = (None, None, None);
         let units = self.doc.job.units;
         let (id, size) = (egui::Id::unique("snapping_options"), dialog_size(ctx));
@@ -336,34 +342,31 @@ impl CutCraftApp {
         );
         // kept until Apply, unless it is as it already is
         if let Some(edited) = edited {
-            self.snap_draft = (edited != self.options.snapping).then_some(edited);
+            self.snap.edited(&self.options.snapping, edited);
         }
         // the close box is Close: it asks first while changes wait
         if !open {
             button = Some(Button::Close);
         }
         let apply = |app: &mut Self| {
-            if let Some(snapping) = app.snap_draft.take() {
+            if let Some(snapping) = app.snap.take_changes() {
                 app.options.snapping = snapping;
                 app.save_options();
             }
         };
-        let close = |app: &mut Self| {
-            (app.snap_draft, app.snap_closing, app.snap_window) = (None, false, false);
-        };
         match button {
             Some(Button::Apply) => apply(self),
-            Some(Button::Close) if self.snap_draft.is_some() => self.snap_closing = true,
-            Some(Button::Cancel | Button::Close) => close(self),
+            Some(Button::Close) if self.snap.dirty() => self.snap.closing = true,
+            Some(Button::Cancel | Button::Close) => self.snap.close(),
             None => {}
         }
         match answer {
             Some(Answer::ApplyAndClose) => {
                 apply(self);
-                close(self);
+                self.snap.close();
             }
-            Some(Answer::Discard) => close(self),
-            Some(Answer::KeepEditing) => self.snap_closing = false,
+            Some(Answer::Discard) => self.snap.close(),
+            Some(Answer::KeepEditing) => self.snap.closing = false,
             None => {}
         }
     }

@@ -474,7 +474,7 @@ fn soften(grid: &mut Grid, fig: &[bool], floor: f32, width: usize) {
     }
 }
 
-/// What `bit` (a tool from the Tool Database, the one Calculate's reach check uses) can
+/// What `bit` (a bit from the Bit Library, the one Calculate's reach check uses) can
 /// carve of `heights` (cells `cell` apart, a height of 1 standing `relief` high): the bit is lowered everywhere as far as it goes without cutting into the
 /// relief, and what its shape leaves behind is the answer. Pits and grooves too narrow for
 /// it fill in and the foot of a wall slopes at its taper; nothing is ever cut lower than

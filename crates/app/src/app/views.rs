@@ -5,8 +5,8 @@
 
 use super::{
     APP_NAME, Align, Change, CutCraftApp, DESIGN_TABS, DROP_SHADE, EntityId, JOB_EXTENSION, Layout,
-    OLD_JOB_EXTENSION, RESOLUTIONS, Screen, Split, UNITS, Value, View, ViewTool, ViewTransform,
-    bordered, egui, file_name, files, page_width, paint_focus_ring, show_page,
+    OLD_JOB_EXTENSION, RESOLUTIONS, Screen, Split, UNITS, Value, View, ViewTransform, bordered,
+    egui, file_name, files, page_width, paint_focus_ring, show_page,
 };
 use crate::options::WindowLayout;
 use cut_craft_bug_report::hint::HoverHint;
@@ -89,6 +89,8 @@ impl CutCraftApp {
         self.units_question(ctx);
         // a save that would replace G-code from an earlier save: Replace or Archive?
         self.earlier_question(ctx);
+        // a new toolpath order that left toolpaths cutting what is left out of date
+        self.reorder_question(ctx);
         // what the checks before cutting found: save anyway?
         self.save_anyway_question(ctx);
         // Save or Send pressed in Save Toolpaths: once its window has closed
@@ -143,7 +145,7 @@ impl CutCraftApp {
             ..self.doc.job
         });
         let cell = c.finish();
-        let done = format!("Units: {name}; every length now reads in {name}, tools in their own");
+        let done = format!("Units: {name}; every length now reads in {name}, bits in their own");
         self.record(Ok(cell), &done);
     }
 
@@ -203,7 +205,7 @@ impl CutCraftApp {
             painter.text(
                 screen.center(),
                 egui::Align2::CENTER_CENTER,
-                "Drop to open or import",
+                t!("Drop to open or import"),
                 egui::TextStyle::Heading.resolve(&ctx.global_style()),
                 ctx.global_style().visuals.strong_text_color(),
             );
@@ -214,7 +216,7 @@ impl CutCraftApp {
     }
 
     /// Whether dropping `path` imports it into the job (it is not a job, a post-processor or
-    /// a tool database).
+    /// a bit library).
     pub(super) fn drop_imports(path: &std::path::Path) -> bool {
         let ext = path
             .extension()
@@ -224,7 +226,7 @@ impl CutCraftApp {
             || (files::TOOL_FILE_EXTENSIONS.contains(&ext.as_str()) && ext != "json"))
     }
 
-    /// One dropped file: a job opens; a post-processor installs; a tool database's tools are
+    /// One dropped file: a job opens; a post-processor installs; a bit library's tools are
     /// added; anything else is imported into the open job.
     pub(super) fn drop_file(&mut self, path: &std::path::Path) {
         let ext = path
@@ -238,9 +240,9 @@ impl CutCraftApp {
             }
             "pp" => self.install_post(path),
             e if files::TOOL_FILE_EXTENSIONS.contains(&e) && e != "json" => self.import_tools(path),
-            _ if self.screen != Screen::Job => self.status.set_message(&format!(
-                "Open or make a job to import {} into",
-                file_name(path)
+            _ if self.screen != Screen::Job => self.status.set_message(&cut_craft_i18n::tr!(
+                "status-open-a-job-to-import",
+                file = file_name(path).clone()
             )),
             _ => self.import_file(path),
         }
@@ -256,12 +258,14 @@ impl CutCraftApp {
                 let kept = files::config_dir()
                     .map(|d| d.join(LAST_CRASH))
                     .filter(|path| std::fs::write(path, &crash).is_ok());
-                let where_ = kept.map_or_else(String::new, |p| {
-                    format!(" Its crash log is kept in {}.", p.display())
-                });
-                self.status.set_message(&format!(
-                    "Cut Craft closed with an error last time.{where_} To send crash reports, \
-                     change Edit ▸ Options ▸ Bug Reports."
+                self.status.set_message(&kept.map_or_else(
+                    || cut_craft_i18n::tr!("status-closed-with-error"),
+                    |p| {
+                        cut_craft_i18n::tr!(
+                            "status-closed-with-error-log",
+                            path = p.display().to_string()
+                        )
+                    },
                 ));
             }
             CrashLogs::Send => {
@@ -399,6 +403,7 @@ impl CutCraftApp {
         self.tool_changer_window(ctx);
         self.fit_import_window(ctx);
         self.updates_window(ctx);
+        self.back_up_window(ctx);
         if self.addons.window(ctx) {
             self.refresh_installed();
         }
@@ -447,6 +452,10 @@ impl CutCraftApp {
             WindowLayout::Ribbon => self.ribbon_layout(ui),
             WindowLayout::Canvas => self.canvas_layout(ui),
         }
+        // in every layout, over the drawing
+        self.floating_toolbars(ui.ctx());
+        self.toolbar_rename_window(ui.ctx());
+        self.toolbar_changes(ui.ctx());
     }
 
     /// The top bar's sheet, layer and level drop-downs: a command to apply, if one was
@@ -542,26 +551,12 @@ impl CutCraftApp {
         clicked: &mut Option<&'static str>,
     ) {
         let s = &self.options.snapping;
-        for (id, on, icon, tip) in [
-            (
-                "toggle_grid_snapping",
-                s.snap_to_grid,
-                "grid",
-                "Grid Snapping",
-            ),
-            (
-                "toggle_smart_snapping",
-                s.smart_snapping,
-                "smart",
-                "Smart Snapping",
-            ),
-            (
-                "toggle_geometry_snapping",
-                s.geometry_snapping,
-                "geometry",
-                "Geometry Snapping",
-            ),
+        for (id, on, icon) in [
+            ("toggle_grid_snapping", s.snap_to_grid, "grid"),
+            ("toggle_smart_snapping", s.smart_snapping, "smart"),
+            ("toggle_geometry_snapping", s.geometry_snapping, "geometry"),
         ] {
+            let tip = &self.tool_label(id);
             let state = if on { "on" } else { "off" };
             let path = format!("snapping/{icon}_snapping_{state}.png");
             let button = self.icon_button(&path, "", tip, edge).selected(on);
@@ -571,24 +566,18 @@ impl CutCraftApp {
         }
     }
 
-    /// The top bar's split and snapping toggles.
-    pub(super) fn top_bar_toggle(&mut self, id: &str) {
-        match id {
-            "split_stacked" | "split_side_by_side" | "split_picture" => {
-                let split = match id {
-                    "split_stacked" => Split::Stacked,
-                    "split_side_by_side" => Split::SideBySide,
-                    _ => Split::Picture,
-                };
-                self.split = (self.split != Some(split)).then_some(split);
-            }
-            "toggle_geometry_snapping" => self.options.snapping.geometry_snapping ^= true,
-            "toggle_smart_snapping" => self.options.snapping.smart_snapping ^= true,
-            _ => self.options.snapping.snap_to_grid ^= true,
-        }
-        if id.starts_with("toggle_") {
-            self.save_options();
-        }
+    /// A split of the views, or back to one view when it is the split showing.
+    pub(super) fn split_toggle(&mut self, split: Split) {
+        self.split = (self.split != Some(split)).then_some(split);
+    }
+
+    /// One of the top bar's snapping switches, the other way, kept with the options.
+    pub(super) fn toggle_snapping(
+        &mut self,
+        which: fn(&mut cut_craft_core::snap::SnapOptions) -> &mut bool,
+    ) {
+        *which(&mut self.options.snapping) ^= true;
+        self.save_options();
     }
 
     /// The top bar over the views: 2D / 3D and the split, the sheet, layer and level
@@ -607,28 +596,26 @@ impl CutCraftApp {
             ui.horizontal_centered(|ui| {
                 ui.selectable_value(&mut self.view, View::TwoD, tr!("views-2d-view-f2"));
                 ui.selectable_value(&mut self.view, View::ThreeD, tr!("views-3d-view-f3"));
-                for (id, icon, tip, split) in [
+                for (id, icon, split) in [
                     (
                         "split_stacked",
                         "view/split_over_and_under.png",
-                        "2D over 3D",
                         Split::Stacked,
                     ),
                     (
                         "split_side_by_side",
                         "view/split_side_by_side.png",
-                        "2D beside 3D",
                         Split::SideBySide,
                     ),
                     (
                         "split_picture",
                         "view/split_picture_in_picture.png",
-                        "One view in a corner of the other",
                         Split::Picture,
                     ),
                 ] {
+                    let tip = self.tool_label(id);
                     let button = self
-                        .icon_button(icon, "", tip, edge)
+                        .icon_button(icon, "", &tip, edge)
                         .selected(self.split == Some(split));
                     if ui.add(button).on_hover_hint(tip).clicked() {
                         clicked = Some(id);
@@ -651,9 +638,9 @@ impl CutCraftApp {
                 ui.horizontal_centered(|ui| {
                     if self.doc.job.double_sided.is_some() {
                         let side = if self.doc.bottom_side {
-                            "Bottom Side"
+                            t!("Bottom Side")
                         } else {
-                            "Top Side"
+                            t!("Top Side")
                         };
                         if ui
                             .button(side)
@@ -694,58 +681,17 @@ impl CutCraftApp {
             .unwrap_or(self.doc.job)
     }
 
-    /// Zoom and pan: the 2D view controls.
-    pub(super) fn view_action(&mut self, ctx: &egui::Context, id: &str) {
-        let tool = match id {
-            "pan" => {
-                self.view_tool = Some(ViewTool::Pan);
-                "pan"
+    /// Zoom to Selection: the picked shapes fill the 2D view.
+    pub(super) fn zoom_selected(&mut self, ctx: &egui::Context) {
+        let margin = ctx.global_style().spacing.interact_size.y;
+        match (self.doc.selection_bounds(), self.view_area) {
+            (Some(bounds), Some(area)) if bounds.size().max_element() > 0.0 => {
+                self.camera = Some(ViewTransform::fit(area, margin, bounds));
             }
-            "measure_inspect" => {
-                self.view_tool = Some(ViewTool::Measure);
-                "measure_inspect"
-            }
-            "transform" => {
-                self.rotating = false;
-                if self.view_tool == Some(ViewTool::Transform) {
-                    self.view_tool = None;
-                    "select"
-                } else {
-                    self.view_tool = Some(ViewTool::Transform);
-                    "transform"
-                }
-            }
-            "node_edit" => {
-                self.node_mirror = [false, false];
-                if self.view_tool == Some(ViewTool::NodeEdit) {
-                    self.view_tool = None;
-                    "select"
-                } else {
-                    self.view_tool = Some(ViewTool::NodeEdit);
-                    "node_edit"
-                }
-            }
-            "zoom_box" => {
-                self.view_tool = Some(ViewTool::ZoomBox);
-                "zoom_box"
-            }
-            "zoom_selected" => {
-                let margin = ctx.global_style().spacing.interact_size.y;
-                match (self.doc.selection_bounds(), self.view_area) {
-                    (Some(bounds), Some(area)) if bounds.size().max_element() > 0.0 => {
-                        self.camera = Some(ViewTransform::fit(area, margin, bounds));
-                    }
-                    _ => self.status.set_message("select something to zoom to"),
-                }
-                return;
-            }
-            // zoom to job, zoom to drawing (F6)
-            _ => {
-                self.camera = None;
-                return;
-            }
-        };
-        self.status.current_tool = self.tool_label(tool);
+            _ => self
+                .status
+                .set_message(&cut_craft_i18n::tr!("status-select-to-zoom")),
+        }
     }
 }
 
@@ -816,10 +762,10 @@ pub(super) fn immediate_output(
 
 /// Why Save Toolpaths and Send to Machine are greyed while a warning is not ticked.
 pub(super) const TICK_TO_SAVE: &str =
-    "Tick each ⚠ under Checks before cutting to say you have read it, then save";
+    "Tick each ✖ and ⚠ under Checks before cutting to say you have read it, then save";
 
-/// Save Toolpaths' tool changes: a file for each tool, the tool changer (when the machine
-/// has one), or a pause to change the tool by hand.
+/// Save Toolpaths' bit changes: a file for each tool, the tool changer (when the machine
+/// has one), or a pause to change the bit by hand.
 pub(super) fn tool_changes_section(
     ui: &mut egui::Ui,
     changes: &mut files::ToolChanges,
@@ -855,7 +801,7 @@ pub(super) fn tiling_on(tiles: usize) -> String {
     tr!("views-tiling-on", tiles = tiles)
 }
 
-/// Save Toolpaths' files: what goes in each, why there is a file for each tool, and that
+/// Save Toolpaths' files: what goes in each, why there is a file for each bit, and that
 /// each is saved once per tile while tiling is on.
 pub(super) fn files_section(
     ui: &mut egui::Ui,

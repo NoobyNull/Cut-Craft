@@ -137,13 +137,15 @@ impl CutCraftApp {
                 revision: self.history.revision(),
             });
             let kind = snap.to.kind();
-            self.status.set_message(&format!(
-                "Snap picked: this point is kept on the {}. Press Delete to let it go.",
-                kind.label().to_lowercase()
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-snap-picked",
+                kind = kind.label().to_lowercase()
             ));
             return;
         }
-        let hit = self.doc.pick(at, tolerance);
+        // on a rotary job, a click on a ghost past a seam picks the vector it copies
+        let pick = |p| self.doc.pick(p, tolerance);
+        let hit = self.wrap().map_or_else(|| pick(at), |w| w.pick(at, pick));
         // a picture is picked where no vector is: click picks it, Shift-click adds or
         // takes it away
         let picture = hit.is_none().then(|| self.doc.pick_bitmap(at)).flatten();
@@ -174,9 +176,11 @@ impl CutCraftApp {
             self.doc.inside_group = None;
         }
         // inside a closed shape, away from any line, picture or component: the shape and
-        // its holes, as one part
+        // its holes, as one part (inside a rotary job's ghost too, the shape it copies)
         let part = if hit.is_none() && picture.is_none() && component.is_none() {
-            self.doc.pick_part(at, tolerance)
+            let part = |p| Some(self.doc.pick_part(p, tolerance)).filter(|v| !v.is_empty());
+            let picked = self.wrap().map_or_else(|| part(at), |w| w.pick(at, part));
+            picked.unwrap_or_default()
         } else {
             Vec::new()
         };
@@ -250,7 +254,7 @@ impl CutCraftApp {
         }
         self.doc.inside_group = Some(group);
         self.select([hit], false);
-        self.status.set_message(INSIDE_GROUP);
+        self.status.set_message(&t!(INSIDE_GROUP));
     }
 
     /// Steps out of the group stepped into once it is gone (undone, deleted, ungrouped).
@@ -272,11 +276,12 @@ impl CutCraftApp {
         self.doc.inside_group = around;
         let members = self.doc.members_under(group);
         self.select(members, false);
-        self.status.set_message(if around.is_some() {
-            "Stepped out to the group around it"
-        } else {
-            "Stepped out of the group: a click picks whole groups again"
-        });
+        self.status
+            .set_message(&cut_craft_i18n::tr!(if around.is_some() {
+                "status-stepped-out-to-group"
+            } else {
+                "status-stepped-out-of-group"
+            }));
     }
 
     /// Selection is view state: applied directly, never recorded for undo.

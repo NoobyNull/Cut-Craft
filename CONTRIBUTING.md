@@ -75,15 +75,31 @@ pack has no words for yet.
   longer than English. `cut_craft_i18n::pseudo()` is a test language that stretches every word
   by that much.
 
+### Tools and bits
+
+A **tool** is a button on the screen (Draw Circle, Pocket Toolpath, Find Tool). What goes in
+the spindle is a **bit**: the Bit Library, Select Bit, a bit's diameter, bit changes, Bit
+Number (the `T` in G-code, shown as `T1`, `T2`...). **Tool changer** keeps its name, as it is
+the machine part's own, with "(ATC)" where it is named on its own. Other programs' file kinds
+keep their names (a "Vectric tool database"). The test `cutters_are_called_bits_in_the_english_words`
+(`crates/app/src/tool_names/bit_words.rs`) fails on the old cutter words in the English text,
+the help pages and the text the code shows.
+
 Languages have their own test suite, run by the **Languages** workflow:
 
     cargo nextest run -p cut-craft -p cut-craft-i18n --profile languages
 
-The **hard-coded text** check in it (also in the ordinary run) fails on
-words handed straight to a button, label, tooltip, menu or window in `crates/app/src`, and on
-a key with no English words. Text already in the code before the move is listed in
-`crates/app/i18n/hard-coded-baseline.txt`; when you move one into Fluent, delete its line
-(the check fails on a stale line too, so the list only shrinks).
+The **hard-coded text** check in it (also in the ordinary run) warns of words handed
+straight to a button, label, tooltip, menu, window or the status line in `crates/app/src`: a
+warning on the pull request, never a fail. It does fail on a key with no English words. Text
+already in the code before the move is listed in `crates/app/i18n/hard-coded-baseline.txt`;
+when you move one into Fluent, delete its line (a stale line is warned of too, so the list
+only shrinks).
+
+A form's words (each setting's name, tooltip and choices, from the command's doc comments)
+are copied into `crates/i18n/locales/en/settings.ftl`, keyed by their English words. When you
+change a form, write that file again: `cargo test -p cut-craft --bin cut-craft
+write_settings_words -- --ignored` (a test fails until you do).
 
 ## Test suites by area
 
@@ -120,7 +136,7 @@ boxes to tick):
   [PowerWhittle timeline](https://github.com/orgs/Power-Whittle/projects/1) with a start date
   and a target date, and keep its status right. When it merges, mark it done. The board needs
   write access; without it, ask a maintainer in the pull request to add or update it for you.
-- **The release mirror.** Power-Whittle/Cut-Craft is a read-only copy for releases. Once the
+- **The release mirror.** Power-Whittle/PowerWhittle is a read-only copy for releases. Once the
   release workflow's mirror step lands (it pushes each release's tag and `main` there and adds
   the same files), never commit to the mirror's `main` by hand: the next release could no longer
   push `main` there. Change its description, rulesets or settings when a

@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-23
-see-also: updates, smooth_selected_components, component_properties, addons
+reviewed: 2026-11-25
+see-also: updates, smooth_selected_components, component_properties, addons, protect_the_machine
 ---
 
 # Web API
@@ -184,10 +184,20 @@ Toolpaths page's buttons, each with its progress window as usual.
     files it made) is kept unless you send `"replace": true`. Then it is archived or
     replaced just as **Save Toolpaths** does, as **Edit ▸ Options ▸ Confirmation Choices**
     say (replaced when they say to ask), and put back if the new files can't be written.
-  - An error the checks find stops it: nothing is made. A warning (a toolpath out of date
-    is one) stops it too, as **Save Toolpaths** asks you, until you send
-    `"accept_warnings": true`, which is like answering **Save Anyway**. Each warning is
-    listed once, word for word as **Save Toolpaths** shows it.
+  - A warning the checks find (a toolpath out of date is one) stops it, as **Save
+    Toolpaths** asks you, until you send `"accept_warnings": true`, which is like
+    answering **Save Anyway**. Each warning is listed once, word for word as **Save
+    Toolpaths** shows it.
+  - An error (✖ Must fix) stops it too, and `accept_warnings` does not answer it: send
+    `"accept_errors": true` as well, which is like ticking each error in **Save Anyway**.
+    When the job would not run as saved, the answer says so. The files then say at the
+    top what they were saved with.
+  - Something that could damage the machine (⛔: a keep-out zone, past the bed or the Z
+    travel, too deep into the spoilboard) is always refused, whatever the script sends.
+    Only switching its check off in the machine's
+    [Protect the Machine](help:protect_the_machine) lets it past.
+  - The answer lists `"warnings"` and `"errors"` it was made past, and `"left_out"`: the
+    toolpaths with no moves, which have nothing to write.
 
   The G-code is only made and saved: it is never sent to your machine.
 - **POST job/new** `{"settings": {"size": {"width": 300, "height": 150, "thickness": 12}}}`:

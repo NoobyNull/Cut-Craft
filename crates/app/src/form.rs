@@ -205,7 +205,7 @@ pub type DrawTool<'a> = dyn Fn(&mut egui::Ui, &str, &mut Value) + 'a;
 /// they changed. See [`Look::group_end`].
 pub type GroupEnd<'a> = dyn Fn(&mut egui::Ui, &str, &mut Value) -> bool + 'a;
 
-/// The fields that are lists of Tool Database tools, drawn by [`Look::tool`] as the form's
+/// The fields that are lists of Bit Library tools, drawn by [`Look::tool`] as the form's
 /// own tool is.
 pub const TOOL_LISTS: [&str; 3] = ["tools", "clearance_tools", "bits_before"];
 
@@ -216,8 +216,8 @@ pub struct Look<'a> {
     pub picture: &'a dyn Fn(&str) -> Option<egui::Image<'static>>,
     /// The material's size in the units shown, for sums typed into number fields (W, H, T).
     pub material: cut_craft_core::calc::Values,
-    /// Draws a `tool` field, or a list of tools ([`TOOL_LISTS`]), in its place (the Tool
-    /// Database's tools, which the form does not edit), given the field's key and the
+    /// Draws a `tool` field, or a list of tools ([`TOOL_LISTS`]), in its place (the Bit
+    /// Library's tools, which the form does not edit), given the field's key and the
     /// parameters holding it; `None` leaves them out.
     pub tool: Option<&'a DrawTool<'a>>,
     /// Draws more at the foot of an `x-group` block, given its name (Profile's Edit Tabs…
@@ -753,9 +753,54 @@ pub fn arrange(fields: Vec<Field>) -> Vec<Field> {
     keyed.into_iter().map(|(.., f)| f).collect()
 }
 
-/// The fields of a params schema, in declaration order.
+/// The fields of a params schema, in declaration order, their words in the language in use.
 pub fn fields(schema: &Value) -> Vec<Field> {
+    let mut fields = english_fields(schema);
+    fields.iter_mut().for_each(translate);
+    fields
+}
+
+/// The fields of a params schema with the code's English words. A group's, a tab's and a
+/// section's name stay English in [`fields`] too, as the code finds them by it (a section's
+/// end, such as Model Size's Scale to Fit); they are translated where they are drawn.
+pub fn english_fields(schema: &Value) -> Vec<Field> {
     object_fields(schema, schema)
+}
+
+/// A field's name, tooltip, other names and choices in the language in use.
+fn translate(f: &mut Field) {
+    if !f.section {
+        f.label = setting_text(&f.label);
+    }
+    f.help = f.help.as_deref().map(setting_text);
+    if let Some(t) = &mut f.titles {
+        for (_, title) in &mut t.by {
+            *title = setting_text(title);
+        }
+    }
+    if !is_font(f) {
+        translate_kind(&mut f.kind);
+    }
+}
+
+/// A font choice (Draw Text's, Auto Layout Text's): its choices are the fonts installed, each
+/// named as it is installed in every language, so they are neither translated nor in Fluent.
+pub fn is_font(f: &Field) -> bool {
+    f.key == "font"
+}
+
+fn translate_kind(kind: &mut Kind) {
+    match kind {
+        Kind::Choice(options, _) => {
+            for o in options {
+                o.label = setting_text(&o.label);
+                o.help = o.help.as_deref().map(setting_text);
+            }
+        }
+        Kind::Group(inner) => inner.iter_mut().for_each(translate),
+        Kind::List(item) => translate_kind(item),
+        _ => {}
+    }
 }
 
 fn object_fields(root: &Value, schema: &Value) -> Vec<Field> {
@@ -906,6 +951,19 @@ fn choices(s: &Value) -> Option<Vec<Choice>> {
     }
 }
 
+/// A form's text in the language in use, found by its English words (a setting's label, its
+/// tooltip, a choice, a group's or a tab's heading): the forms are made from the commands'
+/// own descriptions, so these have no names of their own. `locales/en/settings.ftl` holds
+/// every one (a test checks), under [`cut_craft_i18n::text_key`].
+pub fn setting_text(english: &str) -> String {
+    cut_craft_i18n::tr_or(&setting_key(english), english)
+}
+
+/// The key of a form's text: `setting-`, its first words and a check of all of it.
+pub fn setting_key(english: &str) -> String {
+    cut_craft_i18n::text_key("setting", english)
+}
+
 fn sentence_case(key: &str) -> String {
     let words = key.replace('_', " ");
     let mut chars = words.chars();
@@ -916,6 +974,9 @@ fn sentence_case(key: &str) -> String {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod words;
 
 #[cfg(test)]
 #[test]
@@ -958,7 +1019,7 @@ fn print_form_blocks() {
             } else if let Some(t) = &f.tab {
                 row("tab", t, None);
             } else if f.key == "tool" {
-                row("tool", "Tool", None);
+                row("tool", "Bit", None);
             } else {
                 row("loose", "(fields outside a block)", None);
             }

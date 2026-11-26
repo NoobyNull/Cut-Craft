@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-24
-see-also: setup_material, material_setup, settings, draw_rectangle, rotary_firmware, check_rotary_setup, rotary_machining_toolpath
+reviewed: 2026-11-25
+see-also: setup_material, material_setup, settings, draw_rectangle, rotary_firmware, check_rotary_setup, rotary_machining_toolpath, view_2d
 ---
 
 ## Steps
@@ -70,6 +70,10 @@ round its axis. A toolpath preview cuts into that same shape, so a shallow cut t
 square's corners off just as it will on the machine. Depths are measured down from the round
 that touches a square's or board's flat faces, the same round the design is wrapped onto.
 
+The 2D view shows the design unrolled: one turn of the material between two blue seams, with
+a shaded band past each seam showing what wraps round from the other side. See
+[Moving around the 2D view](help:view_2d).
+
 5. Under **Holding the Part**, say what of the material is left to hold the part while it is
    cut (see below). Leave **Keep Joined At** on **Neither** and **Centre Stock Diameter** at 0
    to cut the part free all round, as before.
@@ -101,7 +105,10 @@ warn if any toolpath comes after it. [Rotary Lathe](help:rotary_lathe_toolpath) 
 leave the centre stock too; Part off cuts through it.
 
 A square's corners and a board's edges swing out further than its top as A turns, out to the
-red circle. Toolpaths lift the bit that much higher before A turns, so it never knocks into
-them, and the [Rotary set up](help:check_rotary_setup) check sees that they clear the
-spoilboard and the bit.
+red circle. Whenever a rapid move turns A with the bit lower than that, the saved file lifts
+the bit clear first, turns A, and comes back down, so it never knocks into them, and the
+[Rotary set up](help:check_rotary_setup) check sees that they clear the spoilboard and the
+bit. Cutting moves are not lifted: the toolpaths that cut while A turns stay on the material
+already, below its top.
 
+Throughout the forms, the **bit** is what is in the spindle; the tools are the buttons you press.

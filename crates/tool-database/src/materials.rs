@@ -1,4 +1,4 @@
-//! The Materials Library window, laid out as the Tool Database: the classes, each over its
+//! The Materials Library window, laid out as the Bit Library: the classes, each over its
 //! materials softest first, on the left; the picked material's or class's settings on the
 //! right, with the bits that have feeds and speeds for it. Add Tool picks a bit with the
 //! tool selector and gives it feeds for the material. Edits are made to copies; only Apply
@@ -42,7 +42,7 @@ pub struct MaterialsWindow {
     pub tools: ToolDatabase,
     pub pick: Option<MaterialPick>,
     /// The tools as the window opened on them: what it changed is told from them, so its
-    /// OK keeps edits made in the Tool Database meanwhile.
+    /// OK keeps edits made in the Bit Library meanwhile.
     opened_on: ToolDatabase,
     /// The library as last kept (opened, or Apply): it differs while changes wait.
     saved_library: MaterialLibrary,
@@ -65,14 +65,14 @@ impl MaterialsWindow {
         }
     }
 
-    /// `now`, the tool database as it is (the Tool Database may have changed it while this
+    /// `now`, the bit library as it is (the Bit Library may have changed it while this
     /// window was open), with this window's own edits made to it: each bit's feeds for the
     /// materials and classes, and the Material list. Tools added, deleted or edited
     /// elsewhere meanwhile stay as they are.
     #[must_use]
     pub fn tools_onto(&self, now: &ToolDatabase) -> ToolDatabase {
         // the same tool here: by its name, and a catalogue's entry only by a catalogue's
-        // (a copy in My Tools shares its name)
+        // (a copy in My Bits shares its name)
         fn find<'a>(db: &'a ToolDatabase, name: &str, catalogue: bool) -> Option<&'a Tool> {
             db.tools
                 .iter()
@@ -132,7 +132,7 @@ impl MaterialsWindow {
         self.library != self.saved_library || self.tools != self.opened_on
     }
 
-    /// The Tool Database kept edits (the Add Tool picker's Select, say): the window goes
+    /// The Bit Library kept edits (the Add Bit picker's Select, say): the window goes
     /// on from `now`, its own edits still unkept on top, so Cancel still drops only those.
     pub fn rebase(&mut self, now: &ToolDatabase) {
         self.tools = self.tools_onto(now);
@@ -269,10 +269,10 @@ impl MaterialsWindow {
                 }
                 egui::Panel::bottom("materials_buttons").show(ui, |ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("Cancel").clicked() {
+                        if ui.button(cut_craft_i18n::t!("Cancel")).clicked() {
                             outcome = Some(MaterialsOutcome::Cancel);
                         }
-                        if ui.button("OK").clicked() {
+                        if ui.button(cut_craft_i18n::t!("OK")).clicked() {
                             outcome = Some(MaterialsOutcome::Ok);
                         }
                         if unapplied::apply_button(ui, dirty) {
@@ -289,15 +289,18 @@ impl MaterialsWindow {
                     .show(ui, |ui| {
                         egui::Panel::bottom("materials_tree_buttons").show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                if ui.button("New Material").clicked() {
+                                if ui.button(cut_craft_i18n::t!("New Material")).clicked() {
                                     self.new_material();
                                 }
                                 let picked = self.material().is_some();
                                 if ui
-                                    .add_enabled(picked, egui::Button::new("Delete"))
-                                    .on_hover_hint(
-                                        "Deletes the material and every bit's feeds for it",
+                                    .add_enabled(
+                                        picked,
+                                        egui::Button::new(cut_craft_i18n::t!("Delete")),
                                     )
+                                    .on_hover_hint(cut_craft_i18n::t!(
+                                        "Deletes the material and every bit's feeds for it"
+                                    ))
                                     .clicked()
                                 {
                                     self.delete_material();
@@ -370,7 +373,7 @@ impl MaterialsWindow {
             }
             Some(MaterialPick::Class(class)) => self.class_details(ui, class),
             _ => {
-                ui.weak("Pick a class or material in the list");
+                ui.weak(cut_craft_i18n::t!("Pick a class or material in the list"));
                 false
             }
         }
@@ -382,10 +385,10 @@ impl MaterialsWindow {
         egui::Grid::new("material_details")
             .num_columns(2)
             .show(ui, |ui| {
-                ui.label("Name");
+                ui.label(cut_craft_i18n::t!("Name"));
                 ui.text_edit_singleline(&mut m.name);
                 ui.end_row();
-                ui.label("Class");
+                ui.label(cut_craft_i18n::t!("Class"));
                 egui::ComboBox::from_id_salt("material_class")
                     .selected_text(format!("{}. {}", m.class.number(), m.class.name()))
                     .show_ui(ui, |ui| {
@@ -395,10 +398,11 @@ impl MaterialsWindow {
                         }
                     });
                 ui.end_row();
-                ui.label("Hardness").on_hover_hint(
-                    "Where it sits in its class: a bit's feeds for the class are placed \
-                     between its softest and hardest materials by this",
-                );
+                ui.label(cut_craft_i18n::t!("Hardness"))
+                    .on_hover_hint(cut_craft_i18n::t!(
+                        "Where it sits in its class: a bit's feeds for the class are placed \
+                     between its softest and hardest materials by this"
+                    ));
                 ui.horizontal(|ui| {
                     ui.add(
                         Number::new(&mut m.hardness)
@@ -408,7 +412,7 @@ impl MaterialsWindow {
                     ui.weak(m.class.scale());
                 });
                 ui.end_row();
-                ui.label("Notes");
+                ui.label(cut_craft_i18n::t!("Notes"));
                 ui.text_edit_multiline(&mut m.notes);
                 ui.end_row();
             });
@@ -417,7 +421,7 @@ impl MaterialsWindow {
             self.rename(i, &before);
         }
         ui.separator();
-        ui.strong("Bits with feeds and speeds for it");
+        ui.strong(cut_craft_i18n::t!("Bits with feeds and speeds for it"));
         let library = self.library.clone();
         let mut remove = None;
         for (t, tool) in self.tools.tools.iter_mut().enumerate() {
@@ -434,7 +438,7 @@ impl MaterialsWindow {
                     ui.label(&tool.name);
                     if ui
                         .small_button("×")
-                        .on_hover_hint("Remove its feeds for this material")
+                        .on_hover_hint(cut_craft_i18n::t!("Remove its feeds for this material"))
                         .clicked()
                     {
                         remove = Some((t, at));
@@ -457,19 +461,19 @@ impl MaterialsWindow {
                 .any(|d| d.material.eq_ignore_ascii_case(&name));
             if !own && tool.class_feeds.iter().any(|f| f.class == class) {
                 let cut = tool.for_material_in(&name, &library);
-                ui.weak(format!(
-                    "{}: from its {} range, feed {:.0} mm/min at {:.0} r.p.m.",
-                    tool.name,
-                    class.name(),
-                    cut.feed_rate,
-                    cut.spindle_speed
+                ui.weak(cut_craft_i18n::tr!(
+                    "tool-database-from-class-range",
+                    tool = tool.name.clone(),
+                    class = class.name().to_string(),
+                    feed = format!("{:.0}", cut.feed_rate),
+                    speed = format!("{:.0}", cut.spindle_speed)
                 ));
             }
         }
-        ui.button("Add Tool…")
-            .on_hover_hint(
-                "Pick a bit with the tool selector: it gets feeds and speeds for this material",
-            )
+        ui.button(cut_craft_i18n::t!("Add Tool…"))
+            .on_hover_hint(cut_craft_i18n::t!(
+                "Pick a bit with the bit selector: it gets feeds and speeds for this material"
+            ))
             .clicked()
     }
 
@@ -477,18 +481,19 @@ impl MaterialsWindow {
         ui.heading(format!("{}. {}", class.number(), class.name()));
         let members = self.library.in_class(class);
         if let (Some(soft), Some(hard)) = (members.first(), members.last()) {
-            ui.weak(format!(
-                "From {} ({}) to {} ({}), {}: a material between cuts with feeds between, \
-                 by its hardness, unless it has feeds of its own",
-                soft.name,
-                soft.hardness,
-                hard.name,
-                hard.hardness,
-                class.scale()
+            ui.weak(cut_craft_i18n::tr!(
+                "tool-database-class-span",
+                soft = soft.name.clone(),
+                soft_hardness = soft.hardness.to_string(),
+                hard = hard.name.clone(),
+                hard_hardness = hard.hardness.to_string(),
+                scale = class.scale().to_string()
             ));
         }
         ui.separator();
-        ui.strong("Bits with feeds and speeds for the class");
+        ui.strong(cut_craft_i18n::t!(
+            "Bits with feeds and speeds for the class"
+        ));
         let mut remove = None;
         for (t, tool) in self.tools.tools.iter_mut().enumerate() {
             let Some(at) = tool.class_feeds.iter().position(|f| f.class == class) else {
@@ -500,7 +505,7 @@ impl MaterialsWindow {
                     ui.label(&tool.name);
                     if ui
                         .small_button("×")
-                        .on_hover_hint("Remove its feeds for this class")
+                        .on_hover_hint(cut_craft_i18n::t!("Remove its feeds for this class"))
                         .clicked()
                     {
                         remove = Some((t, at));
@@ -508,11 +513,11 @@ impl MaterialsWindow {
                 });
                 let feeds = &mut tool.class_feeds[at];
                 ui.push_id("softest", |ui| {
-                    ui.weak("Softest");
+                    ui.weak(cut_craft_i18n::t!("Softest"));
                     data_row(ui, &mut feeds.softest, units, rates);
                 });
                 ui.push_id("hardest", |ui| {
-                    ui.weak("Hardest");
+                    ui.weak(cut_craft_i18n::t!("Hardest"));
                     data_row(ui, &mut feeds.hardest, units, rates);
                 });
             });
@@ -520,10 +525,10 @@ impl MaterialsWindow {
         if let Some((t, at)) = remove {
             self.tools.tools[t].class_feeds.remove(at);
         }
-        ui.button("Add Tool…")
-            .on_hover_hint(
-                "Pick a bit with the tool selector: it gets feeds and speeds for the whole class",
-            )
+        ui.button(cut_craft_i18n::t!("Add Tool…"))
+            .on_hover_hint(cut_craft_i18n::t!(
+                "Pick a bit with the bit selector: it gets feeds and speeds for the whole class"
+            ))
             .clicked()
     }
 }
@@ -533,11 +538,11 @@ impl MaterialsWindow {
 fn data_row(ui: &mut egui::Ui, d: &mut CuttingData, units: Units, rates: RateUnits) -> bool {
     let mut changed = false;
     ui.horizontal_wrapped(|ui| {
-        ui.label("Feed");
+        ui.label(cut_craft_i18n::t!("Feed"));
         changed |= rate(ui, "Feed", &mut d.feed_rate, rates);
-        ui.label("Plunge");
+        ui.label(cut_craft_i18n::t!("Plunge"));
         changed |= rate(ui, "Plunge", &mut d.plunge_rate, rates);
-        ui.label("Spindle");
+        ui.label(cut_craft_i18n::t!("Spindle"));
         changed |= ui
             .add(
                 Number::new(&mut d.spindle_speed)
@@ -546,11 +551,11 @@ fn data_row(ui: &mut egui::Ui, d: &mut CuttingData, units: Units, rates: RateUni
                     .name("Spindle"),
             )
             .changed();
-        ui.label("Pass Depth");
+        ui.label(cut_craft_i18n::t!("Pass Depth"));
         changed |= length(ui, "Pass Depth", &mut d.pass_depth, units);
-        ui.label("Clearing");
+        ui.label(cut_craft_i18n::t!("Clearing"));
         changed |= percent(ui, "Clearing Stepover", &mut d.stepover);
-        ui.label("Finishing");
+        ui.label(cut_craft_i18n::t!("Finishing"));
         changed |= percent(ui, "Finishing Stepover", &mut d.finish_stepover);
     });
     changed
@@ -619,7 +624,7 @@ mod tests {
         let bit = w.tools.tools[0].name.clone();
         w.pick = Some(MaterialPick::Material(at(&w, "Hard Maple")));
         w.add_tool(&bit);
-        // the Tool Database, opened on its own while the library was open: a tool deleted,
+        // the Bit Library, opened on its own while the library was open: a tool deleted,
         // one added and a bit's own feed changed
         let mut now = ToolDatabase::starter();
         let gone = now.tools.remove(1).name;
@@ -634,7 +639,7 @@ mod tests {
         );
         assert!(merged.get("A New Bit").is_some(), "the added tool stays");
         let tool = merged.get(&bit).unwrap();
-        assert_eq!(tool.feed_rate, 1234.0, "the Tool Database's own edit stays");
+        assert_eq!(tool.feed_rate, 1234.0, "the Bit Library's own edit stays");
         assert!(
             tool.materials.iter().any(|d| d.material == "Hard Maple"),
             "the library's feeds are added"
@@ -647,7 +652,7 @@ mod tests {
         let again = w.tools_onto(&now);
         assert!(
             again.get(&bit).unwrap().materials.is_empty(),
-            "a later Tool Database edit is not undone by the next OK"
+            "a later Bit Library edit is not undone by the next OK"
         );
     }
 
@@ -660,7 +665,7 @@ mod tests {
         db.catalogues.push("Catalogues/Maker".into());
         db.tools.push(bit);
         let mut w = MaterialsWindow::new(&MaterialLibrary::starter(), &db);
-        // the Add Tool picker's Copy to My Tools and Select, kept as the Tool Database's
+        // the Add Bit picker's Copy to My Bits and Select, kept as the Bit Library's
         // Select keeps it
         let mut now = db.clone();
         let catalogue = now.tools.len() - 1;
@@ -673,7 +678,7 @@ mod tests {
             t.materials.iter().any(|d| d.material == "Hard Maple")
         };
         let mine = merged.get("Maker Bit").unwrap();
-        assert!(!merged.is_catalogue(mine), "the My Tools copy stays");
+        assert!(!merged.is_catalogue(mine), "the My Bits copy stays");
         assert!(has_maple(mine), "the copy has the feeds");
         assert!(
             !has_maple(&merged.tools[catalogue]),

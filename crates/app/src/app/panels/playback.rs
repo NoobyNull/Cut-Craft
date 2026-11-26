@@ -18,10 +18,7 @@ impl CutCraftApp {
             .collect();
         if self.display.animate_preview {
             self.finish_playback();
-            self.before_preview = Some(super::super::BeforePreview(
-                self.simulation.clone(),
-                self.preview_side,
-            ));
+            self.preview.keep_for_undo(false);
             self.play(&visible, true, move |app| {
                 app.preview_other_side(visible_only);
             });
@@ -37,10 +34,7 @@ impl CutCraftApp {
             return;
         }
         self.finish_playback();
-        self.before_preview = Some(super::super::BeforePreview(
-            self.simulation.clone(),
-            self.preview_side,
-        ));
+        self.preview.keep_for_undo(false);
         self.play(ids, true, |_| {});
     }
 
@@ -52,10 +46,7 @@ impl CutCraftApp {
     ) {
         self.finish_playback();
         // the preview before stays shown until this one is cut
-        self.before_preview = Some(super::super::BeforePreview(
-            self.simulation.clone(),
-            self.preview_side,
-        ));
+        self.preview.keep_for_undo(false);
         let fresh = self.fresh_material();
         self.preview_in_background(ids, fresh, then);
     }
@@ -111,7 +102,7 @@ impl CutCraftApp {
     /// in the job's order, and the other side too when it was previewed.
     pub(in super::super) fn rework_preview(&mut self) {
         self.finish_playback();
-        let Some(material) = &self.simulation else {
+        let Some(material) = &self.preview.material else {
             return;
         };
         let marks: std::collections::BTreeSet<u32> = material
@@ -223,15 +214,16 @@ impl CutCraftApp {
             },
             move |app, other| {
                 let other = Some(std::sync::Arc::new(other));
-                if let Some(playback) = app.playback.as_mut() {
+                if let Some(playback) = app.player.playback.as_mut() {
                     playback.set_other_side(other);
                 } else {
                     let material = app
-                        .simulation
+                        .preview
+                        .material
                         .get_or_insert_with(|| Material::over(&job, grid.area, grid.cell));
                     material.other_side = other;
                 }
-                (app.simulation_coarse, app.fine_3d, app.surface_gpu) = (None, None, None);
+                app.preview_changed();
                 if app.display.auto_open_3d {
                     app.view = View::ThreeD;
                 }
@@ -280,12 +272,13 @@ impl CutCraftApp {
         let clamps: Vec<_> = source.named_keep_out().cloned().collect();
         drop(source);
         let grid = self.preview_grid();
-        let start = (self.simulation.clone())
+        let start = (self.preview.material.clone())
             .filter(|m| !fresh && m.lies_on(&self.doc.job))
             .map_or_else(|| self.fresh_material(), |m| m.including(grid.area));
         // on a rotary job, the file's own moves turning the material as well, carrying on
         // from what the toolpaths before these cut when the preview does
-        let carries_on = (self.simulation.as_ref()).is_some_and(|m| !fresh && m.lies_on(&job));
+        let carries_on =
+            (self.preview.material.as_ref()).is_some_and(|m| !fresh && m.lies_on(&job));
         let making = self.turning_making(
             if carries_on {
                 earlier.iter().map(|(_, t)| t.clone()).collect()
@@ -328,19 +321,11 @@ impl CutCraftApp {
                 if let Some(hit) = super::super::background::collision_note(&collided) {
                     app.status.set_message(&hit);
                 }
-                app.collisions = collided;
-                app.playback = Some(playback);
+                app.preview.collisions = collided;
+                app.player.start(playback, revision);
                 app.turning = turning;
-                app.kept_playback = None;
-                app.playback_revision = revision;
-                app.simulation = None;
-                (
-                    app.playing,
-                    app.playback_goal,
-                    app.simulation_coarse,
-                    app.fine_3d,
-                    app.surface_gpu,
-                ) = (true, None, None, None, None);
+                app.preview.material = None;
+                app.preview_changed();
                 if app.display.auto_open_3d {
                     app.view = View::ThreeD;
                 }
@@ -356,40 +341,15 @@ impl CutCraftApp {
     pub(in super::super) fn advance_playback(&mut self, ctx: &egui::Context) {
         self.drop_stale_playback();
         self.drop_preview_of_old_block();
-        let Some(playback) = self.playback.as_mut() else {
-            self.playback_goal = None;
-            self.follow_turning(ctx);
-            return;
-        };
-        // a slow frame does not send the tool further on the next
-        let dt = f64::from(ctx.input(|i| i.stable_dt)).min(0.1);
-        let goal = self.playback_goal.or_else(|| {
-            self.playing
-                .then(|| playback.at() + self.playback_speed * dt)
-        });
-        if let Some(goal) = goal {
-            let budget = if self.playback_goal.is_some() {
-                super::super::jump_budget(self.playback_budget)
-            } else {
-                self.playback_budget
-            };
-            let until = std::time::Instant::now() + budget;
-            if playback.seek_until(goal, || std::time::Instant::now() >= until) {
-                self.playback_goal = None;
-            }
+        let dt = f64::from(ctx.input(|i| i.stable_dt));
+        let frame = self.player.advance(dt, std::time::Instant::now());
+        if frame.repaint {
             ctx.request_repaint();
         }
-        // the view shows where it has stopped at once; on the way, every so often
-        let (revision, now) = (playback.revision(), std::time::Instant::now());
-        let settled = self.playback_goal.is_none() && !self.playing;
-        match self.playback_shown {
-            Some((shown, _)) if shown == revision => {}
-            Some((_, when)) if !settled && now < when + self.playback_redraw => {
-                ctx.request_repaint_after(when + self.playback_redraw - now);
-            }
-            _ => self.playback_shown = Some((revision, now)),
+        if let Some(after) = frame.repaint_after {
+            ctx.request_repaint_after(after);
         }
-        if playback.finished() {
+        if frame.finished {
             self.finish_playback();
         }
         self.follow_turning(ctx);
@@ -399,16 +359,13 @@ impl CutCraftApp {
     /// a playing one stops, keeping what it has cut, and its controls close, so Run or a
     /// drag never plays the old moves over the job again.
     pub(super) fn drop_stale_playback(&mut self) {
-        if self.history.revision() == self.playback_revision
-            || (self.playback.is_none() && self.kept_playback.is_none())
-        {
+        if !self.player.stale(self.history.revision()) {
             return;
         }
         self.finish_playback();
-        self.kept_playback = None;
-        self.status.set_message(
-            "The job changed, so the preview's controls closed: preview again to play it",
-        );
+        self.player.kept = None;
+        self.status
+            .set_message(&cut_craft_i18n::tr!("status-preview-closed-job-changed"));
     }
 
     /// Once Job Setup changes the block's size, thickness or place, the preview of the old
@@ -416,42 +373,26 @@ impl CutCraftApp {
     /// next Preview cuts into that.
     pub(super) fn drop_preview_of_old_block(&mut self) {
         let job = self.doc.job;
-        let old = |m: &Material| !m.lies_on(&job);
-        if self.simulation.as_ref().is_some_and(old)
-            || (self.before_preview.as_ref()).is_some_and(|b| b.0.as_ref().is_some_and(old))
-        {
-            (self.simulation, self.before_preview) = (None, None);
-            (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
-            self.status.set_message(
-                "Job Setup changed the material, so the preview starts again on the new block",
-            );
+        if self.preview.drop_old(|m| !m.lies_on(&job)) {
+            self.preview_changed();
+            self.status
+                .set_message(&cut_craft_i18n::tr!("status-preview-new-material"));
         }
     }
 
     /// Ends a playing preview, keeping what it has cut (Stop, or the end of the path), and
     /// the playback, so its controls stay to scrub it again.
     pub(in super::super) fn finish_playback(&mut self) {
-        (self.playback_goal, self.playback_shown) = (None, None);
-        (self.playback_view, self.playback_gpu) = (None, None);
-        if let Some(playback) = self.playback.take() {
-            self.simulation = Some(playback.material().clone());
-            self.kept_playback = Some(playback);
-            (
-                self.playing,
-                self.simulation_coarse,
-                self.fine_3d,
-                self.surface_gpu,
-            ) = (false, None, None, None);
+        if let Some(cut) = self.player.finish() {
+            self.preview.material = Some(cut);
+            self.preview_changed();
         }
     }
 
     pub(in super::super) fn preview_toolpath(&mut self, id: EntityId) {
         if self.display.animate_preview {
             self.finish_playback();
-            self.before_preview = Some(super::super::BeforePreview(
-                self.simulation.clone(),
-                self.preview_side,
-            ));
+            self.preview.keep_for_undo(false);
             self.play(&[id], false, |_| {});
             return;
         }
@@ -459,13 +400,10 @@ impl CutCraftApp {
         if !self.preview_source().toolpaths.contains_key(&id) {
             return;
         }
-        self.before_preview = Some(super::super::BeforePreview(
-            self.simulation.clone(),
-            self.preview_side,
-        ));
+        self.preview.keep_for_undo(false);
         // cut into the preview so far (on a block Job Setup has not changed since)
         let grid = self.preview_grid();
-        let start = (self.simulation.clone())
+        let start = (self.preview.material.clone())
             .filter(|m| m.lies_on(&self.doc.job))
             .map_or_else(|| self.fresh_material(), |m| m.including(grid.area));
         self.preview_in_background(&[id], start, |_| {});
@@ -478,8 +416,8 @@ impl CutCraftApp {
     /// Close in place of Stop, till another preview, Reset Preview or another job.
     pub(in super::super) fn playback_bar(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Toolpath playback bar");
-        let kept = self.playback.is_none();
-        let Some(playback) = self.playback.as_ref().or(self.kept_playback.as_ref()) else {
+        let kept = self.player.playback.is_none();
+        let Some(playback) = self.player.playback.as_ref().or(self.player.kept.as_ref()) else {
             return;
         };
         let (at, length) = (playback.at(), playback.length());
@@ -495,7 +433,7 @@ impl CutCraftApp {
             .map(|(_, tool)| tool.name.clone());
         let (mut stop, mut run, mut goal) = (false, false, None);
         ui.horizontal(|ui| {
-            let label = if self.playing { "Pause" } else { "Run" };
+            let label = if self.player.playing { "Pause" } else { "Run" };
             run = ui.button(label).clicked();
             if ui.button(tr!("panels-single-step")).clicked() {
                 goal = Some(playback.next_step());
@@ -513,7 +451,7 @@ impl CutCraftApp {
                     .clicked()
             };
             ui.add(
-                egui::Slider::new(&mut self.playback_speed, PLAYBACK_SPEEDS)
+                egui::Slider::new(&mut self.player.speed, PLAYBACK_SPEEDS)
                     .logarithmic(true)
                     .prefix("×")
                     .custom_formatter(|x, _| times(x))
@@ -521,16 +459,16 @@ impl CutCraftApp {
             )
             .on_hover_hint(tr!("panels-1-plays-at-the-machine"));
         });
-        if let Some(to) = self.scrub_sliders(ui, self.playback_goal.unwrap_or(at), length) {
+        if let Some(to) = self.scrub_sliders(ui, self.player.goal.unwrap_or(at), length) {
             goal = Some(to);
         }
         ui.weak(playback_note(
             at,
             length,
-            self.playback_goal,
-            self.playing,
+            self.player.goal,
+            self.player.playing,
             kept,
-            self.playback_speed,
+            self.player.speed,
         ));
         if let Some(name) = guessed_shank {
             ui.weak(tr!("panels-shank-guessed", name = name.as_str()));
@@ -542,20 +480,20 @@ impl CutCraftApp {
             self.resume_playback();
         }
         if run {
-            let playback = self.playback.as_mut().expect("resumed");
+            let playback = self.player.playback.as_mut().expect("resumed");
             // Run at the end plays it again from the start
-            if !self.playing && playback.finished() {
+            if !self.player.playing && playback.finished() {
                 playback.seek(0.0);
             }
-            self.playing = !self.playing;
-            self.playback_goal = None;
+            self.player.playing = !self.player.playing;
+            self.player.goal = None;
         }
         if let Some(goal) = goal {
             // sent somewhere: it pauses there, cut a frame's worth at a time
-            (self.playing, self.playback_goal) = (false, Some(goal));
+            (self.player.playing, self.player.goal) = (false, Some(goal));
         }
         if stop && kept {
-            self.kept_playback = None;
+            self.player.kept = None;
         } else if stop {
             self.finish_playback();
         }
@@ -631,10 +569,9 @@ impl CutCraftApp {
     /// A stopped preview's playback taken up again, to play or scrub it: what it shows is
     /// its material again.
     pub(super) fn resume_playback(&mut self) {
-        if let Some(playback) = self.kept_playback.take() {
-            self.playback = Some(playback);
-            self.simulation = None;
-            (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+        if self.player.resume() {
+            self.preview.material = None;
+            self.preview_changed();
         }
     }
 }

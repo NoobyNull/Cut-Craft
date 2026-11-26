@@ -46,14 +46,14 @@ pub enum Shape {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RotaryZZero {
-    /// The tool is zeroed on the top of the material at A=0: touch the bit off on the
+    /// The bit is zeroed on the top of the material at A=0: touch the bit off on the
     /// highest point of a round blank, or the middle of a square's or board's top face. Cut
     /// depths go below zero, so a 3 mm deep cut is Z -3. Easiest when the blank is true; set
     /// zero again for each new blank
     #[default]
     #[schemars(title = "Material Top")]
     CylinderSurface,
-    /// The tool is zeroed on the turning axis, the centre line the rotary spins the material
+    /// The bit is zeroed on the turning axis, the centre line the rotary spins the material
     /// round (touch off on the axis, not on the machine bed or the rotary's base). Every Z is
     /// a distance from the axis, so on a 50 mm blank a 3 mm deep cut is Z 22. Zero stays put
     /// when you change blanks, and an out-of-round blank still cuts to the right finished
@@ -181,14 +181,14 @@ pub struct Params {
         extend("x-icon" = "job_setup/material_size_xyz.png")
     )]
     pub size: Size,
-    /// Where the tool is zeroed in Z: on top of the material, or under it on the machine bed
+    /// Where the bit is zeroed in Z: on top of the material, or under it on the machine bed
     #[schemars(
         title = "Z Zero Position",
         extend("x-section" = true, "x-hide-when" = {"job_type": "rotary"}),
         extend("x-icon" = "job_setup/z_zero_{}.png")
     )]
     pub z_zero: ZZero,
-    /// Rotary jobs: where the tool is zeroed in Z, on top of the cylinder or on its axis. The
+    /// Rotary jobs: where the bit is zeroed in Z, on top of the cylinder or on its axis. The
     /// picture shows where. Pick the one you touch the bit off on at the machine: the G-code
     /// heights depend on it, and a wrong pick cuts too deep or in the air
     #[schemars(
@@ -250,14 +250,14 @@ pub struct Params {
         extend("x-kind" = "colour")
     )]
     pub colour: [u8; 3],
-    /// How high the tool travels between cuts
+    /// How high the bit travels between cuts
     #[schemars(
         title = "Rapid Z Gaps above Material",
         extend("x-section" = true),
         extend("x-icon" = "job_setup/clearance_z1.png")
     )]
     pub gaps: RapidGaps,
-    /// Where the tool starts from and goes back to at the end
+    /// Where the bit starts from and goes back to at the end
     #[schemars(title = "Home / Start Position", extend("x-section" = true))]
     pub home: Home,
 }

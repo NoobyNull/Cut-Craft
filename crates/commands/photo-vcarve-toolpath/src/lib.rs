@@ -86,7 +86,7 @@ impl Default for Params {
                 .tools
                 .into_iter()
                 .find(|t| t.shape == ToolShape::VBit)
-                .expect("the starter tools include a V-bit"),
+                .expect("the starter bits include a V-bit"),
             project_onto_model: false,
         }
     }

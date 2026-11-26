@@ -4,6 +4,9 @@ use super::{CutCraftApp, Value, dialog_size, egui};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
 
+/// Options ▸ Backups' key: its settings, then [`super::backups::list_ui`].
+const BACKUPS: &str = "backups";
+
 impl CutCraftApp {
     /// Edit ▸ Options: the sections; changes wait for Apply, and Cancel throws them away.
     #[expect(
@@ -11,23 +14,23 @@ impl CutCraftApp {
         reason = "the one Options window, with the extras some pages show under their settings"
     )]
     pub(super) fn options_window(&mut self, ctx: &egui::Context) {
-        let mut open = self.options_window;
+        let mut open = self.options_editor.window.open;
         let fields = self.options_categories();
         let mut values = serde_json::to_value(self.edited_options()).expect("options serialise");
         let dirty = self.options_dirty();
-        let closing = self.options_closing;
+        let closing = self.options_editor.window.closing;
         let mut button = None;
         let mut answer = None;
         let mut changed = None;
         let mut reset = None;
-        if let Some(key) = self.options_goto.take()
+        if let Some(key) = self.options_editor.take_goto()
             && let Some(at) = fields.iter().position(|f| f.key == key)
         {
-            self.options_page = at;
+            self.options_editor.page = at;
         }
         // Mouse and Shortcuts lists every action's shortcuts under its settings
         let on_shortcuts = fields
-            .get(self.options_page)
+            .get(self.options_editor.page)
             .is_some_and(|f| f.key == super::shortcuts_page::CATEGORY);
         let rows = if on_shortcuts {
             self.shortcut_rows(&self.shortcut_search)
@@ -42,7 +45,7 @@ impl CutCraftApp {
                 .map_or_else(|| id.to_owned(), |(_, label)| label.clone())
         };
         let on_job_defaults = fields
-            .get(self.options_page)
+            .get(self.options_editor.page)
             .is_some_and(|f| f.key == crate::options::JOB_DEFAULTS);
         let (job_fields, mut job_params, job_error) = if on_job_defaults {
             self.job_defaults_state()
@@ -50,7 +53,7 @@ impl CutCraftApp {
             (vec![], Value::Null, None)
         };
         let on_language = fields
-            .get(self.options_page)
+            .get(self.options_editor.page)
             .is_some_and(|f| f.key == crate::options::LANGUAGE);
         if on_language && self.language_packs.is_none() {
             let dir = self.addons.dir().map(std::path::Path::to_path_buf);
@@ -67,6 +70,16 @@ impl CutCraftApp {
             self.language_packs = None;
         }
         let language_packs = self.language_packs.clone().unwrap_or_default();
+        let on_backups = fields
+            .get(self.options_editor.page)
+            .is_some_and(|f| f.key == BACKUPS);
+        let backups_listed = if on_backups {
+            self.backups_listed()
+        } else {
+            self.forget_backups_listed();
+            vec![]
+        };
+        let mut backups_pressed = None;
         let chosen_language = self.edited_options().language.pack.clone();
         let mut language_picked = None;
         let capture = self.capture.clone();
@@ -79,8 +92,8 @@ impl CutCraftApp {
         let mut forget_unsigned = false;
         let mut job_edited = false;
         let (icons, materials) = (&self.icons, &self.materials);
-        let show_advanced = &mut self.show_advanced;
-        let page = &mut self.options_page;
+        let show_advanced = &mut self.options_editor.show_advanced;
+        let page = &mut self.options_editor.page;
         *page = (*page).min(fields.len().saturating_sub(1));
         let (id, size) = (egui::Id::unique("options"), dialog_size(ctx));
         // the categories down the left, the chosen one's settings beside them
@@ -151,6 +164,9 @@ impl CutCraftApp {
                     if category.key == "confirmations" {
                         forget_unsigned = unsigned_code_section(ui, unsigned_remembered);
                     }
+                    if category.key == BACKUPS {
+                        backups_pressed = super::backups::list_ui(ui, &backups_listed);
+                    }
                     if category.key == "web_api" {
                         web_api_pressed =
                             super::web_api::options_section(ui, &web_api_state, &edited_web_api);
@@ -169,7 +185,7 @@ impl CutCraftApp {
         });
         if let Some(page) = reset {
             if page == crate::options::JOB_DEFAULTS {
-                self.job_defaults_form = None;
+                self.options_editor.job_defaults_form = None;
             }
             changed = Some(self.edited_options().reset(&page));
         }
@@ -208,6 +224,9 @@ impl CutCraftApp {
         if let Some(pressed) = web_api_pressed {
             self.web_api_pressed(pressed);
         }
+        if let Some(pressed) = backups_pressed {
+            self.backups_pressed(pressed);
+        }
         // after the page's settings, so they don't put back the shortcuts as they were
         if let Some(edit) = shortcut_edit {
             self.apply_shortcut_edit(edit);
@@ -228,7 +247,7 @@ impl CutCraftApp {
                 inner.retain(|f| f.key != "wayland_native");
             }
         }
-        if !self.show_advanced {
+        if !self.options_editor.show_advanced {
             fields.retain(|f| f.key != "advanced");
         }
         fields
@@ -295,7 +314,7 @@ impl CutCraftApp {
     pub(super) fn options_changed(
         &mut self,
         ctx: &egui::Context,
-        options: crate::options::Options,
+        mut options: crate::options::Options,
     ) {
         // the Preview tab's detail stays as it was moved, unless the default changed
         let now = self.display.detail;
@@ -309,17 +328,26 @@ impl CutCraftApp {
             if super::mac::is_mac(ctx) {
                 // a Mac's window can't change its title bar while open
                 self.status
-                    .set_message("The title bar changes next time Cut Craft starts.");
+                    .set_message(&cut_craft_i18n::tr!("status-title-bar-next-start"));
             } else {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(frame));
             }
         }
+        // the checks ran on the moves thinned as they were: checked again as now saved
+        let (new, old) = (&options.toolpaths, &self.options.toolpaths);
+        if (new.tolerance_2d, new.tolerance_3d, new.tolerance_vcarve)
+            != (old.tolerance_2d, old.tolerance_3d, old.tolerance_vcarve)
+        {
+            self.forget_save_checks();
+        }
         if options.toolpaths.preview_multiplier != self.options.toolpaths.preview_multiplier {
-            self.playback_speed = options.toolpaths.preview_speed();
+            self.player.speed = options.toolpaths.preview_speed();
         }
         let language =
             (options.language != self.options.language).then(|| options.language.pack.clone());
         options.apply();
+        // the window never changes the toolbars of your own: ones made while it was open stay
+        options.toolbars.clone_from(&self.options.toolbars);
         self.options = options;
         self.save_options();
         if let Some(pack) = language {

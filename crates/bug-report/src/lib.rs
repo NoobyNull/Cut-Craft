@@ -66,7 +66,7 @@ fn frame_id() -> egui::Id {
 /// How tall a dialog opens, as a share of the main window's height.
 pub const DIALOG_HEIGHT_SHARE: f32 = 0.8;
 
-/// A dialog in a window of its own beside the main one (the Tool Database, Machine
+/// A dialog in a window of its own beside the main one (the Bit Library, Machine
 /// Configuration, Report a Bug...), closed with the desktop's own button: `open` goes false
 /// then. It stays above the main window until it closes ([`cut_craft_window_owner`]). Its content scrolls when it is taller than the window. Where no second window can
 /// open (the web, tests), an egui window inside the main one instead.
@@ -235,7 +235,10 @@ pub fn context_menu(response: &egui::Response, add_contents: impl FnOnce(&mut eg
     response.context_menu(|ui| {
         add_contents(ui);
         ui.separator();
-        if ui.button("Report a Bug Here…").clicked() {
+        if ui
+            .button(cut_craft_i18n::t!("Report a Bug Here…"))
+            .clicked()
+        {
             open_here(ui.ctx());
             ui.close();
         }
@@ -580,7 +583,9 @@ impl Reporter {
             .constrain(true)
             .show(ctx, |ui| {
                 egui::Frame::menu(ui.style()).show(ui, |ui| {
-                    chosen = ui.button("Report a Bug Here…").clicked();
+                    chosen = ui
+                        .button(cut_craft_i18n::t!("Report a Bug Here…"))
+                        .clicked();
                 });
             });
         let away = ctx.input(|i| {
@@ -613,13 +618,13 @@ impl Reporter {
             if let Some((language, url)) = &translation {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(wording_note(language));
-                    ui.hyperlink_to("Tell its translators", url);
+                    ui.hyperlink_to(cut_craft_i18n::t!("Tell its translators"), url);
                 });
                 ui.separator();
             }
-            ui.label("Title");
+            ui.label(cut_craft_i18n::t!("Title"));
             ui.add(egui::TextEdit::singleline(&mut draft.title).desired_width(f32::INFINITY));
-            ui.label("What went wrong, and what you expected");
+            ui.label(cut_craft_i18n::t!("What went wrong, and what you expected"));
             ui.add(
                 egui::TextEdit::multiline(&mut draft.text)
                     .desired_rows(TEXT_ROWS)
@@ -627,7 +632,7 @@ impl Reporter {
             );
             what_is_sent(ui, draft);
             ui.horizontal(|ui| {
-                if ui.button("Add Pictures…").clicked() {
+                if ui.button(cut_craft_i18n::t!("Add Pictures…")).clicked() {
                     draft.pictures.extend((host.pick_pictures)());
                 }
                 let mut remove = None;
@@ -637,7 +642,7 @@ impl Reporter {
                         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                     if ui
                         .small_button(format!("{name} ✕"))
-                        .on_hover_text("Leave it out")
+                        .on_hover_text(cut_craft_i18n::t!("Leave it out"))
                         .clicked()
                     {
                         remove = Some(i);
@@ -654,13 +659,16 @@ impl Reporter {
             ui.horizontal(|ui| {
                 let ready = !draft.title.trim().is_empty() && !sending;
                 submit_now = ui
-                    .add_enabled(ready, egui::Button::new("Submit to GitHub"))
-                    .on_disabled_hover_text("Give it a title")
+                    .add_enabled(
+                        ready,
+                        egui::Button::new(cut_craft_i18n::t!("Submit to GitHub")),
+                    )
+                    .on_disabled_hover_text(cut_craft_i18n::t!("Give it a title"))
                     .clicked();
-                cancel = ui.button("Cancel").clicked();
+                cancel = ui.button(cut_craft_i18n::t!("Cancel")).clicked();
                 if sending {
                     ui.spinner();
-                    ui.label("Sending…");
+                    ui.label(cut_craft_i18n::t!("Sending…"));
                 }
             });
         });
@@ -736,14 +744,18 @@ fn computer_lines() -> Vec<String> {
 /// what always goes is shown as well.
 fn what_is_sent(ui: &mut egui::Ui, draft: &mut Draft) {
     ui.separator();
-    ui.strong("May Cut Craft send these with your report?");
-    ui.weak(PUBLIC_NOTE);
+    ui.strong(cut_craft_i18n::t!(
+        "May Cut Craft send these with your report?"
+    ));
+    ui.weak(cut_craft_i18n::t!(PUBLIC_NOTE));
     if let Some(image) = &draft.screenshot {
         ui.checkbox(
             &mut draft.send_screenshot,
-            "A picture of the Cut Craft window",
+            cut_craft_i18n::t!("A picture of the Cut Craft window"),
         );
-        ui.weak("It shows your design as it is on screen.");
+        ui.weak(cut_craft_i18n::t!(
+            "It shows your design as it is on screen."
+        ));
         let texture = ui.ctx().load_texture(
             "bug_report_screenshot",
             Arc::clone(image),
@@ -766,11 +778,11 @@ fn what_is_sent(ui: &mut egui::Ui, draft: &mut Draft) {
             "Cut Craft's log"
         };
         ui.checkbox(&mut draft.send_log, label);
-        ui.weak(
+        ui.weak(cut_craft_i18n::t!(
             "What Cut Craft was doing: the tools used, what each did and how it ended. Your \
-             user name and home folder are left out.",
-        );
-        ui.collapsing("See the log", |ui| {
+             user name and home folder are left out."
+        ));
+        ui.collapsing(cut_craft_i18n::t!("See the log"), |ui| {
             egui::ScrollArea::vertical()
                 .max_height(ui.text_style_height(&egui::TextStyle::Monospace) * LOG_ROWS)
                 .stick_to_bottom(true)
@@ -778,11 +790,14 @@ fn what_is_sent(ui: &mut egui::Ui, draft: &mut Draft) {
         });
     }
     if !draft.computer.is_empty() {
-        ui.checkbox(&mut draft.send_computer, "Details of my computer");
-        ui.weak(
-            "Which system and version it runs, its processor and graphics card: some bugs \
-             happen only on some computers. Never your computer's name or your user name.",
+        ui.checkbox(
+            &mut draft.send_computer,
+            cut_craft_i18n::t!("Details of my computer"),
         );
+        ui.weak(cut_craft_i18n::t!(
+            "Which system and version it runs, its processor and graphics card: some bugs \
+             happen only on some computers. Never your computer's name or your user name."
+        ));
         // a few lines: shown as they are, so it is plain what goes
         ui.indent("computer_details", |ui| {
             for line in &draft.computer {
@@ -790,19 +805,22 @@ fn what_is_sent(ui: &mut egui::Ui, draft: &mut Draft) {
             }
         });
     }
-    ui.collapsing("Always sent: the version and where you clicked", |ui| {
-        ui.weak("No designs or files: only these lines.");
-        if let Some(widget) = &draft.widget {
-            ui.label(format!("Clicked: {widget}"));
-        }
-        if draft.regions.is_empty() && !draft.crash {
-            ui.weak("No named part of the window here");
-        }
-        for r in &draft.regions {
-            ui.label(format!("{} — {}:{}", r.name, r.at.file(), r.at.line()));
-        }
-        ui.monospace(&draft.state);
-    });
+    ui.collapsing(
+        cut_craft_i18n::t!("Always sent: the version and where you clicked"),
+        |ui| {
+            ui.weak(cut_craft_i18n::t!("No designs or files: only these lines."));
+            if let Some(widget) = &draft.widget {
+                ui.label(format!("Clicked: {widget}"));
+            }
+            if draft.regions.is_empty() && !draft.crash {
+                ui.weak(cut_craft_i18n::t!("No named part of the window here"));
+            }
+            for r in &draft.regions {
+                ui.label(format!("{} — {}:{}", r.name, r.at.file(), r.at.line()));
+            }
+            ui.monospace(&draft.state);
+        },
+    );
     ui.separator();
 }
 

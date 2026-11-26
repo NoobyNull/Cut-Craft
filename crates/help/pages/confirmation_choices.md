@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-25
 see-also: settings, checks_before_cutting, check_missed_spots, vector_validator, save_toolpaths, addons
 ---
 

@@ -35,9 +35,9 @@ impl CutCraftApp {
             app.keep_job_times();
             match made {
                 Err(why) => app.status.set_message(&why),
-                Ok(_) if app.history.revision() != revision => app.status.set_message(&format!(
-                    "{named} was not used: the job changed while it worked. Try again"
-                )),
+                Ok(_) if app.history.revision() != revision => app.status.set_message(
+                    &cut_craft_i18n::tr!("status-not-used-job-changed", what = named.clone()),
+                ),
                 Ok(made) => then(app, made),
             }
         });
@@ -80,8 +80,10 @@ impl CutCraftApp {
         } else if busy.window(ctx) {
             let what = busy.what().to_owned();
             busy.cancel();
-            self.status
-                .set_message(&format!("{what} cancelled: nothing changed"));
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-cancelled-nothing-changed",
+                what = what
+            ));
         } else {
             self.busy = Some(busy);
         }
@@ -313,12 +315,12 @@ impl CutCraftApp {
             },
             move |app, (material, collided)| {
                 let hit = collision_note(&collided);
-                app.collisions = collided;
+                app.preview.collisions = collided;
                 let fine_bit =
                     crate::display::fine_bit_note(&tools, material.cell, app.display.detail);
-                app.simulation = Some(material);
-                app.kept_playback = None;
-                (app.simulation_coarse, app.fine_3d, app.surface_gpu) = (None, None, None);
+                app.preview.material = Some(material);
+                app.player.kept = None;
+                app.preview_changed();
                 if app.display.auto_open_3d {
                     app.view = super::View::ThreeD;
                 }
@@ -442,6 +444,8 @@ fn command_change_of(
     .map_err(|e: CommandError| e.to_string())?;
     let change =
         cut_craft_core::rest::with_rest(&doc.job, params, change).map_err(|e| e.to_string())?;
+    let change = cut_craft_core::locked_face::with_locked_face(&doc.job, params, change)
+        .map_err(|e| e.to_string())?;
     Ok(cut_craft_core::selector::kept(params, change))
 }
 

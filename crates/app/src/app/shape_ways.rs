@@ -107,11 +107,8 @@ impl CutCraftApp {
         let variant = flyout::VARIANTS
             .iter()
             .find(|v| v.command == form.id && v.way == form.way)?;
-        Some(format!(
-            "{}{}",
-            variant.hint,
-            super::selection_2d::EDIT_DRAWN
-        ))
+        let edit = t!("; Shift-click one this tool drew to edit it");
+        Some(format!("{}{edit}", variant.hint))
     }
 
     /// The line a shape's button adds to its tooltip while its other ways are in its form:

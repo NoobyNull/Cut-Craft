@@ -1,4 +1,4 @@
-//! Keeps Cut Craft's dialog windows (Did You Know?, Options, the Tool Database...) above the
+//! Keeps Cut Craft's dialog windows (Did You Know?, Options, the Bit Library...) above the
 //! main window until they close, and makes the system's file dialogs belong to whichever window
 //! opened them.
 //!

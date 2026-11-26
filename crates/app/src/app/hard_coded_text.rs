@@ -3,10 +3,11 @@
 //!
 //! The words the app shows belong in `crates/i18n/locales/en/*.ftl`, under a key the code
 //! asks for with `tr!("key")`. This scans the app's code for text handed straight to a button,
-//! label, tooltip, menu or window, and fails on any not listed in
+//! label, tooltip, menu, window or the status line, and warns of any not listed in
 //! `crates/app/i18n/hard-coded-baseline.txt`: the text that was there before it moved to
-//! Fluent, waiting its turn. Moving one empties its line, and a stale line fails too, so the
-//! list only shrinks.
+//! Fluent, waiting its turn. It never fails a pull request (Matthew, 2026-11-25: a warning,
+//! not a fail): in CI each new text is a warning on the pull request, and a line whose text
+//! has moved is a warning to delete it, so the list only shrinks.
 //!
 //! It also checks that every key the code asks for has English words.
 
@@ -49,9 +50,11 @@ const SHOWN: &[&str] = &[
     "CollapsingHeader::new",
     "Checkbox::new",
     "SelectableLabel::new",
+    "set_message",
+    "colored_label",
 ];
 
-fn sources() -> Vec<PathBuf> {
+pub(crate) fn sources() -> Vec<PathBuf> {
     fn walk(dir: &Path, files: &mut Vec<PathBuf>) {
         for entry in std::fs::read_dir(dir).unwrap() {
             let path = entry.unwrap().path();
@@ -63,31 +66,47 @@ fn sources() -> Vec<PathBuf> {
         }
     }
     let mut files = Vec::new();
-    walk(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
-        &mut files,
-    );
+    let app = Path::new(env!("CARGO_MANIFEST_DIR"));
+    walk(&app.join("src"), &mut files);
+    for other in OTHER_CRATES {
+        walk(
+            &app.parent().unwrap_or(app).join(other).join("src"),
+            &mut files,
+        );
+    }
     files.sort();
     files
         .into_iter()
         // test-only files (this one is all tests: its examples are not the app's words)
         .filter(|f| {
-            ![
-                "app/tests.rs",
-                "web_api_tests.rs",
-                "hard_coded_text.rs",
-                "help_coverage.rs",
-            ]
-            .iter()
-            .any(|t| f.ends_with(t))
+            !f.to_string_lossy()
+                .replace('\\', "/")
+                .contains("/app/tests/")
+                && !f.ends_with("tests.rs")
+                && ![
+                    "app/tests.rs",
+                    "web_api_tests.rs",
+                    "hard_coded_text.rs",
+                    "help_coverage.rs",
+                    "screenshots.rs",
+                ]
+                .iter()
+                .any(|t| f.ends_with(t))
         })
         .collect()
 }
 
-/// A source file's path from the app crate, with `/` on every computer.
-fn short(path: &Path) -> String {
+/// The other crates whose windows the app shows, scanned with its own code: their paths are
+/// written from `crates/` (`machines/src/…`), the app's from its crate (`src/…`).
+pub(crate) const OTHER_CRATES: &[&str] = &["machines", "tool-database", "bug-report"];
+
+/// A source file's path from the app crate (or from `crates/` for another crate's), with `/`
+/// on every computer.
+pub(crate) fn short(path: &Path) -> String {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let crates = root.parent().unwrap_or(root);
     path.strip_prefix(root)
+        .or_else(|_| path.strip_prefix(crates))
         .unwrap_or(path)
         .to_string_lossy()
         .replace('\\', "/")
@@ -95,7 +114,7 @@ fn short(path: &Path) -> String {
 
 /// A file's program code: up to its test module (not a single test-only function above it),
 /// with comments blanked out.
-fn program(source: &str) -> String {
+pub(crate) fn program(source: &str) -> String {
     // an inline `#[cfg(test)] mod tests { … }` is left out up to its closing brace; `mod
     // tests;` (a test file of its own) is only a line, so the code after either is still scanned
     let mut code = String::new();
@@ -162,7 +181,7 @@ fn block_end(code: &[u8], open: usize) -> usize {
 }
 
 /// The string literals in `code`, each with where its closing quote ends.
-fn literal_at(code: &[u8], at: usize) -> Option<(String, usize)> {
+pub(crate) fn literal_at(code: &[u8], at: usize) -> Option<(String, usize)> {
     if code.get(at) != Some(&b'"') {
         return None;
     }
@@ -323,7 +342,7 @@ fn written(found: &BTreeMap<String, usize>) -> String {
     let mut out = String::from(
         "# Text written straight into the app's code, waiting to move into\n\
          # crates/i18n/locales/en/*.ftl: one `file | \"text\"` a line (a text there twice has two\n\
-         # lines). The hard-coded text check fails on text not listed here. Move one into Fluent,\n\
+         # lines). The hard-coded text check warns of text not listed here. Move one into Fluent,\n\
          # then delete its line.\n\n",
     );
     for (entry, count) in found {
@@ -335,8 +354,11 @@ fn written(found: &BTreeMap<String, usize>) -> String {
     out
 }
 
+/// Warns of text written straight into the code that the baseline does not list, and of
+/// baseline lines whose text has moved; a warning, never a fail. In CI (`GITHUB_ACTIONS`) each
+/// is a warning annotation on the pull request.
 #[test]
-fn no_new_text_is_written_into_the_code() {
+fn warns_of_new_text_written_into_the_code() {
     let found = hard_coded();
     if std::env::var_os("CUT_CRAFT_WRITE_TEXT_BASELINE").is_some() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("i18n/hard-coded-baseline.txt");
@@ -344,28 +366,56 @@ fn no_new_text_is_written_into_the_code() {
         return;
     }
     let known = baseline();
-    let new: Vec<String> = found
-        .iter()
-        .filter(|(entry, count)| known.get(*entry).copied().unwrap_or(0) < **count)
-        .map(|(entry, _)| entry.clone())
-        .collect();
-    let moved: Vec<String> = known
-        .iter()
-        .filter(|(entry, count)| found.get(*entry).copied().unwrap_or(0) < **count)
-        .map(|(entry, _)| entry.clone())
-        .collect();
-    assert!(
-        new.is_empty(),
-        "Words written straight into the code, where a language pack cannot reach them. Put \
-         each in crates/i18n/locales/en/<area>.ftl under a key and show it with tr!(\"key\"):\n{}",
-        new.join("\n")
-    );
-    assert!(
-        moved.is_empty(),
-        "These have moved into Fluent: delete their lines from \
-         crates/app/i18n/hard-coded-baseline.txt:\n{}",
-        moved.join("\n")
-    );
+    let more = |a: &BTreeMap<String, usize>, b: &BTreeMap<String, usize>| -> Vec<String> {
+        a.iter()
+            .filter(|(entry, count)| b.get(*entry).copied().unwrap_or(0) < **count)
+            .map(|(entry, _)| entry.clone())
+            .collect()
+    };
+    for line in warnings(&more(&found, &known), &more(&known, &found)) {
+        println!("{line}");
+    }
+}
+
+/// The warnings for `new` text written into the code and baseline lines whose text has
+/// `moved`: GitHub annotations in CI, plain lines elsewhere.
+fn warnings(new: &[String], moved: &[String]) -> Vec<String> {
+    let ci = std::env::var_os("GITHUB_ACTIONS").is_some();
+    let warn = |entry: &str, why: &str| {
+        let file = entry.split(" | ").next().unwrap_or_default();
+        if ci {
+            format!(
+                "::warning file=crates/app/{file},title=Text written into the code::{why}: {entry}"
+            )
+        } else {
+            format!("warning: {why}: {entry}")
+        }
+    };
+    new.iter()
+        .map(|e| {
+            warn(
+                e,
+                "a language pack cannot reach this; put it in crates/i18n/locales/en/<area>.ftl \
+                 under a key and show it with tr!(\"key\")",
+            )
+        })
+        .chain(moved.iter().map(|e| {
+            warn(
+                e,
+                "this has moved into Fluent; delete its line from \
+                 crates/app/i18n/hard-coded-baseline.txt",
+            )
+        }))
+        .collect()
+}
+
+#[test]
+fn a_warning_names_the_file_and_the_text() {
+    let new = ["src/app.rs | \"Open\"".to_owned()];
+    let lines = warnings(&new, &[]);
+    assert_eq!(lines.len(), 1);
+    assert!(lines[0].contains("src/app.rs | \"Open\""), "{}", lines[0]);
+    assert!(lines[0].contains("tr!"), "{}", lines[0]);
 }
 
 /// The keys the code asks for by name: `tr!("key"`.

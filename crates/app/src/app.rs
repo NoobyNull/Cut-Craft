@@ -1,15 +1,19 @@
 //! The main window: menus, Design and Toolpaths panels, and the 2D/3D views over the
 //! document, its undo history and the command registry.
 
+mod action_runs;
 mod actions;
 mod app_icon;
 mod background;
+mod backups;
+pub(crate) mod built_ins;
 mod calculate_again;
 mod canvas_2d;
 mod canvas_layout;
 mod check_list;
 mod command_form;
 mod commit;
+mod custom_toolbars;
 mod cutting;
 mod depth;
 mod dialog_windows;
@@ -26,14 +30,15 @@ mod gcode_view;
 mod generate_border;
 mod gestures_2d;
 mod guide;
+mod handle_drag;
 mod run;
 pub use run::*;
 mod tool_sections;
 #[cfg(test)]
 use tool_sections::{KNIFE_LINE, held_name, tool_line};
 use tool_sections::{
-    ListAsk, ListSlot, PickFor, ToolAsk, ToolList, bordered, clearing_section, put_listed,
-    rest_section, selector_section, shows_rest, tool_picker, tools_section, trimmed,
+    ListAsk, ListSlot, PickFor, ToolAsk, ToolList, bordered, clearing_section, locked_face_section,
+    put_listed, rest_section, selector_section, shows_rest, tool_picker, tools_section, trimmed,
 };
 mod dialogs;
 pub(crate) use dialogs::message_dialog;
@@ -51,8 +56,9 @@ mod shape_ways;
 pub use settings::*;
 mod bit_changes;
 #[cfg(test)]
-mod hard_coded_text;
+pub(crate) mod hard_coded_text;
 mod help;
+mod help_browser;
 #[cfg(test)]
 mod help_coverage;
 #[path = "help_pictures.rs"]
@@ -65,21 +71,29 @@ mod keyboard;
 mod language_page;
 mod layout_choice;
 mod layouts;
+mod library_file;
 mod mac;
 mod machine_fit;
 mod machine_setup;
+mod meshes_3d;
 mod node_editing;
 mod notes_panel;
 mod options_apply;
+mod options_editor;
 mod options_window;
 mod output;
 mod pace;
 mod page_layout;
 mod panels;
 mod passes;
+mod photo_depth;
 mod placement;
+mod player;
+mod preview;
+mod rail_list;
 mod reach;
 mod sample;
+mod saving_checks;
 #[path = "screenshots.rs"]
 mod screenshots;
 mod selection_2d;
@@ -92,11 +106,15 @@ mod surfacing;
 mod tabs;
 #[cfg(test)]
 mod tests;
+mod unapplied;
+#[cfg(test)]
+pub(crate) use tests::document_menus;
 mod tips;
 mod title_bar;
 mod toolpath_output;
 mod tools_materials;
 mod trace_window;
+mod turn_rings;
 mod turning;
 mod units_ask;
 mod updates;
@@ -505,12 +523,8 @@ impl Anchor {
     }
 }
 
-/// Orientate 3D Model's rotation rings on screen (each ring's axis and its points), and the
-/// middle sphere's centre and radius.
-type Rings3d = (
-    Vec<(&'static str, Vec<egui::Pos2>)>,
-    Option<(egui::Pos2, f32)>,
-);
+#[cfg(test)]
+use turn_rings::Drawn as Rings3d;
 
 /// A command whose settings form is open.
 #[expect(
@@ -615,7 +629,7 @@ struct CarveArea {
     clippy::struct_excessive_bools,
     reason = "the windows and modes it shows"
 )]
-struct CutCraftApp {
+pub(crate) struct CutCraftApp {
     screen: Screen,
     doc: Document,
     history: History,
@@ -685,18 +699,19 @@ struct CutCraftApp {
     search: Option<String>,
     /// The browser's tab (`INSPECTOR_TABS`) in the Rail and Ribbon layouts.
     inspector_tab: usize,
-    /// The Rail layout's open group (an index into `all_groups`), and whether its list
-    /// stays open after a tool is picked.
-    rail_group: Option<usize>,
-    rail_pinned: bool,
-    /// Whether the Rail layout's list shows the favourites (its ★ button) instead of a group.
-    rail_favourites: bool,
+    /// The Rail layout's list: which is open (a group, the favourites or the gadgets), and
+    /// whether its pin keeps it open after a tool is picked.
+    rail: rail_list::RailList,
     /// The Ribbon layout's tab (`RIBBON_TABS`), which the Canvas layout's header shares.
     ribbon_tab: usize,
     /// What the Canvas layout has open.
     canvas: canvas_layout::CanvasState,
+    /// What the toolbars of your own have open.
+    toolbars: custom_toolbars::ToolbarState,
     /// Where the options are saved; `None` keeps them in memory (tests).
     options_path: Option<std::path::PathBuf>,
+    /// Help ▸ Back Up Settings and the automatic backups ([`cut_craft_backup`]).
+    backups: backups::Backups,
     /// The user's own spelling words, one a line; none in tests.
     words_path: Option<std::path::PathBuf>,
     /// Where how long each kind of slow job took is kept between runs
@@ -713,15 +728,10 @@ struct CutCraftApp {
     selected_group: Option<String>,
     /// Quick Engrave's Immediate Output: the post and side name it saves with.
     immediate_output: SaveForm,
-    /// Relief from Photo's Estimate Depth, while the Depth add-on works on a picture.
-    depth_estimate: Option<crate::depth::Estimating>,
+    /// Relief from Photo: the Depth add-on's estimate running, and High detail.
+    photo_depth: photo_depth::PhotoDepth,
     /// Generate Border's key, and the border it is generating.
     border: generate_border::BorderForm,
-    /// Relief from Photo's High detail tick: unset means on once the model is fetched.
-    depth_high_detail: Option<bool>,
-    /// The High detail model downloading, or why its last download failed.
-    depth_detail_fetch: Option<crate::depth::FetchingDetail>,
-    depth_detail_failed: Option<String>,
     /// A slow job running off the window's thread, its progress shown over the window.
     busy: Option<crate::busy::Busy<CutCraftApp>>,
     /// How long a job may take before its progress is shown; quicker ones finish as if
@@ -750,22 +760,17 @@ struct CutCraftApp {
     layout_question: Option<layout_choice::LayoutQuestion>,
     post_window: Option<cut_craft_machines::PostManager>,
     tools: ToolDatabase,
-    /// Where `tools` is saved; `None` keeps it in memory (tests, or a file that failed to load).
-    tools_path: Option<std::path::PathBuf>,
-    /// The tool database file that could not be read at start: nothing is saved over it,
-    /// and every save says so.
-    tools_unreadable: Option<std::path::PathBuf>,
-    /// The open Tool Database window.
+    /// Where `tools` is saved, and whether its file could not be read at start.
+    tools_file: library_file::LibraryFile,
+    /// The open Bit Library window.
     tool_manager: Option<cut_craft_tool_database::Manager>,
     /// The Materials Library: materials by class and hardness.
     materials: cut_craft_core::material_library::MaterialLibrary,
-    /// Where `materials` is saved; `None` keeps it in memory.
-    materials_path: Option<std::path::PathBuf>,
-    /// The Materials Library file that could not be read at start, as `tools_unreadable`.
-    materials_unreadable: Option<std::path::PathBuf>,
+    /// Where `materials` is saved, and whether its file could not be read at start.
+    materials_file: library_file::LibraryFile,
     /// The open Materials Library window.
     materials_window: Option<cut_craft_tool_database::materials::MaterialsWindow>,
-    /// What the open Select Tool picks for: a tool in one of the form's lists, or a tool
+    /// What the open Select Bit picks for: a tool in one of the form's lists, or a tool
     /// changer holder; `None` picks the form's own tool.
     picking: Option<PickFor>,
     /// A Calculate waiting on the deeper-than-the-material warning.
@@ -774,6 +779,9 @@ struct CutCraftApp {
     units_ask: Option<units_ask::UnitsAsk>,
     /// Save Toolpaths held for the question about G-code an earlier save left there.
     earlier_ask: Option<EarlierAsk>,
+    /// The toolpaths a new order left out of date, as they cut only what is above them:
+    /// waiting on Put it back or Keep the new order.
+    reorder_ask: Option<Vec<String>>,
     /// View G-code's window, while open.
     gcode_view: Option<gcode_view::GcodeView>,
     /// Save Toolpaths held for the question about what the checks before cutting found.
@@ -782,9 +790,8 @@ struct CutCraftApp {
     save_after: Option<gcode_view::SaveAfter>,
     /// Save Toolpaths' form, opened again once its save has asked all it asks.
     form_back: Option<SaveForm>,
-    /// The problems Save Anyway was answered for: the next save goes on despite them, and
-    /// asks again if the checks find any not among them. Empty when not answered.
-    checks_accepted: Vec<String>,
+    /// What a save of toolpaths carries from the checks before cutting to its files.
+    saving: saving_checks::SavingChecks,
     /// The warnings of the checks before cutting ticked as read, by what they say: Save
     /// and Send to Machine wait until each one found is ticked.
     acknowledged: std::collections::BTreeSet<String>,
@@ -799,8 +806,6 @@ struct CutCraftApp {
     /// The add-ons installed that are not gadgets, by name, each with the tool it brings
     /// when Cut Craft knows it, and whether it is official (`crate::addons::installed_tools`).
     installed_addons: Vec<(String, Option<&'static str>, bool)>,
-    /// Rail: the Gadgets list is open.
-    rail_gadgets: bool,
     /// Gadgets from the My Gadgets folder or unsigned add-ons, not from Cut Craft's own
     /// signed builds, by command id.
     unsigned_gadgets: std::collections::HashMap<String, crate::gadgets::Unsigned>,
@@ -823,34 +828,15 @@ struct CutCraftApp {
     handles_3d: Vec<(Handle3d, egui::Pos2)>,
     /// The components under the 3D view's last right-click, topmost first.
     under_3d: Vec<EntityId>,
-    /// A handle being dragged, from where the pointer pressed.
-    drag_3d: Option<(Handle3d, egui::Pos2)>,
-    /// A height handle's drag as it follows the pointer: the component's settings and its
-    /// top when the drag began, and the settings last applied (undone and applied again
-    /// each frame the pointer moves, so the whole drag is one undo).
-    drag_base: Option<(cmd_component_properties::Params, f64, Option<Value>)>,
+    /// A drag on one of the 3D view's edit handles.
+    handle_drag: handle_drag::HandleDrag,
     settings_3d: Option<Settings3d>,
-    /// Orientate 3D Model's rotation handles as drawn last frame: each ring's axis
-    /// (`x`, `y`, `z`) and its points on screen, then the middle sphere's centre and radius.
-    rings_3d: Rings3d,
-    /// The handle a drag started on, which the drag then turns the model about (`xyz`: the
-    /// sphere, all three axes).
-    turn_ring: Option<&'static str>,
-    /// While a ring is held: the way + runs round it under the pointer, on screen, and how
-    /// far it reaches from its middle, points.
-    ring_grip: Option<(egui::Vec2, f32)>,
+    /// Orientate 3D Model's rotation handles: as drawn last frame, and the one held.
+    turn_rings: turn_rings::TurnRings,
     /// An open Help window.
     info: Option<Info>,
-    /// Help Contents' rendered pages and the `help:` links it watches.
-    help_cache: egui_commonmark::CommonMarkCache,
-    /// What is typed in the Help window's search box.
-    help_search: String,
-    /// Every help page as (topic, title, Markdown), made the first time help is searched.
-    help_index: Vec<(&'static str, String, String)>,
-    /// The help search's ranked index of [`Self::help_index`], made with it.
-    help_ranked: Option<cut_craft_help::search::Index>,
-    /// The help pages read before and after the one shown: Back and Forward.
-    help_history: cut_craft_help::wiki::History<&'static str>,
+    /// The Help window's pages, search and Back and Forward.
+    help: help_browser::HelpBrowser,
     /// The Did You Know? window, open on this tip.
     tip: Option<usize>,
     /// The Did You Know? window's rendered tips.
@@ -869,11 +855,6 @@ struct CutCraftApp {
     summary: Summary,
     /// Where the pointer has been during this drag, for stroke tools such as Freehand.
     stroke: Vec<Point>,
-    /// The previewed material before the last preview, for Undo Last Preview.
-    before_preview: Option<BeforePreview>,
-    /// The side of a double-sided job the preview has up (`Document::bottom_side`): when
-    /// the job turns over (Swap Sides, or its undo or redo), the preview turns with it.
-    preview_side: bool,
     /// Node editing: the nodes picked with a box, which a drag of one moves together.
     picked_nodes: Vec<cut_craft_core::nodes::NodeAt>,
     /// Node editing's mirror lines, H and V: with the first, nodes either side of the
@@ -896,12 +877,9 @@ struct CutCraftApp {
     machine_files: Option<send::MachineFiles>,
     /// The checks before cutting shown in Save Toolpaths' form and the Analyse tab.
     save_checks: Vec<SaveChecks>,
-    /// Whether Snapping Options (F4) is open; the options are kept in `options.snapping`.
-    snap_window: bool,
-    /// Snapping Options changed and not applied yet; `None` when it shows them as they are.
-    snap_draft: Option<cut_craft_core::snap::SnapOptions>,
-    /// Close was pressed on Snapping Options with changes not applied: it asks first.
-    snap_closing: bool,
+    /// Snapping Options (F4): whether it is open, and its changes not applied yet. The
+    /// options themselves are kept in `options.snapping`.
+    snap: unapplied::Unapplied<cut_craft_core::snap::SnapOptions>,
     /// Gadgets ▸ Job Setup Sheet Editor is open.
     job_sheet_window: bool,
     /// Toolpaths ▸ Print Part Labels is open.
@@ -924,19 +902,8 @@ struct CutCraftApp {
     /// The preview grid last worked out, and what it was for: the job opened, the
     /// revision and the toolpaths' moves, the detail and the block.
     preview_grid_kept: std::cell::Cell<Option<(GridKey, crate::preview_detail::Grid)>>,
-    /// The material as cut by the previewed toolpaths, and its picture once drawn.
-    simulation: Option<Material>,
-    /// `simulation` at the 3D view's moving detail, and that detail (mesh cells).
-    simulation_coarse: Option<(usize, Material)>,
-    /// The model alone at the 3D view's moving detail (picking, handles, the quick mesh):
-    /// made once a change, not every frame.
-    rough_3d: Option<(RoughKey, Material)>,
-    /// A rotary job's full 3D models as the view draws them round the axis, kept by the
-    /// change and the import they show.
-    turned_3d: Option<TurnedModels>,
-    /// What the collet nut, spindle or shank hit in the last preview, by toolpath: the
-    /// toolpath list marks them ⚠ in red and the 3D view shows the stock in the way red.
-    collisions: std::collections::BTreeMap<EntityId, Collided>,
+    /// The previewed material: what the previewed toolpaths cut, and its undo.
+    preview: preview::Preview,
     /// The model's height, lowest point to highest, and the history's revision it was
     /// measured at: Model Position in Material's picture and warning, measured once a change.
     model_tall: std::cell::Cell<Option<(u64, f64)>>,
@@ -963,15 +930,10 @@ struct CutCraftApp {
     /// What told the toolpaths apart at the last change, so a reorder, or its undo or redo,
     /// moving them between ids is seen (see [`follow`]).
     toolpath_keys: follow::Keys,
-    /// The mark each toolpath's cells take in the preview, where it is not its own id: the
-    /// one it was previewed under before a reorder moved it to another id.
-    preview_marks: std::collections::BTreeMap<EntityId, u32>,
     /// What a tool with no form (Group) warned of, in red at the foot of the tool panel, for
     /// the job (`job_epoch`) and change (history revision) it made: any later change, Undo
     /// too, takes it away.
     tool_note: Option<(u64, u64, String)>,
-    /// When a height handle's drag last remade the model (the app's clock, seconds).
-    height_applied_at: Option<f64>,
     /// The level clipart imported through Orientate 3D Model goes on (Import to Level),
     /// until another command starts.
     import_level: Option<u64>,
@@ -985,29 +947,11 @@ struct CutCraftApp {
     )>,
     /// The snap mark picked in the 2D view: Delete lets that point go.
     picked_constraint: Option<PickedSnap>,
-    /// The 3D view's fine mesh once it is still, with what it was made for.
-    fine_3d: Option<(FineKey, egui::Mesh)>,
-    /// The model at the fine mesh's detail, for drawing in the 3D view to hit what is drawn,
-    /// with the history revision, job and detail when still (mesh cells) it was made for.
-    drawn_on: Option<(
-        (u64, cut_craft_core::document::Job, usize),
-        std::sync::Arc<Material>,
-    )>,
-    /// The imported model's triangles as last drawn, kept while nothing about the view or
-    /// the model changes: sorting and lighting a big model every frame is what made the
-    /// window drag while a model was being imported.
-    model_3d: Option<(ModelKey, std::sync::Arc<egui::Mesh>)>,
     /// The window's GPU, when it draws with wgpu, for the 3D view to draw on (the headless
     /// tests have none and draw the meshes above).
     gpu_3d: Option<view3d::gpu::Gpu>,
-    /// The 3D view's surface as the GPU draws it, with what it was built from.
-    surface_gpu: Option<SurfaceGpu>,
-    /// The model's walls and bottom, made with the surface they hang from (no preview).
-    solid_gpu: Option<std::sync::Arc<view3d::gpu::Geometry>>,
-    /// The imported model as the GPU draws it.
-    model_gpu: Option<ModelGpu>,
-    /// The same for the imported model's parts past the material's edges.
-    ghost_gpu: Option<ModelGpu>,
+    /// What the 3D view keeps of what it draws, each with what it was made from.
+    meshes: meshes_3d::Meshes3d,
     /// When the 3D view last moved (input time, seconds).
     moved_3d: f64,
     /// While Auto-rotate spins the 3D view: when it last turned it (input time, seconds).
@@ -1030,38 +974,10 @@ struct CutCraftApp {
     view_cube: Option<view3d::ViewCube>,
     /// Jobs opened or saved lately, newest first.
     recent: Vec<std::path::PathBuf>,
-    /// A preview playing (or paused): the tool cutting the material a distance at a time.
-    playback: Option<cut_craft_core::playback::Playback>,
-    playing: bool,
-    /// Where the tool is being moved to (Single Step, Run to Retract, the Progress slider),
-    /// cut a little each frame until it gets there, or Stop.
-    playback_goal: Option<f64>,
-    /// A preview stopped or played to its end, kept so its controls stay to scrub it back
-    /// and forth, till another preview, Reset Preview or another job.
-    kept_playback: Option<cut_craft_core::playback::Playback>,
-    /// The job's history revision when the playing (or kept) preview was laid out: once
-    /// the job changes, its moves are old, so it stops and its controls close.
-    playback_revision: u64,
-    /// A playing preview's material as the 3D view draws it, and the GPU's surface of it,
-    /// kept by what they were made from (the playback's revision, the detail and the job's
-    /// revision; for the GPU, its wrap and sides too) so a paused preview is not made again
-    /// each frame, nor a moving one more than once a frame.
-    playback_view: Option<((u64, usize, u64), Material)>,
-    playback_gpu: Option<(PlaybackGpuKey, std::sync::Arc<view3d::gpu::Geometry>)>,
-    /// How many times the playback's view has been made (for tests).
-    playback_builds: usize,
-    /// The playback's revision the 3D view shows, and when it was taken: while it plays
-    /// it is taken again every [`PLAYBACK_REDRAW`], and at once when it stops somewhere.
-    playback_shown: Option<(u64, std::time::Instant)>,
-    /// How often that is, [`PLAYBACK_REDRAW`] (longer in tests, whose frames are slow).
-    playback_redraw: std::time::Duration,
+    /// The preview player: a preview playing, paused or kept, and how it plays.
+    player: player::Player,
     /// Where the Close up slider is centred, held while it is dragged so it stays put.
     close_up: Option<f64>,
-    /// How long a frame may spend cutting a playing preview; the rest waits for the next
-    /// frame, so a long toolpath plays slower instead of freezing the window.
-    playback_budget: std::time::Duration,
-    /// How many times faster than the machine the preview plays (1: the machine's speed).
-    playback_speed: f64,
     /// A rotary job's preview as the machine runs it: the file's own moves played into the
     /// material turning with A, kept in step with the playing (or kept) preview.
     turning: Option<turning::Turning>,
@@ -1071,27 +987,12 @@ struct CutCraftApp {
     guide_drag: Option<(bool, Option<usize>)>,
     /// Transform mode's corners rotate rather than scale.
     rotating: bool,
-    /// Edit ▸ Options, kept between runs, and whether its window is open.
+    /// Edit ▸ Options, kept between runs.
     options: crate::options::Options,
-    options_window: bool,
-    /// Changes made in the Options window and not applied yet; `None` when it shows the
-    /// options as they are. They take effect only on Apply.
-    options_draft: Option<crate::options::Options>,
-    /// Options ▸ Job Defaults' job settings as being edited, and why the job they make was
-    /// refused, if it was (kept as typed until it is put right).
-    job_defaults_form: Option<(Value, Option<String>)>,
-    /// Close was pressed with changes not applied: the window asks Apply or Discard.
-    options_closing: bool,
-    /// The Options category shown, by its place in the list.
-    options_page: usize,
-    /// Show advanced settings is ticked: the Advanced category lists. Off at every start, so
-    /// reaching them is always a deliberate step.
-    show_advanced: bool,
+    /// The Options window: whether it is open, its page, and the changes not applied yet.
+    options_editor: options_editor::OptionsEditor,
     /// Options ▸ Web API: the server, if it is listening, and the calls waiting to run.
     web_api: web_api::WebApi,
-    /// The Options category to show when the window next draws, by its key (Help ▸
-    /// Keyboard Shortcuts' Change Shortcuts opens Mouse and Shortcuts).
-    options_goto: Option<&'static str>,
     /// A shortcut being set in Options ▸ Mouse and Shortcuts: the next key or mouse button
     /// pressed is taken for it, and runs nothing.
     capture: Option<ShortcutCapture>,
@@ -1309,7 +1210,7 @@ fn menu_item(ui: &mut egui::Ui, item: &gui::MenuItem, menus: &Menus, clicked: &m
         if response.hovered()
             && let Some(about) = gui::about(&item.action)
         {
-            cut_craft_bug_report::hint::hint(ui.ctx(), about);
+            cut_craft_bug_report::hint::hint(ui.ctx(), &about);
         }
         if !available {
             response = response.on_disabled_hover_text((menus.why)(&item.action));

@@ -22,18 +22,17 @@ impl CutCraftApp {
     ) {
         self.handles_3d.clear();
         let importing = self.form.as_ref().is_some_and(|f| f.model.is_some());
-        if self.simulation.is_some()
-            || self.playback.is_some()
+        if self.preview.material.is_some()
+            || self.player.playback.is_some()
             || importing
             || self.view_tool != Some(ViewTool::Transform)
         {
             // a drag the mode was left in the middle of ends here, as far as it went
-            self.drag_3d = None;
-            self.drag_base = None;
+            self.handle_drag.end();
             return;
         }
         let Some(bounds) = self.doc.selection_bounds() else {
-            self.drag_3d = None;
+            self.handle_drag.let_go();
             if ui.rect_contains_pointer(area) {
                 cut_craft_bug_report::hint::hint(
                     ui.ctx(),
@@ -119,7 +118,7 @@ impl CutCraftApp {
             if response.drag_started()
                 && let Some(origin) = ui.input(|i| i.pointer.press_origin())
             {
-                self.drag_3d = Some((handle, origin));
+                self.handle_drag.start(handle, origin);
             }
             if response.clicked() && handle == Handle3d::Settings {
                 let params = cmd_component_properties::Params::of(id, &self.doc.components[&id]);
@@ -229,7 +228,7 @@ impl CutCraftApp {
             if response.drag_started()
                 && let Some(from) = ui.input(|i| i.pointer.press_origin())
             {
-                self.drag_3d = Some((Handle3d::Transform(handle), from));
+                self.handle_drag.start(Handle3d::Transform(handle), from);
             }
         }
         self.transform_drag_3d(ui, painter, plane, bounds);
@@ -244,7 +243,7 @@ impl CutCraftApp {
         plane: &Plane3d,
         bounds: cut_craft_core::geometry::Rect,
     ) {
-        let Some((Handle3d::Transform(handle), from)) = self.drag_3d else {
+        let Some((Handle3d::Transform(handle), from)) = self.handle_drag.held() else {
             return;
         };
         let stroke = ui.visuals().selection.stroke;
@@ -264,13 +263,12 @@ impl CutCraftApp {
             // off the handles' plane (over the horizon in perspective, or the plane seen
             // edge-on): nothing to show, and letting go there changes nothing
             if released {
-                self.drag_3d = None;
+                self.handle_drag.let_go();
                 self.status
-                    .set_message("Let go off the material: nothing was changed");
+                    .set_message(&cut_craft_i18n::tr!("status-let-go-off-material"));
             } else {
-                self.status.set_message(
-                    "The pointer is off the material: bring it back, or let go to cancel",
-                );
+                self.status
+                    .set_message(&cut_craft_i18n::tr!("status-pointer-off-material"));
             }
             return;
         };
@@ -280,7 +278,7 @@ impl CutCraftApp {
             .to_vec();
         painter.add(egui::Shape::closed_line(moved, stroke));
         if released {
-            self.drag_3d = None;
+            self.handle_drag.let_go();
             let change = Change::transform_selected(&self.doc, |_| t);
             self.record(change, "Transformed");
         }
@@ -289,14 +287,14 @@ impl CutCraftApp {
     /// Escape during a drag on a 3D view handle: the drag ends with nothing changed (a
     /// height already set as it went is undone), Transform mode stays.
     pub(in super::super) fn cancel_drag_3d(&mut self) {
-        if self.drag_3d.take().is_none() {
+        let Some(applied) = self.handle_drag.cancel() else {
             return;
-        }
-        self.height_applied_at = None;
-        if let Some((.., Some(_))) = self.drag_base.take() {
+        };
+        if applied {
             self.history.undo(&mut self.doc);
         }
-        self.status.set_message("Cancelled: nothing was changed");
+        self.status
+            .set_message(&cut_craft_i18n::tr!("status-cancelled-nothing-done"));
     }
 
     /// A height handle's drag: the component follows the pointer (made again at most every
@@ -306,7 +304,7 @@ impl CutCraftApp {
     /// A drag up a quarter of the view doubles, as the wheel's zoom does; the base height
     /// moves the material's thickness over that quarter.
     pub(super) fn handle_drag_3d(&mut self, ui: &egui::Ui, fit: egui::Rect, id: EntityId) {
-        let Some((handle, origin)) = self.drag_3d else {
+        let Some((handle, origin)) = self.handle_drag.held() else {
             return;
         };
         if !matches!(handle, Handle3d::Total | Handle3d::Height | Handle3d::Base) {
@@ -317,10 +315,10 @@ impl CutCraftApp {
             return;
         };
         let doc = &self.doc;
-        let (base, top, applied) = self.drag_base.get_or_insert_with(|| {
+        let (base, top, applied) = self.handle_drag.height(|| {
             let k = &doc.components[&id];
             let top = k.height_range().map_or(0.0, |(_, top)| top);
-            (cmd_component_properties::Params::of(id, k), top, None)
+            (cmd_component_properties::Params::of(id, k), top)
         });
         let quarter = fit.size() / VIEW_ZOOM_QUARTERS;
         let factor = |px: f32, over: f32| f64::from(2f32.powf(px / over));
@@ -330,7 +328,7 @@ impl CutCraftApp {
                 let f = factor(-by.y, quarter.y);
                 p.shape_height = base.shape_height * f;
                 p.base_height = base.base_height * f;
-                format!("Total height {}", doc.job.units.length(*top * f, 2))
+                format!("Total height {}", doc.job.units.length(top * f, 2))
             }
             Handle3d::Height => {
                 p.shape_height = base.shape_height * factor(-by.y, quarter.y);
@@ -343,11 +341,11 @@ impl CutCraftApp {
             }
         };
         let params = serde_json::to_value(&p).expect("component properties serialize");
-        let (same, undo) = (applied.as_ref() == Some(&params), applied.is_some());
+        let (same, undo) = (applied == Some(&params), applied.is_some());
         // the model is made again at most ten times a second while the drag goes on (the
         // value in the status bar follows the pointer every frame), and as let go
         let time = ui.input(|i| i.time);
-        let since = self.height_applied_at.map_or(f64::INFINITY, |t| time - t);
+        let since = self.handle_drag.since_applied(time);
         let due = released || since >= HEIGHT_DRAG_EVERY;
         let mut failed = false;
         if !same && due {
@@ -362,10 +360,7 @@ impl CutCraftApp {
                     None
                 }
             };
-            if let Some((.., applied)) = &mut self.drag_base {
-                *applied = done;
-            }
-            self.height_applied_at = Some(time);
+            self.handle_drag.applied(done, time);
         } else if !same {
             // a value not yet shown: shown once the wait is over, though the pointer stops
             ui.ctx()
@@ -377,9 +372,7 @@ impl CutCraftApp {
             self.status.set_message(&message);
         }
         if released {
-            self.drag_3d = None;
-            self.drag_base = None;
-            self.height_applied_at = None;
+            self.handle_drag.end();
         }
     }
 
@@ -632,18 +625,21 @@ impl CutCraftApp {
             return false;
         };
         let p = surface.centre(column, row);
-        let before = self.simulation.clone();
-        let removed = self.simulation.as_mut().map_or(0, |m| m.remove_piece(p));
+        let before = self.preview.material.clone();
+        let removed = self
+            .preview
+            .material
+            .as_mut()
+            .map_or(0, |m| m.remove_piece(p));
         if removed > 0 {
             // scrubbing would put the piece back
-            self.kept_playback = None;
+            self.player.kept = None;
         }
         if removed > 0 {
-            self.before_preview = Some(super::super::BeforePreview(before, self.preview_side));
-            (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
-            self.status.set_message(
-                "Removed the piece cut free: Undo Last Preview on the Toolpaths page brings it back",
-            );
+            self.preview.before = Some(super::super::BeforePreview(before, self.preview.side));
+            self.preview_changed();
+            self.status
+                .set_message(&cut_craft_i18n::tr!("status-removed-piece-cut-free"));
         }
         removed > 0
     }

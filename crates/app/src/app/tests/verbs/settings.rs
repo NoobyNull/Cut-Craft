@@ -1,0 +1,67 @@
+//! Settings: Options, the window layout, custom toolbars and backups of the settings.
+
+use super::super::*;
+
+impl Harness {
+    // ---- Options and the window layout ----
+
+    /// Options ▸ Window Layout's `id` (`layout_ribbon`, `layout_canvas`, ...).
+    pub(in super::super) fn set_layout(&mut self, id: &str) {
+        self.app.set_layout(id);
+    }
+
+    /// Opens Options on the page holding the setting `key`.
+    pub(in super::super) fn open_options_at(&mut self, key: &'static str) {
+        self.app.options_editor.open_at(key);
+    }
+
+    /// Options' Apply with `options` as its window held them when it opened.
+    pub(in super::super) fn options_changed(&mut self, options: crate::options::Options) {
+        let ctx = self.ctx.clone();
+        self.app.options_changed(&ctx, options);
+    }
+
+    /// The Ribbon tab showing (Design, Model, ...).
+    pub(in super::super) fn ribbon_tab(&self) -> &'static str {
+        RIBBON_TABS[self.app.ribbon_tab]
+    }
+
+    // ---- custom toolbars ----
+
+    /// The custom toolbar the Ribbon shows as a tab, if one is.
+    pub(in super::super) fn ribbon_toolbar(&self) -> Option<usize> {
+        self.app.toolbars.ribbon
+    }
+
+    /// The custom toolbar the Rail lists, if one is.
+    pub(in super::super) fn rail_toolbar(&self) -> Option<usize> {
+        self.app.toolbars.rail
+    }
+
+    /// Opens custom toolbar `i` in the Rail, as its button there does.
+    pub(in super::super) fn show_rail_toolbar(&mut self, i: usize) {
+        self.app.toolbars.rail = Some(i);
+    }
+
+    /// The group open on a custom toolbar: the toolbar and its place on it.
+    pub(in super::super) fn toolbar_group_open(&self) -> Option<(usize, usize)> {
+        self.app.toolbars.group
+    }
+
+    /// Whether a toolbar's name is being typed.
+    pub(in super::super) fn renaming_toolbar(&self) -> bool {
+        self.app.toolbars.rename.is_some()
+    }
+
+    // ---- backups of the settings ----
+
+    /// Keeps the settings (and their backups) in `folder`, as a real start does.
+    pub(in super::super) fn given_config_folder(&mut self, folder: std::path::PathBuf) {
+        self.app.backups.config = Some(folder);
+    }
+
+    /// The automatic backups, if the settings have somewhere to go.
+    pub(in super::super) fn automatic_backups(&self) -> Option<cut_craft_backup::Automatic> {
+        self.app.automatic_backups()
+    }
+}

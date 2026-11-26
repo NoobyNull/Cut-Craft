@@ -59,6 +59,9 @@ pub struct Options {
     #[schemars(title = "Updates", extend("x-section" = true))]
     pub updates: Updates,
     #[serde(default)]
+    #[schemars(title = "Backups", extend("x-section" = true))]
+    pub backups: Backups,
+    #[serde(default)]
     #[schemars(title = "Bug Reports", extend("x-section" = true))]
     pub bug_reports: BugReports,
     #[serde(default)]
@@ -141,6 +144,10 @@ pub struct Options {
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[schemars(skip)]
     pub shape_ways: std::collections::BTreeMap<String, String>,
+    /// Toolbars of your own (right-click a tool or group ▸ Add to Toolbar), in order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(skip)]
+    pub toolbars: Vec<crate::custom_toolbars::Toolbar>,
 }
 
 /// Each tool page's favourite tools, in the order shown, and whether it shows only those.
@@ -212,6 +219,7 @@ impl Default for Options {
                 change_by_changer: change_by_changer(),
                 file_name_underscores: false,
                 bit_in_file_names: true,
+                advanced_rotary: false,
             },
             language: Language::default(),
             performance: Performance::default(),
@@ -241,6 +249,7 @@ impl Default for Options {
             controls: Controls::default(),
             space_mouse: SpaceMouse::default(),
             updates: Updates::default(),
+            backups: Backups::default(),
             bug_reports: BugReports::default(),
             web_api: WebApi::default(),
             default_job: None,
@@ -254,6 +263,7 @@ impl Default for Options {
             flyout_faces: crate::flyout::Faces::new(),
             ribbon_pins: std::collections::BTreeMap::new(),
             shape_ways: std::collections::BTreeMap::new(),
+            toolbars: Vec::new(),
         }
     }
 }

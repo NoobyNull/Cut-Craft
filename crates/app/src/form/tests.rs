@@ -411,7 +411,7 @@ fn every_form() -> Vec<(String, Value)> {
 /// Each number field in `fields` (inside groups and lists too) as its path and its kind.
 fn numbers<'a>(prefix: &str, fields: &'a [Field], out: &mut Vec<(String, &'a Kind)>) {
     for f in fields {
-        // the Tool Database's tools are drawn by their own block and keep their own units
+        // the Bit Library's tools are drawn by their own block and keep their own units
         if f.key == "tool" || TOOL_LISTS.contains(&f.key.as_str()) {
             continue;
         }
@@ -451,9 +451,10 @@ const NOT_LENGTHS: [&str; 14] = [
 /// Numbers with no unit that are not measurements: counts, ids, shares and strengths. A
 /// new number that is none of these needs an `x-unit` (`mm` for a length), so it is
 /// shown converted in an inch job, or a place here saying why not.
-const UNITLESS: [&str; 65] = [
+const UNITLESS: [&str; 66] = [
     // counts
     "extra_passes",
+    "most_angles",
     "sides",
     "points",
     "passes",
@@ -525,7 +526,7 @@ const UNITLESS: [&str; 65] = [
 
 /// Numbers with no unit that are measurements of something other than the job's
 /// lengths, each with why it does not change with mm / inches.
-const UNITLESS_BY_FORM: [(&str, &str, &str); 11] = [
+const UNITLESS_BY_FORM: [(&str, &str, &str); 12] = [
     (
         "generate_border",
         "depth_curve",
@@ -553,6 +554,7 @@ const UNITLESS_BY_FORM: [(&str, &str, &str); 11] = [
     ("Options", "rapid_rate", "set with its own feed-rate units"),
     ("Options", "scale_factor", "a multiplier"),
     ("Options", "web_api.port", "a network port number"),
+    ("Options", "backups.keep", "a count of backups"),
 ];
 
 #[test]

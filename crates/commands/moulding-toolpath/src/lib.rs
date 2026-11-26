@@ -1,7 +1,7 @@
 //! Moulding Toolpath: sweeps an open cross-section profile along drive rails, cutting the
-//! moulding in passes parallel to the rails, each as low as the tool can go without cutting
+//! moulding in passes parallel to the rails, each as low as the bit can go without cutting
 //! into the profile. Passes can be spaced along the profile's slope (vary stepover), and a
-//! larger clearance tool can rough it first in levels, leaving an allowance, its own toolpath.
+//! larger clearance bit can rough it first in levels, leaving an allowance, its own toolpath.
 
 use cut_craft_core::document::Document;
 use cut_craft_core::entry::Ways;
@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 pub struct MouldingToolpath;
 
-/// Which way the tool travels along the rails. The profile hangs outside a closed rail and on
+/// Which way the bit travels along the rails. The profile hangs outside a closed rail and on
 /// the right of an open one, so on an open rail climb runs back against the rail's direction.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -25,7 +25,7 @@ pub enum CutDirection {
     #[schemars(title = "Climb (clockwise)")]
     Climb,
     /// Anticlockwise round a closed rail, as you would push a hand router: gentler on a
-    /// light machine or a large form tool, sometimes rougher in the finish
+    /// light machine or a large form bit, sometimes rougher in the finish
     #[schemars(title = "Conventional (anticlockwise)")]
     Conventional,
 }
@@ -55,7 +55,7 @@ pub struct Params {
     /// Usually a ball nose; its stepover spaces the passes
     pub tool: Tool,
     /// Which way the passes go round the rails: climb (clockwise) or conventional
-    /// (anticlockwise), for any bit, a custom form tool too
+    /// (anticlockwise), for any bit, a custom form bit too
     #[serde(default = "conventional")]
     #[schemars(extend(
         "x-group" = "Cut Direction",
@@ -80,24 +80,24 @@ pub struct Params {
     #[serde(default)]
     #[schemars(title = "Vary Stepover")]
     pub vary_stepover: bool,
-    /// Use Larger Area Clearance Tool: the first of these roughs the moulding first, in
+    /// Use Larger Area Clearance Bit: the first of these roughs the moulding first, in
     /// levels of its pass depth, as a toolpath of its own named [Clear]
     #[serde(default)]
-    #[schemars(title = "Larger Area Clearance Tool")]
+    #[schemars(title = "Larger Area Clearance Bit")]
     pub clearance_tools: Vec<Tool>,
-    /// Material the clearance tool leaves on the profile for the finishing tool
+    /// Material the clearance bit leaves on the profile for the finishing bit
     #[serde(default)]
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-group" = "Larger Area Clearance Tool"))]
+    #[schemars(extend("x-group" = "Larger Area Clearance Bit"))]
     pub machining_allowance: f64,
-    /// The clearance tool cuts the profile's flat parts it fits in to their finished height
+    /// The clearance bit cuts the profile's flat parts it fits in to their finished height
     #[serde(default)]
-    #[schemars(extend("x-group" = "Larger Area Clearance Tool"))]
+    #[schemars(extend("x-group" = "Larger Area Clearance Bit"))]
     pub machine_flat_regions: bool,
-    /// The finishing tool leaves out the flat parts the clearance tool finished
+    /// The finishing bit leaves out the flat parts the clearance bit finished
     #[serde(default)]
     #[schemars(extend("x-show-when" = {"machine_flat_regions": true}))]
-    #[schemars(extend("x-group" = "Larger Area Clearance Tool"))]
+    #[schemars(extend("x-group" = "Larger Area Clearance Bit"))]
     pub skip_flat_regions: bool,
 }
 
@@ -111,7 +111,7 @@ impl Default for Params {
                 .tools
                 .into_iter()
                 .find(|t| t.shape == ToolShape::BallNose)
-                .expect("the starter tools include a ball nose"),
+                .expect("the starter bits include a ball nose"),
             cut_direction: CutDirection::Climb,
             ways: Ways::One,
             vary_stepover: false,
@@ -156,7 +156,7 @@ fn height(section: &[(f64, f64)], u: f64) -> f64 {
     a.1 + (b.1 - a.1) * (u - a.0) / (b.0 - a.0)
 }
 
-/// How low the tool's tip goes at `h` across without cutting into the profile.
+/// How low the bit's tip goes at `h` across without cutting into the profile.
 fn tip_height(section: &[(f64, f64)], tool: &Tool, h: f64) -> f64 {
     let radius = tool.diameter / 2.0;
     // ponytail: samples a fiftieth of the tool across; exact segment contact if finer is needed
@@ -204,11 +204,11 @@ impl Command for MouldingToolpath {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        ensure_positive("tool diameter", p.tool.diameter)?;
+        ensure_positive("bit diameter", p.tool.diameter)?;
         let stepover = p.tool.finishing_stepover();
         if !(stepover > 0.0 && stepover <= 1.0) {
             return Err(CommandError::InvalidParams(
-                "the tool's finishing stepover must be more than 0% and at most 100%: set it in the Tool Database".into(),
+                "the bit's finishing stepover must be more than 0% and at most 100%: set it in the Bit Library".into(),
             ));
         }
         // the profile is the open vector picked last
@@ -248,8 +248,8 @@ impl Command for MouldingToolpath {
         let mut c = Change::builder(doc);
         let mut flats = vec![];
         if let Some(clearer) = p.clearance_tools.first() {
-            ensure_positive("clearance tool diameter", clearer.diameter)?;
-            ensure_positive("clearance tool pass depth", clearer.pass_depth)?;
+            ensure_positive("clearance bit diameter", clearer.diameter)?;
+            ensure_positive("clearance bit pass depth", clearer.pass_depth)?;
             let (levels, flat) = clearance(&section, clearer, p, span, floor);
             flats = flat;
             c.add_toolpath(made_by::<Self>(
@@ -336,7 +336,7 @@ fn flat(section: &[(f64, f64)], a: f64, b: f64) -> bool {
             .all(|s| (s.1 - level).abs() < 1e-6)
 }
 
-/// The clearance tool's passes, level by level: at each, wherever the material it may cut
+/// The clearance bit's passes, level by level: at each, wherever the material it may cut
 /// reaches below the level above, it cuts down to this level or as far as it may (the
 /// profile plus the allowance, or the profile itself on flats it fits, when asked). Also
 /// where it finished flats.

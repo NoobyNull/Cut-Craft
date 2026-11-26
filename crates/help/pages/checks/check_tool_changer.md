@@ -9,11 +9,11 @@ see-also: checks_before_cutting, check_tool_numbers
 
 ## What it looks for
 
-When **Tool changer (ATC)** is chosen under Tool changes, every bit the job uses must be
+When **Tool changer (ATC)** is chosen under Bit changes, every bit the job uses must be
 loaded in one of the tool changer's slots in Machine Configuration. It also warns when
 Tool changer is chosen for a machine with no tool changer set up.
 
-Changing a slot or a slot's holder, in Machine Configuration or the Tool Database, runs the
+Changing a slot or a slot's holder, in Machine Configuration or the Bit Library, runs the
 checks again, so the list always matches the slots as they are now.
 
 ## Why it matters
@@ -24,8 +24,8 @@ controllers, carry on with whatever bit it is holding.
 ## How to fix it
 
 Load the bit into a slot in **Machine Configuration**. If you change bits by hand, pick
-**Separate file for each tool** or **One file, pause to change the tool** instead. If the
-bit is no longer in the Tool Database, pick it again with the toolpath's **Select…**.
+**Separate file for each bit** or **One file, pause to change the bit** instead. If the
+bit is no longer in the Bit Library, pick it again with the toolpath's **Select…**.
 
 Without a tool changer this check says *not checked: you change the bits*.
 

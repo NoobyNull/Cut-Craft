@@ -79,7 +79,9 @@ impl CutCraftApp {
         ui.scope_builder(egui::UiBuilder::new().max_rect(room), |ui| {
             // laid out from the right, so the first button is the leftmost
             ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
-                for (id, label, icon) in VIEW_BUTTONS.into_iter().rev() {
+                for id in VIEW_BUTTONS.into_iter().rev() {
+                    let label = &self.tool_label(id);
+                    let icon = gui::built_in_icon(id).unwrap_or_default();
                     let button = self
                         .icon_button(icon, id, label, edge)
                         .selected(in_hand(id));
@@ -122,7 +124,8 @@ impl CutCraftApp {
         };
         if !form.params["area"].is_null() {
             self.set_trace_area(None);
-            self.status.set_message("Tracing the whole picture");
+            self.status
+                .set_message(&cut_craft_i18n::tr!("status-tracing-whole-picture"));
             return;
         }
         let Ok(p) = serde_json::from_value::<cmd_trace_bitmap::Params>(form.params.clone()) else {
@@ -132,9 +135,9 @@ impl CutCraftApp {
             return;
         };
         self.status.set_message(&if colours.is_empty() {
-            "No colours traced: click one on the picture, or tick it in the trace window".into()
+            cut_craft_i18n::tr!("status-no-colours-traced")
         } else {
-            format!("Colors to trace: {}", colours.join(", "))
+            cut_craft_i18n::tr!("status-colours-to-trace", colours = colours.join(", "))
         });
         if let Some(form) = self.form.as_mut() {
             form.params["trace"] = serde_json::json!(colours);
@@ -232,11 +235,12 @@ impl CutCraftApp {
         };
         let Some(on) = self.on_selected(drag.end, reach) else {
             self.status
-                .set_message("drop a tab on a selected vector to move it there");
+                .set_message(&cut_craft_i18n::tr!("status-drop-tab-on-vector"));
             return;
         };
         points[i] = on;
-        self.status.set_message("Tab moved");
+        self.status
+            .set_message(&cut_craft_i18n::tr!("status-tab-moved"));
         if let Some(form) = self.form.as_mut() {
             form.params["tab_points"] = serde_json::json!(points);
         }
@@ -247,17 +251,18 @@ impl CutCraftApp {
         let mut points = self.tab_points();
         if let Some(i) = points.iter().position(|p| p.distance(at) <= reach) {
             points.remove(i);
-            self.status.set_message("Tab removed");
+            self.status
+                .set_message(&cut_craft_i18n::tr!("status-tab-removed"));
         } else {
             let on = self.on_selected(at, reach);
             let Some(on) = on else {
-                self.status.set_message(
-                    "click on a selected vector to add a tab, or on a tab to remove it",
-                );
+                self.status
+                    .set_message(&cut_craft_i18n::tr!("status-click-to-add-tab"));
                 return;
             };
             points.push(on);
-            self.status.set_message("Tab added");
+            self.status
+                .set_message(&cut_craft_i18n::tr!("status-tab-added"));
         }
         if let Some(form) = self.form.as_mut() {
             form.params["tab_points"] = serde_json::json!(points);
@@ -345,9 +350,8 @@ impl CutCraftApp {
     pub(super) fn join_ends_click(&mut self, at: Point, reach: f64) {
         let first = self.join_ends_first();
         let Some(end) = cmd_join_open_ends::end_near(&self.doc, at, reach) else {
-            self.status.set_message(
-                "No open end there: click one of the circles at the ends of open vectors",
-            );
+            self.status
+                .set_message(&cut_craft_i18n::tr!("status-no-open-end"));
             return;
         };
         let Some(first) = first else {
@@ -355,7 +359,7 @@ impl CutCraftApp {
                 form.params["first"] = serde_json::json!(end.point);
             }
             self.status
-                .set_message("End picked: now click the end to join it to");
+                .set_message(&cut_craft_i18n::tr!("status-end-picked"));
             return;
         };
         let same = cmd_join_open_ends::end_near(&self.doc, first, reach)
@@ -367,7 +371,8 @@ impl CutCraftApp {
                 == 1;
         if same {
             self.join_ends_forget();
-            self.status.set_message("End let go");
+            self.status
+                .set_message(&cut_craft_i18n::tr!("status-end-let-go"));
             return;
         }
         let Some(params) = self.join_ends_params(at, reach) else {
@@ -413,7 +418,7 @@ impl CutCraftApp {
                     self.measure_rows = inspected_rows(path, at, reach, units);
                 } else {
                     self.status
-                        .set_message("click a vector, or drag between two points");
+                        .set_message(&cut_craft_i18n::tr!("status-click-to-measure"));
                 }
             }
             _ => {}

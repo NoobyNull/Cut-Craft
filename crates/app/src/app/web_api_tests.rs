@@ -485,7 +485,7 @@ fn a_picture_before_the_preview_shows_the_model_and_the_preview_comes_back_after
     let (mut h, at) = switched_on();
     h.app.doc = cut_craft_core::testing::domed();
     let material = cut_craft_core::simulation::Material::new(&h.app.doc.job, 1000);
-    h.app.simulation = Some(material.clone());
+    h.app.preview.material = Some(material.clone());
     let mut seen = None;
     let path = format!(
         "{}view.png?view=iso&preview=before",
@@ -506,7 +506,7 @@ fn a_picture_before_the_preview_shows_the_model_and_the_preview_comes_back_after
         }
         h.frame(vec![]);
         if let Some(asked) = h.screenshot.take() {
-            seen = Some(h.app.simulation.is_some());
+            seen = Some(h.app.preview.material.is_some());
             asked.complete(std::sync::Arc::new(egui::ColorImage::filled(
                 [1280, 800],
                 egui::Color32::RED,
@@ -526,7 +526,7 @@ fn a_picture_before_the_preview_shows_the_model_and_the_preview_comes_back_after
         "the preview was set aside while it was taken"
     );
     assert_eq!(
-        h.app.simulation.as_ref(),
+        h.app.preview.material.as_ref(),
         Some(&material),
         "and put back after"
     );
@@ -602,7 +602,7 @@ fn a_script_calculates_previews_and_resets_the_preview_as_the_buttons_do() {
         Some(json!({ "toolpaths": [999] })),
     );
     assert_eq!(status, 404, "{e}");
-    assert!(h.app.simulation.is_none());
+    assert!(h.app.preview.material.is_none());
     let (status, previewed) = call(
         &mut h,
         at,
@@ -611,8 +611,8 @@ fn a_script_calculates_previews_and_resets_the_preview_as_the_buttons_do() {
         Some(json!({ "toolpaths": id })),
     );
     assert_eq!(status, 200, "{previewed}");
-    assert!(h.app.simulation.is_some(), "previewed");
-    assert!(h.app.playback.is_none(), "cut at once, not played");
+    assert!(h.app.preview.material.is_some(), "previewed");
+    assert!(h.app.player.playback.is_none(), "cut at once, not played");
     let (status, progress) = call(&mut h, at, "GET", "progress", None);
     assert_eq!(status, 200);
     assert_eq!(progress["busy"], false, "{progress}");
@@ -620,7 +620,7 @@ fn a_script_calculates_previews_and_resets_the_preview_as_the_buttons_do() {
     assert_eq!(status, 409, "nothing to cancel: {e}");
     let (status, _) = call(&mut h, at, "POST", "preview/reset", Some(json!({})));
     assert_eq!(status, 200);
-    assert!(h.app.simulation.is_none(), "reset");
+    assert!(h.app.preview.material.is_none(), "reset");
     let (status, e) = call(&mut h, at, "POST", "preview/reset", Some(json!({})));
     assert_eq!(status, 409, "no preview to reset: {e}");
 }
@@ -1121,8 +1121,7 @@ fn windows_over_the_view_are_left_out_of_its_picture() {
     let (mut h, at) = switched_on();
     // a real port, which Options keeps as it is
     h.app.options.web_api.port = at.port();
-    h.app.options_window = true;
-    h.app.options_goto = Some("web_api");
+    h.app.options_editor.open_at("web_api");
     h.frame(vec![]);
     h.frame(vec![]);
     let State::Running(at) = h.app.web_api_state().clone() else {
@@ -1163,7 +1162,7 @@ fn windows_over_the_view_are_left_out_of_its_picture() {
     assert_eq!(hidden, Some(true), "the picture's frame has no windows");
     h.frame(vec![]);
     assert!(shows(&h, "WEB API Running at"), "Options is back");
-    assert!(h.app.options_window);
+    assert!(h.app.options_editor.window.open);
 }
 
 /// Whether any text drawn last frame holds `part`.
@@ -1261,4 +1260,70 @@ fn component_properties_leaves_the_settings_a_script_leaves_out_as_they_are() {
     assert_eq!(d.name, "dome");
     assert_eq!(p.combine, Combine::Subtract);
     assert!(p.visible);
+}
+
+#[test]
+fn a_script_makes_g_code_past_errors_only_when_it_says_so() {
+    let (mut h, at, _) = with_a_toolpath();
+    h.app
+        .doc
+        .toolpaths
+        .values_mut()
+        .next()
+        .unwrap()
+        .tool
+        .feed_rate = 0.0;
+    // an error is not answered by accepting the warnings
+    let (status, e) = call(
+        &mut h,
+        at,
+        "POST",
+        "gcode",
+        Some(json!({ "accept_warnings": true })),
+    );
+    assert_eq!(status, 409, "{e}");
+    let said = e["error"].as_str().unwrap();
+    assert!(said.contains("accept_errors"), "{e}");
+    assert!(said.contains("will not run as saved"), "{e}");
+    assert!(said.contains("no feed rate"), "{e}");
+    let (status, made) = call(
+        &mut h,
+        at,
+        "POST",
+        "gcode",
+        Some(json!({ "accept_errors": true, "accept_warnings": true })),
+    );
+    assert_eq!(status, 200, "{made}");
+    let errors = made["errors"].as_array().unwrap();
+    assert_eq!(errors.len(), 1, "{made}");
+    assert_eq!(made["left_out"], json!([]), "{made}");
+    // the file says what it was saved past, at the top
+    let gcode = made["files"][0]["gcode"].as_str().unwrap();
+    assert!(gcode.contains("SAVED WITH ERRORS"), "{gcode}");
+    assert!(gcode.contains("no feed rate"), "{gcode}");
+}
+
+#[test]
+fn a_script_never_makes_g_code_that_could_damage_the_machine() {
+    let (mut h, at, _) = with_a_toolpath();
+    // a keep-out zone across the whole job: every cut goes into it
+    let zone = cut_craft_core::testing::square(-1000.0, -1000.0, 3000.0);
+    h.app.doc.keep_out = vec![cut_craft_core::keep_out::KeepOutZone::new("Clamp 1", zone)];
+    let (status, e) = call(
+        &mut h,
+        at,
+        "POST",
+        "gcode",
+        Some(json!({ "accept_errors": true, "accept_warnings": true })),
+    );
+    assert_eq!(status, 409, "{e}");
+    let said = e["error"].as_str().unwrap();
+    assert!(
+        said.contains("could damage the machine") && said.contains("\"Clamp 1\""),
+        "{e}"
+    );
+    assert!(
+        said.contains("Protect the Machine"),
+        "the only way past: {e}"
+    );
 }

@@ -1,11 +1,18 @@
 ---
-reviewed: 2026-11-24
-see-also: rotary_lathe_toolpath, rounding_toolpath, 3d_finishing_toolpath, rotary_firmware, check_rotary_setup, collisions, job_setup, save_toolpaths, tool_database, web_api, performance
+reviewed: 2026-11-25
+see-also: rotary_roughing_toolpath, rotary_finishing_toolpath, rotary_locked_angles_toolpath, rotary_lathe_toolpath, rounding_toolpath, 3d_finishing_toolpath, rotary_firmware, check_rotary_setup, collisions, job_setup, save_toolpaths, tool_database, web_api, performance
 ---
 
 **4-Axis Rotary Machining** finishes a 3D model all the way round a turning cylinder. The bit
 moves along the part and up and down while A turns the material under it: X, Z and A move
 together.
+
+Its Radial, Off centre and Indexed strategies now have toolpaths of their own:
+[Rotary Finishing](help:rotary_finishing_toolpath) (over the axis or off centre) and
+[Rotary Locked Angles](help:rotary_locked_angles_toolpath). A job saved with one of them opens
+as the new toolpath, with the moves it had, so it cuts the same until you recalculate it.
+Recalculated, it cuts only what the toolpaths above it in the list leave. Sides then details
+stays here.
 
 It is worked out round the turning axis itself, not on the unrolled sheet. Deep in the part, the
 bit reaches further round than it does at the surface, so a toolpath made on the flat sheet can
@@ -46,8 +53,8 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
 
 ## Settings
 
-- **Tool**: a ball nose follows curves best. A flat-bottomed bit works too, resting on the
-  highest point under it. Its **finishing stepover** (in the Tool Database) is the distance
+- **Bit**: a ball nose follows curves best. A flat-bottomed bit works too, resting on the
+  highest point under it. Its **finishing stepover** (in the Bit Library) is the distance
   from one ring to the next.
 - **Strategy**: how the bit goes round the part (see Four ways round, below):
   - **Radial** keeps the bit straight over the turning axis while A turns.
@@ -73,6 +80,10 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
   [Machine Configuration](help:rotary_firmware). They count from the material's start
   whatever XY zero [Job Setup](help:job_setup) uses: zeroed on the middle, the toolpath is
   written where the material is, just as with a corner.
+- **Machining limit**: where on the material it may cut. **Material** (the usual) is all of
+  it; **Model**, a **Selected Level** or **Selected Vector(s)** keep it within their outline,
+  grown by **Boundary Offset**. Vectors drawn on the job wrap round the part, just as the job
+  does. Selected vectors are kept with the toolpath, so it recalculates the same.
 - **Allowance**: material left all the way round for a later pass.
 - **Cut Away the Support**: cuts away the centre stock [Job Setup](help:job_setup) leaves
   along the axis (Holding the Part), down to the model. Tick it only on the last toolpath:
@@ -136,7 +147,7 @@ collet nut and spindle above every bit of material left at the angle A is locked
 the bit's tip off the model, so a deep cut beside a tall wing never brings the nut down onto it.
 The sizes come from your machine: the holder from [Machine Configuration](help:collisions)
 (the usual ER20 nut and a 65 mm spindle if none is set), and how far the bit sticks out from its
-stick-out in the [Tool Database](help:tool_database).
+stick-out in the [Bit Library](help:tool_database).
 
 It also keeps out of the **Chuck** and **Tailstock** set in Machine Configuration's rotary
 settings: nothing is cut where they hold the material. (The other ways round cut between
@@ -156,7 +167,7 @@ no finish could get down to.
 - **Some of the model is left rough**: no angle tried let the holder get down there. The note
   says where along the part, and which angles A locked at. A bit that sticks out further, a
   slimmer holder, more **Tilts**, or the model sliced into parts would reach it. If the
-  [Tool Database](help:tool_database) doesn't say how far the bit sticks out of the collet
+  [Bit Library](help:tool_database) doesn't say how far the bit sticks out of the collet
   (its stick-out, or its flute length), 25 mm is taken and the note says so. That guess is
   often what leaves a detailed model rough: measure the bit in the collet and set it.
 - A model joined to the material at the chuck or tailstock end (Job Setup's **Keep Joined

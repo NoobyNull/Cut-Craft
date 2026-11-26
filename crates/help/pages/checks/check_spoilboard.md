@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-17
-see-also: checks_before_cutting, check_reach
+reviewed: 2026-11-25
+see-also: checks_before_cutting, check_reach, protect_the_machine
 ---
 
 # Not cutting into the spoilboard
@@ -9,9 +9,17 @@ see-also: checks_before_cutting, check_reach
 
 ## What it looks for
 
-How far below the bottom of the material the deepest cut goes. Up to 1 mm is allowed,
-since cutting a part out cleanly goes a little into the spoilboard on purpose. Flattening
-the spoilboard itself (Surfacing, Spoilboard) is a reminder, not a problem.
+How far below the bottom of the material the deepest cut goes, against the machine's
+**Allowed into spoilboard** depth (1 mm unless set). Cutting a part out cleanly goes a
+little into the spoilboard on purpose. Flattening the spoilboard itself (Surfacing,
+Spoilboard) is a reminder, not a problem.
+
+- Deeper than the depth allowed: **⛔ Could damage the machine**, never saved, with no tick.
+- More than 1 mm in but within the depth allowed: a ⚠ to read and tick, unless the
+  machine's **Warn about cuts more than 1 mm into the spoilboard** is unticked.
+
+Both are set per machine in [Protect the Machine](help:protect_the_machine), where
+**Spoilboard depth** can also be switched off.
 
 ## Why it matters
 

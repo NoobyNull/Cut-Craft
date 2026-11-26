@@ -3,8 +3,8 @@
 
 use super::machine_setup::bed;
 use super::{
-    CutCraftApp, OpenForm, SECTION_PICTURE_ROWS, Value, brush_dialog, egui, form, rest_section,
-    saving_path, selector_section, texture_dialog, tool_picker,
+    CutCraftApp, OpenForm, SECTION_PICTURE_ROWS, Value, brush_dialog, egui, form,
+    locked_face_section, rest_section, saving_path, selector_section, texture_dialog, tool_picker,
 };
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
@@ -46,11 +46,16 @@ impl CutCraftApp {
         let cuts = open.id != "relief_from_photo";
         // a surfacing toolpath flattens all it covers, 3D Pencil has its own bits that
         // finished before and follows the model, and 4-Axis Rotary Machining goes all the way
-        // round: no rest machining or vector selector
+        // round, and Rotary Roughing, Finishing, Locked Angles and Details cut only what the toolpaths above it leave: no rest
+        // machining or vector selector
         let extras = cuts
             && ![
                 "surfacing_toolpath",
                 "3d_pencil_toolpath",
+                "rotary_roughing_toolpath",
+                "rotary_finishing_toolpath",
+                "rotary_locked_angles_toolpath",
+                "rotary_details_toolpath",
                 "rotary_machining_toolpath",
                 "rotary_lathe_toolpath",
             ]
@@ -58,6 +63,7 @@ impl CutCraftApp {
         let suggested = open.suggested.clone();
         let form_id = open.id;
         let laser = open.kind.needs() == cut_craft_core::Needs::Laser;
+        let rotary = self.doc.job.rotary.is_some();
         let tool = |ui: &mut egui::Ui, key: &str, params: &mut Value| {
             if key == "clearance_tools" {
                 let (changed, ask) = super::clearing_section(
@@ -103,6 +109,9 @@ impl CutCraftApp {
             if extras {
                 selector_section(ui, params, &layers, units);
             }
+            if extras && rotary && !laser {
+                locked_face_section(ui, params);
+            }
         };
         let stock = form_stock(&self.doc, &open.params, units, bed(&self.machines));
         // Scale to Fit Material is pressed inside Model Size, and worked out once it is drawn
@@ -147,7 +156,7 @@ impl CutCraftApp {
         }
     }
 
-    /// A list of tools' Select…, Add a tool… or Edit…: the Tool Database, to pick a tool of
+    /// A list of tools' Select…, Add a tool… or Edit…: the Bit Library, to pick a tool of
     /// list `which` in or change one.
     pub(super) fn ask_listed(
         &mut self,
@@ -202,8 +211,10 @@ impl CutCraftApp {
         {
             Ok(p) => p,
             Err(e) => {
-                self.status
-                    .set_message(&format!("Suggest could not read the form: {e}"));
+                self.status.set_message(&cut_craft_i18n::tr!(
+                    "status-suggest-could-not-read",
+                    error = e.to_string()
+                ));
                 return;
             }
         };
@@ -277,8 +288,10 @@ impl CutCraftApp {
         let texture = self.texture_params()?.to_vtexture();
         std::fs::write(path, texture)
             .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
-        self.status
-            .set_message(&format!("Saved texture {}", path.display()));
+        self.status.set_message(&cut_craft_i18n::tr!(
+            "status-saved-texture",
+            path = path.display().to_string()
+        ));
         Ok(())
     }
 
@@ -300,8 +313,10 @@ impl CutCraftApp {
         }
         form.params = loaded;
         form.dirty = true;
-        self.status
-            .set_message(&format!("Loaded texture {}", path.display()));
+        self.status.set_message(&cut_craft_i18n::tr!(
+            "status-loaded-texture",
+            path = path.display().to_string()
+        ));
         Ok(())
     }
 
@@ -474,7 +489,7 @@ impl CutCraftApp {
                 self.depth_install(ui);
                 return;
             };
-            if self.depth_estimate.is_some() {
+            if self.photo_depth.estimating() {
                 ui.horizontal(|ui| {
                     ui.spinner();
                     ui.label(tr!("depth-estimating"));
@@ -502,14 +517,14 @@ impl CutCraftApp {
         let name = "The Depth add-on";
         let high_detail = installed
             .as_ref()
-            .is_some_and(|i| self.depth_high_detail.unwrap_or(i.detailed.is_some()));
+            .is_some_and(|i| self.photo_depth.high_detail(i.detailed.is_some()));
         if let (true, Some(installed), Some(id)) = (start, installed, chosen)
             && self.may_run_add_on(crate::depth::ADDON_ID, name, &installed.program)
         {
             let installed = installed.with_high_detail(high_detail);
             match crate::depth::Estimating::start(&installed, id, &self.doc.bitmaps[&id], ui.ctx())
             {
-                Ok(running) => self.depth_estimate = Some(running),
+                Ok(running) => self.photo_depth.estimate = Some(running),
                 Err(e) => self.status.set_message(&e),
             }
         }
@@ -518,33 +533,20 @@ impl CutCraftApp {
     /// Relief from Photo's High detail: the tick once the model is here (`have`), else the
     /// offer to fetch it, or how its download is going.
     fn depth_detail(&mut self, ui: &mut egui::Ui, have: bool) {
-        if let Some(answer) = self
-            .depth_detail_fetch
-            .as_ref()
-            .and_then(crate::depth::FetchingDetail::answer)
-        {
-            self.depth_detail_fetch = None;
-            match answer {
-                Ok(()) => {
-                    self.depth_detail_failed = None;
-                    self.depth_high_detail = Some(true);
-                }
-                Err(e) => self.depth_detail_failed = Some(e),
-            }
-        }
-        if let Some(fetch) = &self.depth_detail_fetch {
+        self.photo_depth.check_fetch();
+        if let Some(fraction) = self.photo_depth.fetching() {
             ui.label(tr!("depth-downloading-high-detail"));
-            ui.add(egui::ProgressBar::new(fetch.fraction()).show_percentage());
+            ui.add(egui::ProgressBar::new(fraction).show_percentage());
             return;
         }
         if have {
-            let mut on = self.depth_high_detail.unwrap_or(true);
+            let mut on = self.photo_depth.high_detail(true);
             if ui
                 .checkbox(&mut on, tr!("depth-high-detail"))
                 .on_hover_hint(crate::depth::DETAILED_NOTE)
                 .changed()
             {
-                self.depth_high_detail = Some(on);
+                self.photo_depth.set_high_detail(on);
             }
             if on {
                 ui.label(tr!("depth-high-detail-note"));
@@ -552,7 +554,7 @@ impl CutCraftApp {
             return;
         }
         ui.label(tr!("depth-want-finer"));
-        if let Some(e) = &self.depth_detail_failed {
+        if let Some(e) = self.photo_depth.failed() {
             ui.colored_label(ui.visuals().error_fg_color, e);
         }
         if ui
@@ -561,13 +563,8 @@ impl CutCraftApp {
             .clicked()
             && let Some(addons) = self.addons.dir().map(std::path::Path::to_path_buf)
         {
-            match crate::depth::FetchingDetail::start(&addons, ui.ctx()) {
-                Ok(fetch) => {
-                    self.depth_detail_failed = None;
-                    self.depth_detail_fetch = Some(fetch);
-                }
-                Err(e) => self.depth_detail_failed = Some(e),
-            }
+            self.photo_depth
+                .fetch_started(crate::depth::FetchingDetail::start(&addons, ui.ctx()));
         }
     }
 
@@ -623,14 +620,9 @@ impl CutCraftApp {
     /// Gives the picture its depth once the Depth add-on answers (undoable), and shows the
     /// form's preview again.
     pub(super) fn take_depth(&mut self) {
-        let Some(answer) = self
-            .depth_estimate
-            .as_ref()
-            .and_then(crate::depth::Estimating::answer)
-        else {
+        let Some((sent, answer)) = self.photo_depth.take_answer() else {
             return;
         };
-        let sent = self.depth_estimate.take().expect("answered");
         let id = sent.bitmap;
         let result = answer.and_then(|depth| {
             let bitmap = self
@@ -652,7 +644,8 @@ impl CutCraftApp {
         });
         match result {
             Ok(()) => {
-                self.status.set_message("Depth estimated");
+                self.status
+                    .set_message(&cut_craft_i18n::tr!("status-depth-estimated"));
                 self.relief_after_estimate(id);
             }
             Err(e) => self.status.set_message(&e),

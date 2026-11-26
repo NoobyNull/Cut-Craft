@@ -19,7 +19,7 @@ impl CutCraftApp {
     pub(super) fn rings_3d(&mut self, ui: &egui::Ui, area: egui::Rect, fit: egui::Rect) {
         use crate::axes::Axis;
         use cut_craft_core::glam::DVec3;
-        self.rings_3d = (vec![], None);
+        self.turn_rings.clear();
         let model = self
             .form
             .as_ref()
@@ -79,15 +79,15 @@ impl CutCraftApp {
                 Axis::Y => "y",
                 Axis::Z => "z",
             };
-            let hot = self.turn_ring == Some(key);
+            let hot = self.turn_rings.held() == Some(key);
             let colour = axis.colour();
             let stroke = egui::Stroke::new(if hot { 2.0 * width } else { width }, colour);
             painter.add(egui::Shape::line(points.clone(), stroke));
-            self.rings_3d.0.push((key, points));
+            self.turn_rings.add_ring(key, points);
             looks.push((stroke, name));
         }
         // each ring's + and − arrows, kept clear of each other's
-        let rings: Vec<&[egui::Pos2]> = self.rings_3d.0.iter().map(|(_, p)| p.as_slice()).collect();
+        let rings = self.turn_rings.ring_points();
         let marks = crate::axes::rings_marks(&rings, centre, RING_MARK_GAP * head);
         for ((points, mark), (stroke, name)) in rings.iter().zip(marks).zip(looks) {
             if let Some((at, _)) = mark {
@@ -101,58 +101,21 @@ impl CutCraftApp {
             ui.visuals().widgets.inactive.bg_fill,
             ui.visuals().widgets.inactive.bg_stroke,
         );
-        self.rings_3d.1 = Some((centre, radius));
+        self.turn_rings.set_sphere(centre, radius);
     }
 
     /// A left drag starting on a rotation handle takes it for the drag; let go, none.
     pub(super) fn take_ring(&mut self, ui: &egui::Ui, response: &egui::Response) {
         if response.drag_started_by(egui::PointerButton::Primary) {
-            self.turn_ring = ui
-                .input(|i| i.pointer.press_origin())
-                .and_then(|at| self.ring_at(at, ui.spacing().interact_size.y / 2.0));
+            let pressed = ui.input(|i| i.pointer.press_origin());
+            self.turn_rings
+                .press(pressed, ui.spacing().interact_size.y / 2.0);
         } else if !response.dragged() {
-            self.turn_ring = None;
+            self.turn_rings.let_go();
         }
         // while a ring is held, the way + runs round it under the pointer and how far it
         // reaches from its middle: the drag turns the model the way it goes round the ring
-        self.ring_grip = self.turn_ring.and_then(|axis| {
-            let (_, points) = self.rings_3d.0.iter().find(|(a, _)| *a == axis)?;
-            let (centre, _) = self.rings_3d.1?;
-            let at = ui.input(|i| i.pointer.latest_pos())?;
-            let along = crate::axes::ring_tangent(points, at)?;
-            let radius = points
-                .iter()
-                .map(|p| p.distance(centre))
-                .fold(0.0, f32::max);
-            Some((along, radius))
-        });
-    }
-
-    /// The rotation handle within `reach` of `at` as last drawn: the sphere (`xyz`) first,
-    /// else the nearest ring.
-    pub(in super::super) fn ring_at(&self, at: egui::Pos2, reach: f32) -> Option<&'static str> {
-        if let Some((centre, radius)) = self.rings_3d.1
-            && centre.distance(at) <= radius
-        {
-            return Some("xyz");
-        }
-        let off = |points: &[egui::Pos2]| {
-            points
-                .windows(2)
-                .map(|w| {
-                    let (a, b) = (w[0], w[1]);
-                    let along = (at - a).dot(b - a) / (b - a).length_sq().max(f32::EPSILON);
-                    at.distance(a + (b - a) * along.clamp(0.0, 1.0))
-                })
-                .fold(f32::INFINITY, f32::min)
-        };
-        self.rings_3d
-            .0
-            .iter()
-            .map(|(axis, points)| (*axis, off(points)))
-            .filter(|(_, d)| *d <= reach)
-            .min_by(|a, b| a.1.total_cmp(&b.1))
-            .map(|(axis, _)| axis)
+        self.turn_rings.follow(ui.input(|i| i.pointer.latest_pos()));
     }
 
     /// Set in the settings popup: two clicks on the model place the fade's or tilt's
@@ -200,7 +163,7 @@ impl CutCraftApp {
     ) -> Option<Point> {
         let (job, previewing) = (
             self.shown_job(),
-            self.simulation.is_some() || self.showing_uncut_material(),
+            self.preview.material.is_some() || self.showing_uncut_material(),
         );
         let (orbit, framing, on) = (self.orbit, self.framing, self.display.auto_wrapping);
         let surface = self.surface_3d()?.into_owned();
@@ -367,7 +330,7 @@ impl CutCraftApp {
                 .as_ref()
                 .map(|(m, _)| std::sync::Arc::as_ptr(m) as usize),
         );
-        if let Some((kept, model)) = &self.turned_3d
+        if let Some((kept, model)) = &self.meshes.turned
             && *kept == key
         {
             return Some(std::sync::Arc::clone(model));
@@ -377,17 +340,17 @@ impl CutCraftApp {
         if let Some(own) = &own {
             if all.is_empty() {
                 // only the import: its own faces, kept as they are
-                self.turned_3d = Some((key, std::sync::Arc::clone(own)));
+                self.meshes.turned = Some((key, std::sync::Arc::clone(own)));
                 return Some(std::sync::Arc::clone(own));
             }
             all.extend(own.iter().copied());
         }
         if all.is_empty() {
-            self.turned_3d = None;
+            self.meshes.turned = None;
             return None;
         }
         let all = std::sync::Arc::new(all);
-        self.turned_3d = Some((key, std::sync::Arc::clone(&all)));
+        self.meshes.turned = Some((key, std::sync::Arc::clone(&all)));
         Some(all)
     }
 
@@ -410,14 +373,11 @@ impl CutCraftApp {
             look,
             mark,
         };
-        if let Some((kept, mesh)) = &self.model_3d
-            && *kept == key
-        {
+        if let Some(mesh) = self.meshes.model.get(&key) {
             return std::sync::Arc::clone(mesh);
         }
         let mesh = std::sync::Arc::new(view3d::triangles(model, screen, orbit, &look, mark));
-        self.model_3d = Some((key, std::sync::Arc::clone(&mesh)));
-        mesh
+        std::sync::Arc::clone(self.meshes.model.keep(key, mesh))
     }
 
     #[expect(
@@ -437,8 +397,8 @@ impl CutCraftApp {
             // the block's sides: a preview's, the uncut material's, the block the model
             // sits on
             sides: shown.material_block
-                && (self.simulation.is_some()
-                    || self.playback.is_some()
+                && (self.preview.material.is_some()
+                    || self.player.playback.is_some()
                     || self.showing_uncut_material()
                     || self.model_on_material()),
             light: view3d::Look::light_from(self.orbit, shown.light_follows),
@@ -457,10 +417,12 @@ impl CutCraftApp {
         }
         let job = self.shown_job();
         // the uncut material wraps as a preview's stock does: its top at the surface
-        let previewing =
-            self.simulation.is_some() || self.playback.is_some() || self.showing_uncut_material();
+        let previewing = self.preview.material.is_some()
+            || self.player.playback.is_some()
+            || self.showing_uncut_material();
         // a playing preview's tool: where its tip is, and the parts it is drawn in
         let tool_at = self
+            .player
             .playback
             .as_ref()
             .and_then(cut_craft_core::playback::Playback::tool)
@@ -527,8 +489,8 @@ impl CutCraftApp {
         }
         // the model's body, under its surface: also while a model is imported, whose own
         // faces (all of them, or past the face limit those out of reach) are drawn as well
-        let body_draw = (slot.is_some() && self.simulation.is_none())
-            .then(|| self.solid_gpu.clone())
+        let body_draw = (slot.is_some() && self.preview.material.is_none())
+            .then(|| self.meshes.solid_gpu.clone())
             .flatten()
             .map(|geometry| {
                 let at = cut_craft_core::glam::DVec3::ZERO;
@@ -564,7 +526,7 @@ impl CutCraftApp {
             .and_then(|f| f.beyond.clone())
             .filter(|g| !g.is_empty())
         else {
-            self.ghost_gpu = None;
+            self.meshes.ghost_gpu = None;
             return None;
         };
         let red = self.options.import.out_of_bounds_colour();
@@ -578,7 +540,7 @@ impl CutCraftApp {
         };
         let origin = cut_craft_core::glam::DVec3::new(-surface.origin.x, -surface.origin.y, 0.0);
         if on_gpu {
-            let geometry = faces_geometry(&mut self.ghost_gpu, &ghost);
+            let geometry = faces_geometry(&mut self.meshes.ghost_gpu, &ghost);
             return Some(view3d::gpu::Draw::new(
                 geometry, camera, area, origin, &look, red,
             ));
@@ -747,8 +709,9 @@ impl CutCraftApp {
     /// on its own zero plane at 0 and the material's outline is drawn from there up to its
     /// thickness, so zero is measured from that top.
     pub(in super::super) fn origin_height_3d(&self) -> f64 {
-        let importing =
-            self.importing_model() && self.simulation.is_none() && self.playback.is_none();
+        let importing = self.importing_model()
+            && self.preview.material.is_none()
+            && self.player.playback.is_none();
         origin_3d(&self.doc.job, importing)
     }
 

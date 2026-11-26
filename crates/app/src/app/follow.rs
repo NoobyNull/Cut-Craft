@@ -62,7 +62,8 @@ impl CutCraftApp {
     /// The mark toolpath `id`'s cells take in the preview: the same one all its life, so
     /// its cuts keep its colour when a reorder moves it to another id.
     pub(super) fn preview_mark(&self, id: EntityId) -> u32 {
-        self.preview_marks
+        self.preview
+            .marks
             .get(&id)
             .copied()
             .unwrap_or_else(|| super::preview_mark(id))
@@ -84,7 +85,7 @@ impl CutCraftApp {
         let before = std::mem::replace(&mut self.toolpath_keys, Keys { at, keys });
         if before.at.map(|(job, _)| job) != at.map(|(job, _)| job) {
             // another job: its toolpaths have marks of their own
-            self.preview_marks.clear();
+            self.preview.marks.clear();
             return;
         }
         let moved = moved(&before.keys, &self.toolpath_keys.keys);
@@ -112,9 +113,9 @@ impl CutCraftApp {
             .collect();
         for (id, mark) in marks {
             if mark == super::preview_mark(id) {
-                self.preview_marks.remove(&id);
+                self.preview.marks.remove(&id);
             } else {
-                self.preview_marks.insert(id, mark);
+                self.preview.marks.insert(id, mark);
             }
         }
     }

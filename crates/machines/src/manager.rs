@@ -51,7 +51,7 @@ fn viewer(ctx: &egui::Context, viewing: &mut Option<(String, String)>) {
     let mut open = true;
     let id = egui::Id::unique("post_processor_content");
     cut_craft_bug_report::dialog_with_panels(ctx, id, title, dialog_size(ctx), &mut open, |ui| {
-        if ui.button("Copy").clicked() {
+        if ui.button(cut_craft_i18n::t!("Copy")).clicked() {
             ui.ctx().copy_text(text.clone());
         }
         text_view(ui, &mut text.as_str());
@@ -197,7 +197,7 @@ impl MachineManager {
             ui.separator();
             let names_clash = self.draft.names_clash();
             let Some(machine) = self.draft.active_mut() else {
-                ui.weak("No machines yet: Add Machine makes one");
+                ui.weak(cut_craft_i18n::t!("No machines yet: Add Machine makes one"));
                 outcome = buttons(ui, false, dirty).or(outcome.take());
                 return;
             };
@@ -208,6 +208,7 @@ impl MachineManager {
             tool_changer(ui, machine, None);
             bit_changes(ui, machine);
             keep_out(ui, machine);
+            protect(ui, machine);
             drill_bank(ui, machine);
             if let Some(asked) = g_code_folders(ui, machine) {
                 outcome = Some(asked);
@@ -215,7 +216,7 @@ impl MachineManager {
             if names_clash {
                 ui.colored_label(
                     ui.visuals().error_fg_color,
-                    "Two machines cannot have the same name",
+                    cut_craft_i18n::t!("Two machines cannot have the same name"),
                 );
             }
             let entries = library.entries();
@@ -251,7 +252,7 @@ impl MachineManager {
     /// what was asked for.
     fn machine_row(&mut self, ui: &mut egui::Ui, look: &Look) -> Option<MachineOutcome> {
         let mut asked = None;
-        ui.label("Machine Configuration");
+        ui.label(cut_craft_i18n::t!("Machine Configuration"));
         ui.horizontal(|ui| {
             let shown = self
                 .draft
@@ -316,13 +317,13 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library, find_fir
                     ui.end_row();
                 }
                 // the controller (board) and the firmware it runs, side by side
-                ui.label("Controller");
+                ui.label(cut_craft_i18n::t!("Controller"));
                 ui.horizontal(|ui| {
                     ui.add(
                         egui::TextEdit::singleline(&mut machine.controller)
                             .desired_width((ui.available_width() - 290.0).max(120.0)),
                     );
-                    ui.label("Firmware");
+                    ui.label(cut_craft_i18n::t!("Firmware"));
                     firmware(ui, machine, find_firmware);
                 });
                 ui.end_row();
@@ -340,22 +341,25 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library, find_fir
                     measure(ui, label, value, per, unit);
                     ui.end_row();
                 }
-                ui.label("Units");
+                ui.label(cut_craft_i18n::t!("Units"));
                 ui.horizontal(|ui| {
-                    ui.radio_value(&mut machine.inches, false, "mm");
-                    ui.radio_value(&mut machine.inches, true, "inches");
+                    ui.radio_value(&mut machine.inches, false, cut_craft_i18n::t!("mm"));
+                    ui.radio_value(&mut machine.inches, true, cut_craft_i18n::t!("inches"));
                 });
                 ui.end_row();
                 // standard GRBL has no A axis: no 4th axis to offer at all
                 if machine.firmware().has_a_axis() {
-                    ui.label("4th axis");
+                    ui.label(cut_craft_i18n::t!("4th axis"));
                     let mut ticked = machine.rotary;
                     if ui
-                        .checkbox(&mut ticked, "A, turning the material (rotary jobs)")
-                        .on_hover_hint(
-                            "Rotary jobs are saved through the machine's post that turns their \
-                             side into A; ticking this adds Cut Craft's for its posts",
+                        .checkbox(
+                            &mut ticked,
+                            cut_craft_i18n::t!("A, turning the material (rotary jobs)"),
                         )
+                        .on_hover_hint(cut_craft_i18n::t!(
+                            "Rotary jobs are saved through the machine's post that turns their \
+                             side into A; ticking this adds Cut Craft's for its posts"
+                        ))
                         .changed()
                     {
                         machine.rotary = ticked;
@@ -367,19 +371,22 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library, find_fir
                     }
                     ui.end_row();
                 }
-                ui.label("Laser");
-                ui.checkbox(&mut machine.laser, "Laser fitted")
-                    .on_hover_hint(
+                ui.label(cut_craft_i18n::t!("Laser"));
+                ui.checkbox(&mut machine.laser, cut_craft_i18n::t!("Laser fitted"))
+                    .on_hover_hint(cut_craft_i18n::t!(
                         "Tick if a laser is fitted to the head: only then are the laser \
-                         toolpaths offered on the Toolpaths page",
-                    );
+                         toolpaths offered on the Toolpaths page"
+                    ));
                 ui.end_row();
             });
         // a 4th axis ticked before, that its firmware cannot drive (below the grid, so it
         // wraps to the window)
         if machine.rotary && !machine.firmware().has_a_axis() {
             ui.horizontal_wrapped(|ui| {
-                ui.colored_label(ui.visuals().error_fg_color, format!("⚠ {NO_A_AXIS}"));
+                ui.colored_label(
+                    ui.visuals().error_fg_color,
+                    format!("⚠ {}", cut_craft_i18n::t!(NO_A_AXIS)),
+                );
                 if ui.link("Pick the firmware").clicked() {
                     *find_firmware = true;
                 }
@@ -406,11 +413,11 @@ fn firmware(ui: &mut egui::Ui, machine: &mut Machine, find: &mut bool) {
                 }
             }
         });
-    let response = combo.response.on_hover_hint(
+    let response = combo.response.on_hover_hint(cut_craft_i18n::t!(
         "Which firmware the controller runs. It decides whether the machine can have a 4th axis: \
          standard GRBL has none. Not picked, it is read from Controller, and taken for standard \
-         GRBL when Controller does not name one",
-    );
+         GRBL when Controller does not name one"
+    ));
     if std::mem::take(find) {
         response.scroll_to_me(Some(egui::Align::Center));
         response.request_focus();
@@ -444,9 +451,10 @@ fn limits(ui: &mut egui::Ui, machine: &mut Machine) {
     };
     ui.group(|ui| {
         ui.set_width(ui.available_width());
-        ui.strong("Limits").on_hover_hint(
-            "From the controller's settings (GRBL $110-$112 and $120-$122); 0 is not given",
-        );
+        ui.strong(cut_craft_i18n::t!("Limits"))
+            .on_hover_hint(cut_craft_i18n::t!(
+                "From the controller's settings (GRBL $110-$112 and $120-$122); 0 is not given"
+            ));
         egui::Grid::new("machine_limits")
             .num_columns(4)
             .show(ui, |ui| {
@@ -470,11 +478,12 @@ fn limits(ui: &mut egui::Ui, machine: &mut Machine) {
                     }
                     ui.end_row();
                 }
-                ui.label("Cornering").on_hover_hint(
-                    "How far the controller lets the bit stray from a sharp corner to keep \
+                ui.label(cut_craft_i18n::t!("Cornering"))
+                    .on_hover_hint(cut_craft_i18n::t!(
+                        "How far the controller lets the bit stray from a sharp corner to keep \
                      its speed through it (junction deviation, GRBL $11); 0 is the usual \
-                     0.01 mm. The cutting time estimates use it",
-                );
+                     0.01 mm. The cutting time estimates use it"
+                    ));
                 let mut shown = machine.junction_deviation / per;
                 let corner = Number::new(&mut shown)
                     .speed(0.001)
@@ -486,7 +495,7 @@ fn limits(ui: &mut egui::Ui, machine: &mut Machine) {
                     machine.junction_deviation = shown * per;
                 }
                 ui.end_row();
-                ui.label("Spindle");
+                ui.label(cut_craft_i18n::t!("Spindle"));
                 for (end, value) in ["slowest", "fastest"].into_iter().zip(&mut machine.spindle) {
                     ui.add(
                         Number::new(value)
@@ -524,11 +533,11 @@ fn holder(ui: &mut egui::Ui, machine: &mut Machine) {
     egui::CollapsingHeader::new(summary)
         .id_salt("machine_holder")
         .show(ui, |ui| {
-            ui.weak(
+            ui.weak(cut_craft_i18n::t!(
                 "Only the bit's flutes cut. On a deep cut the collet nut or the spindle above \
                  it can run into material still standing beside the cut: the preview and Save \
-                 Toolpaths warn of it. Measure across the nut and the spindle with a ruler",
-            );
+                 Toolpaths warn of it. Measure across the nut and the spindle with a ruler"
+            ));
             egui::Grid::new("machine_holder_sizes")
                 .num_columns(2)
                 .show(ui, |ui| {
@@ -559,12 +568,15 @@ fn holder(ui: &mut egui::Ui, machine: &mut Machine) {
                         ui.end_row();
                     }
                 });
-            ui.checkbox(&mut machine.holder_per_bit, "Holder per bit")
-                .on_hover_hint(
-                    "Tick for a tool changer whose bits each sit in a holder of their own: \
-                     each bit can then have its own collet nut and spindle sizes in the Tool \
-                     Database. A bit without them uses the sizes above",
-                );
+            ui.checkbox(
+                &mut machine.holder_per_bit,
+                cut_craft_i18n::t!("Holder per bit"),
+            )
+            .on_hover_hint(cut_craft_i18n::t!(
+                "Tick for a tool changer whose bits each sit in a holder of their own: \
+                     each bit can then have its own collet nut and spindle sizes in the Bit \
+                     Library. A bit without them uses the sizes above"
+            ));
         });
 }
 
@@ -596,29 +608,29 @@ fn rotary(ui: &mut egui::Ui, machine: &mut Machine) {
         .id_salt("machine_rotary")
         .default_open(!axis.centre_set)
         .show(ui, |ui| {
-            ui.weak(
+            ui.weak(cut_craft_i18n::t!(
                 "Where the rotary sits and which way it turns. Rotary jobs cut round its \
                  turning axis, so the bit must sit exactly over it: a centre line out by half a \
-                 millimetre makes a round carving lumpy",
-            );
+                 millimetre makes a round carving lumpy"
+            ));
             egui::Grid::new("machine_rotary_axis")
                 .num_columns(2)
                 .show(ui, |ui| {
-                    ui.label("Lies along").on_hover_hint(
-                        "The direction of the turning axis on the bed: along X (left to right, \
-                         most kits) or along Y (front to back)",
-                    );
+                    ui.label(cut_craft_i18n::t!("Lies along"))
+                        .on_hover_hint(cut_craft_i18n::t!(
+                            "The direction of the turning axis on the bed: along X (left to right, \
+                         most kits) or along Y (front to back)"
+                        ));
                     ui.horizontal(|ui| {
-                        ui.radio_value(&mut axis.along, Along::X, "X");
-                        ui.radio_value(&mut axis.along, Along::Y, "Y");
+                        ui.radio_value(&mut axis.along, Along::X, cut_craft_i18n::t!("X"));
+                        ui.radio_value(&mut axis.along, Along::Y, cut_craft_i18n::t!("Y"));
                     });
                     ui.end_row();
                     let across = if axis.along == Along::X { "Y" } else { "X" };
-                    ui.label(format!("Centre line {across}"))
-                        .on_hover_hint(format!(
-                            "From work zero across to the turning axis, in {across}. 0 when you \
-                         zero {across} on the axis, as is usual. (Its height comes from Job \
-                         Setup: Z zero on the turning axis or on the material's top)"
+                    ui.label(cut_craft_i18n::tr!("machines-centre-line", across = across))
+                        .on_hover_hint(cut_craft_i18n::tr!(
+                            "machines-centre-line-hint",
+                            across = across
                         ));
                     let mut v = axis.centre_across / per;
                     if ui
@@ -635,12 +647,15 @@ fn rotary(ui: &mut egui::Ui, machine: &mut Machine) {
                     }
                     ui.end_row();
                     ui.label("");
-                    ui.checkbox(&mut axis.centre_set, "Centre line found")
-                        .on_hover_hint(
-                            "Tick once you have found the centre line on the machine and set \
+                    ui.checkbox(
+                        &mut axis.centre_set,
+                        cut_craft_i18n::t!("Centre line found"),
+                    )
+                    .on_hover_hint(cut_craft_i18n::t!(
+                        "Tick once you have found the centre line on the machine and set \
                              the value above (Help: The 4th Axis and Your Firmware shows \
-                             how). Until then, the checks before cutting ask about it",
-                        );
+                             how). Until then, the checks before cutting ask about it"
+                    ));
                     ui.end_row();
                     turning(ui, axis, per, length);
                     winding(ui, axis);
@@ -657,20 +672,26 @@ fn turning(
     per: f64,
     length: &str,
 ) {
-    ui.label("+A turns").on_hover_hint(
-        "Seen from the chuck end, looking along the axis. Jog A by +10° and \
-         watch which way the chuck turns",
-    );
+    ui.label(cut_craft_i18n::t!("+A turns"))
+        .on_hover_hint(cut_craft_i18n::t!(
+            "Seen from the chuck end, looking along the axis. Jog A by +10° and \
+         watch which way the chuck turns"
+        ));
     ui.horizontal(|ui| {
-        ui.radio_value(&mut axis.clockwise, true, "Clockwise");
-        ui.radio_value(&mut axis.clockwise, false, "Anticlockwise");
+        ui.radio_value(&mut axis.clockwise, true, cut_craft_i18n::t!("Clockwise"));
+        ui.radio_value(
+            &mut axis.clockwise,
+            false,
+            cut_craft_i18n::t!("Anticlockwise"),
+        );
     });
     ui.end_row();
-    ui.label("A top speed").on_hover_hint(
-        "The fastest A turns, from the controller's settings (grblHAL's $113, \
+    ui.label(cut_craft_i18n::t!("A top speed"))
+        .on_hover_hint(cut_craft_i18n::t!(
+            "The fastest A turns, from the controller's settings (grblHAL's $113, \
          FluidNC's max_rate_mm_per_min for A). For cutting times and to keep \
-         feeds within it",
-    );
+         feeds within it"
+        ));
     ui.add(
         Number::new(&mut axis.max_rate)
             .range(0.0..=f64::MAX)
@@ -709,26 +730,29 @@ fn room(
     per: f64,
     length: &str,
 ) {
-    ui.label("Axis height").on_hover_hint(
-        "From the top of the spoilboard up to the turning axis: the middle of the chuck. \
+    ui.label(cut_craft_i18n::t!("Axis height"))
+        .on_hover_hint(cut_craft_i18n::t!(
+            "From the top of the spoilboard up to the turning axis: the middle of the chuck. \
          Material turning on the rotary can swing out no further than this below it. 0 until \
-         you measure it",
-    );
+         you measure it"
+        ));
     measure(ui, "Axis height", &mut axis.axis_height, per, length);
     ui.end_row();
-    ui.label("Spoilboard").on_hover_hint(
-        "How thick the spoilboard under the rotary is. Take it out and material can swing \
-         down past where its top was, to the bed",
-    );
+    ui.label(cut_craft_i18n::t!("Spoilboard"))
+        .on_hover_hint(cut_craft_i18n::t!(
+            "How thick the spoilboard under the rotary is. Take it out and material can swing \
+         down past where its top was, to the bed"
+        ));
     ui.horizontal(|ui| {
         measure(ui, "Spoilboard", &mut axis.spoilboard, per, length);
-        ui.checkbox(&mut axis.spoilboard_off, "Taken out");
+        ui.checkbox(&mut axis.spoilboard_off, cut_craft_i18n::t!("Taken out"));
     });
     ui.end_row();
-    ui.label("Room above").on_hover_hint(
-        "With Z all the way up, from the turning axis up to the tip of the bit. Material can \
-         turn under the bit only if it swings out less than this. 0 until you measure it",
-    );
+    ui.label(cut_craft_i18n::t!("Room above"))
+        .on_hover_hint(cut_craft_i18n::t!(
+            "With Z all the way up, from the turning axis up to the tip of the bit. Material can \
+         turn under the bit only if it swings out less than this. 0 until you measure it"
+        ));
     measure(ui, "Room above", &mut axis.room_above, per, length);
     ui.end_row();
 }
@@ -736,14 +760,23 @@ fn room(
 /// How far A may wind one way, what happens at the limit, and its backlash.
 fn winding(ui: &mut egui::Ui, axis: &mut cut_craft_core::rotary_axis::RotaryAxis) {
     use cut_craft_core::rotary_axis::{AtLimit, Turning};
-    ui.label("A can turn").on_hover_hint(
-        "Freely: A keeps turning one way as long as the job needs, like a lathe. Choose a \
+    ui.label(cut_craft_i18n::t!("A can turn"))
+        .on_hover_hint(cut_craft_i18n::t!(
+            "Freely: A keeps turning one way as long as the job needs, like a lathe. Choose a \
          number of turns when a cable, a hose or a limit switch on the rotary stops it \
-         winding on and on",
-    );
+         winding on and on"
+        ));
     ui.horizontal(|ui| {
-        ui.radio_value(&mut axis.turning, Turning::Free, "Freely");
-        ui.radio_value(&mut axis.turning, Turning::Unwind, "Up to");
+        ui.radio_value(
+            &mut axis.turning,
+            Turning::Free,
+            cut_craft_i18n::t!("Freely"),
+        );
+        ui.radio_value(
+            &mut axis.turning,
+            Turning::Unwind,
+            cut_craft_i18n::t!("Up to"),
+        );
         ui.add_enabled(
             axis.turning == Turning::Unwind,
             Number::new(&mut axis.turns)
@@ -755,24 +788,34 @@ fn winding(ui: &mut egui::Ui, axis: &mut cut_craft_core::rotary_axis::RotaryAxis
         );
     });
     ui.end_row();
-    ui.label("At the limit").on_hover_hint(
-        "When the next pass would turn A past its turns. Cut both ways: the next pass is \
+    ui.label(cut_craft_i18n::t!("At the limit"))
+        .on_hover_hint(cut_craft_i18n::t!(
+            "When the next pass would turn A past its turns. Cut both ways: the next pass is \
          cut the other way round, so A comes back as it cuts. Lift and spin back: the bit \
          lifts clear and A spins back whole turns before the next pass; spinning back to \
-         the start also shows up any steps A has lost",
-    );
+         the start also shows up any steps A has lost"
+        ));
     ui.add_enabled_ui(axis.turning == Turning::Unwind, |ui| {
         ui.horizontal(|ui| {
-            ui.radio_value(&mut axis.at_limit, AtLimit::CutBothWays, "Cut both ways");
-            ui.radio_value(&mut axis.at_limit, AtLimit::SpinBack, "Lift and spin back");
+            ui.radio_value(
+                &mut axis.at_limit,
+                AtLimit::CutBothWays,
+                cut_craft_i18n::t!("Cut both ways"),
+            );
+            ui.radio_value(
+                &mut axis.at_limit,
+                AtLimit::SpinBack,
+                cut_craft_i18n::t!("Lift and spin back"),
+            );
         });
     });
     ui.end_row();
-    ui.label("Backlash").on_hover_hint(
-        "How far A turns before the material moves when it changes direction (a little \
+    ui.label(cut_craft_i18n::t!("Backlash"))
+        .on_hover_hint(cut_craft_i18n::t!(
+            "How far A turns before the material moves when it changes direction (a little \
          play in its gears or belt). The file turns that much further each time A changes \
-         direction. 0 for none",
-    );
+         direction. 0 for none"
+        ));
     ui.add(
         Number::new(&mut axis.backlash)
             .range(0.0..=10.0)
@@ -796,8 +839,8 @@ fn shown(value: f64, unit: &str) -> String {
 const MOST_SLOTS: usize = 99;
 
 /// Automatic Tool Changer: how many slots, and what is loaded in them. Given the tool
-/// database's tools (name and tool number), each slot's Select… asks for its tool to be picked
-/// in the Tool Database, × empties it, and Load by Tool Number puts each numbered tool in its
+/// database's tools (name and bit number), each slot's Select… asks for its tool to be picked
+/// in the Bit Library, × empties it, and Load by Bit Number puts each numbered tool in its
 /// holder; else the slots are only listed. Whether anything changed, and the holder (from 1)
 /// whose Select… was clicked.
 pub fn tool_changer(
@@ -809,21 +852,26 @@ pub fn tool_changer(
     let mut select = None;
     ui.group(|ui| {
         ui.set_width(ui.available_width());
-        ui.strong("Automatic Tool Changer");
+        ui.strong(cut_craft_i18n::t!("Automatic Tool Changer"));
         let mut has = !machine.slots.is_empty();
         if ui
-            .checkbox(&mut has, "This machine has a tool changer")
+            .checkbox(
+                &mut has,
+                cut_craft_i18n::t!("This machine has a tool changer"),
+            )
             .changed()
         {
             machine.set_slot_count(usize::from(has));
         }
         if !has {
-            ui.weak("Tool changes are by hand; tools are numbered in the order they are used");
+            ui.weak(cut_craft_i18n::t!(
+                "Bit changes are by hand; bits are numbered in the order they are used"
+            ));
             return;
         }
         let mut count = machine.slots.len();
         ui.horizontal(|ui| {
-            ui.label("Slots");
+            ui.label(cut_craft_i18n::t!("Slots"));
             if ui
                 .add(Number::new(&mut count).range(1..=MOST_SLOTS).name("Slots"))
                 .changed()
@@ -837,17 +885,21 @@ pub fn tool_changer(
                     ui.label(format!("T{}", i + 1));
                     match tool {
                         Some(name) => ui.label(name),
-                        None => ui.weak("(empty)"),
+                        None => ui.weak(cut_craft_i18n::t!("(empty)")),
                     };
                     ui.end_row();
                 }
             });
-            ui.weak("Load the holders in Machine ▸ Tool Changer…");
+            ui.weak(cut_craft_i18n::t!(
+                "Load the holders in Machine ▸ Tool Changer…"
+            ));
             return;
         };
         if ui
-            .button("Load by Tool Number")
-            .on_hover_hint("Each tool with a tool number goes in that holder")
+            .button(cut_craft_i18n::t!("Load by Bit Number"))
+            .on_hover_hint(cut_craft_i18n::t!(
+                "Each bit with a bit number goes in that holder"
+            ))
             .clicked()
         {
             for (name, number) in tools {
@@ -863,12 +915,14 @@ pub fn tool_changer(
                     ui.label(format!("T{}", i + 1));
                     match &machine.slots[i] {
                         Some(name) => ui.label(name),
-                        None => ui.weak("(empty)"),
+                        None => ui.weak(cut_craft_i18n::t!("(empty)")),
                     };
                     ui.horizontal(|ui| {
                         if ui
-                            .button("Select…")
-                            .on_hover_hint("Pick the tool for this holder in the Tool Database")
+                            .button(cut_craft_i18n::t!("Select…"))
+                            .on_hover_hint(cut_craft_i18n::t!(
+                                "Pick the bit for this holder in the Bit Library"
+                            ))
                             .clicked()
                         {
                             select = Some(i + 1);
@@ -876,7 +930,7 @@ pub fn tool_changer(
                         if machine.slots[i].is_some()
                             && ui
                                 .small_button("×")
-                                .on_hover_hint("Empty this holder")
+                                .on_hover_hint(cut_craft_i18n::t!("Empty this holder"))
                                 .clicked()
                         {
                             machine.slots[i] = None;
@@ -900,71 +954,80 @@ fn bit_changes(ui: &mut egui::Ui, machine: &mut Machine) {
         (true, HandChanges::SeparateFiles) => "a separate file for each bit",
         (true, HandChanges::Pause) => "one file that pauses",
     };
-    let grouped = if machine.group_by_bit {
-        ", grouped by bit"
-    } else {
-        ""
-    };
-    egui::CollapsingHeader::new(format!("Bit Changes: {how}{grouped}"))
-        .id_salt("bit_changes")
-        .show(ui, |ui| {
-            if machine.slots.is_empty() {
-                hand_changes(ui, machine);
-            } else {
-                ui.weak("The tool changer changes the bits; a pause chosen in Save Toolpaths uses these:");
-            }
-            change_position(ui, machine);
-            ui.horizontal(|ui| {
-                ui.label("Spindle spin-up after a pause");
-                ui.add(
-                    Number::new(&mut machine.spin_up)
-                        .range(0.0..=120.0)
-                        .max_decimals(1)
-                        .suffix(" s")
-                        .name("Spindle spin-up"),
-                )
-                .on_hover_hint(
-                    "How long the machine waits for the spindle to come up to speed before \
+    let grouped = if machine.group_by_bit { "yes" } else { "no" };
+    egui::CollapsingHeader::new(cut_craft_i18n::tr!(
+        "machines-bit-changes",
+        how = how,
+        grouped = grouped
+    ))
+    .id_salt("bit_changes")
+    .show(ui, |ui| {
+        if machine.slots.is_empty() {
+            hand_changes(ui, machine);
+        } else {
+            ui.weak(cut_craft_i18n::t!(
+                "The tool changer changes the bits; a pause chosen in Save Toolpaths uses these:"
+            ));
+        }
+        change_position(ui, machine);
+        ui.horizontal(|ui| {
+            ui.label(cut_craft_i18n::t!("Spindle spin-up after a pause"));
+            ui.add(
+                Number::new(&mut machine.spin_up)
+                    .range(0.0..=120.0)
+                    .max_decimals(1)
+                    .suffix(" s")
+                    .name("Spindle spin-up"),
+            )
+            .on_hover_hint(cut_craft_i18n::t!(
+                "How long the machine waits for the spindle to come up to speed before \
                      cutting again; 0 keeps the post's own wait (3 s in Cut Craft's posts). \
-                     It is written in the units the post gives its dwells",
-                );
-            });
-            ui.checkbox(&mut machine.group_by_bit, "Group by bit")
-                .on_hover_hint(
-                    "Off (safest): toolpaths are cut in the order they are listed. On: each \
-                     bit's toolpaths are cut together, for fewer bit changes, which changes \
-                     the order. The checks before cutting show the new order to look over",
-                );
+                     It is written in the units the post gives its dwells"
+            ));
         });
+        ui.checkbox(
+            &mut machine.group_by_bit,
+            cut_craft_i18n::t!("Group by bit"),
+        )
+        .on_hover_hint(cut_craft_i18n::t!(
+            "Off (safest): toolpaths are cut in the order they are listed. On: each \
+                     bit's toolpaths are cut together, for fewer bit changes, which changes \
+                     the order. The checks before cutting show the new order to look over"
+        ));
+    });
 }
 
 /// What Save Toolpaths starts on for a job with several bits on a machine without a tool
 /// changer: a file for each bit, or one file that pauses (warned on standard GRBL).
 fn hand_changes(ui: &mut egui::Ui, machine: &mut Machine) {
-    ui.label("When a job uses more than one bit, save it as:");
+    ui.label(cut_craft_i18n::t!(
+        "When a job uses more than one bit, save it as:"
+    ));
     ui.radio_value(
         &mut machine.hand_changes,
         HandChanges::SeparateFiles,
-        "A separate file for each bit",
+        cut_craft_i18n::t!("A separate file for each bit"),
     )
-    .on_hover_hint(
+    .on_hover_hint(cut_craft_i18n::t!(
         "The safest: run the files in number order, changing the bit and setting Z zero \
-         between them. Save Toolpaths starts on this choice",
-    );
+         between them. Save Toolpaths starts on this choice"
+    ));
     ui.radio_value(
         &mut machine.hand_changes,
         HandChanges::Pause,
-        "One file that pauses at each bit change",
+        cut_craft_i18n::t!("One file that pauses at each bit change"),
     )
-    .on_hover_hint(
+    .on_hover_hint(cut_craft_i18n::t!(
         "The machine stops (M0) at each change; change the bit, set Z zero, then resume. \
-         Standard GRBL cannot jog while paused, so use separate files there",
-    );
+         Standard GRBL cannot jog while paused, so use separate files there"
+    ));
     if machine.hand_changes == HandChanges::Pause && machine.cannot_jog_when_paused() {
         ui.colored_label(
             ui.visuals().warn_fg_color,
-            "⚠ Standard GRBL cannot jog while paused, so setting Z zero at a pause is hard. \
-             Pick the firmware above if yours is not standard GRBL",
+            cut_craft_i18n::t!(
+                "⚠ Standard GRBL cannot jog while paused, so setting Z zero at a pause is hard. \
+             Pick the firmware above if yours is not standard GRBL"
+            ),
         );
     }
 }
@@ -979,11 +1042,14 @@ fn change_position(ui: &mut egui::Ui, machine: &mut Machine) {
     };
     let mut moving = machine.change_position.is_some();
     if ui
-        .checkbox(&mut moving, "Go to a bit change position at each pause")
-        .on_hover_hint(
-            "Off: the bit lifts straight up to the safe Z, often over the work. On: the head \
-             also goes to this spot, out of the way, to change the bit",
+        .checkbox(
+            &mut moving,
+            cut_craft_i18n::t!("Go to a bit change position at each pause"),
         )
+        .on_hover_hint(cut_craft_i18n::t!(
+            "Off: the bit lifts straight up to the safe Z, often over the work. On: the head \
+             also goes to this spot, out of the way, to change the bit"
+        ))
         .changed()
     {
         machine.change_position = moving.then(|| ChangePosition {
@@ -1029,10 +1095,11 @@ fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
     };
     ui.group(|ui| {
         ui.set_width(ui.available_width());
-        ui.strong("Keep-Out Zones").on_hover_hint(
-            "Clamps fixed to the bed: no toolpath of any job passes over them. X and Y are \
-             from the job's XY origin, as the G-code is",
-        );
+        ui.strong(cut_craft_i18n::t!("Keep-Out Zones"))
+            .on_hover_hint(cut_craft_i18n::t!(
+                "Clamps fixed to the bed: no toolpath of any job passes over them. X and Y are \
+             from the job's XY origin, as the G-code is"
+            ));
         let mut gone = None;
         egui::Grid::new("machine_keep_out")
             .num_columns(7)
@@ -1040,11 +1107,12 @@ fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
                 for heading in ["Name", "X", "Y", "Width", "Height"] {
                     ui.label(heading);
                 }
-                ui.label("Tall").on_hover_hint(
-                    "How tall the clamp stands above the top of the material, so the checks \
+                ui.label(cut_craft_i18n::t!("Tall"))
+                    .on_hover_hint(cut_craft_i18n::t!(
+                        "How tall the clamp stands above the top of the material, so the checks \
                      see the collet nut or spindle coming down over it beside a deep cut; 0 \
-                     takes 20 mm",
-                );
+                     takes 20 mm"
+                    ));
                 ui.end_row();
                 for (i, zone) in machine.keep_out.iter_mut().enumerate() {
                     // what its label in the views says, after "Keep-out: "
@@ -1054,7 +1122,9 @@ fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
                             .hint_text(hint.clone())
                             .desired_width(ui.spacing().text_edit_width / 2.0),
                     )
-                    .on_hover_hint("What its label in the 2D and 3D views calls it");
+                    .on_hover_hint(cut_craft_i18n::t!(
+                        "What its label in the 2D and 3D views calls it"
+                    ));
                     // the corner may be either side of the origin
                     let zone_name = if zone.name.is_empty() {
                         hint.clone()
@@ -1079,7 +1149,7 @@ fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
                         let name = format!("{zone_name} {what}");
                         measure(ui, &name, value, per, &format!(" {length}"));
                     }
-                    if ui.button("Remove").clicked() {
+                    if ui.button(cut_craft_i18n::t!("Remove")).clicked() {
                         gone = Some(i);
                     }
                     ui.end_row();
@@ -1088,10 +1158,78 @@ fn keep_out(ui: &mut egui::Ui, machine: &mut Machine) {
         if let Some(i) = gone {
             machine.keep_out.remove(i);
         }
-        if ui.button("Add Zone").clicked() {
+        if ui.button(cut_craft_i18n::t!("Add Zone")).clicked() {
             machine.keep_out.push(crate::machine::Zone::default());
         }
     });
+}
+
+/// Protect the Machine: the checks that refuse a job that could damage the machine, each on
+/// unless switched off here, and how deep a cut may go into the spoilboard. Folded to one
+/// line saying which are on.
+fn protect(ui: &mut egui::Ui, machine: &mut Machine) {
+    let (per, length) = if machine.inches {
+        (INCH, " in")
+    } else {
+        (1.0, " mm")
+    };
+    let off = machine.protect.switched_off();
+    let summary = if off.is_empty() {
+        "Protect the Machine: every check on".to_owned()
+    } else {
+        format!("Protect the Machine: switched off: {}", off.join(", "))
+    };
+    egui::CollapsingHeader::new(summary)
+        .id_salt("machine_protect")
+        .show(ui, |ui| {
+            ui.weak(
+                "Save Toolpaths, Send to Machine and the Web API refuse a job these checks \
+                 find, with no Save Anyway: it could damage the machine. Switching one off \
+                 here is the only way past it, and the G-code then says it was off",
+            );
+            let protect = &mut machine.protect;
+            let rows = [
+                (
+                    &mut protect.keep_out,
+                    "Keep-out zones",
+                    "Refuse a cut into a keep-out zone, the job's or the machine's",
+                ),
+                (
+                    &mut protect.bed,
+                    "Bed size",
+                    "Refuse toolpaths bigger than the bed (each tile of a tiled job on its own)",
+                ),
+                (
+                    &mut protect.z_travel,
+                    "Z travel",
+                    "Refuse toolpaths going further up and down than the Z axis travels",
+                ),
+                (
+                    &mut protect.spoilboard,
+                    "Spoilboard depth",
+                    "Refuse a cut deeper into the spoilboard than allowed below",
+                ),
+            ];
+            for (on, label, hint) in rows {
+                ui.checkbox(on, label).on_hover_hint(hint);
+            }
+            ui.horizontal(|ui| {
+                let label = "Allowed into spoilboard";
+                ui.label(label).on_hover_hint(
+                    "How far below the material a cut may go into the spoilboard; deeper is \
+                     refused while Spoilboard depth is ticked",
+                );
+                measure(ui, label, &mut protect.spoilboard_depth, per, length);
+            });
+            ui.checkbox(
+                &mut protect.warn_spoilboard,
+                "Warn about cuts more than 1 mm into the spoilboard",
+            )
+            .on_hover_hint(
+                "Within the depth allowed, a cut more than 1 mm below the material is a \
+                 warning to read and tick: a wrong material thickness shows first this way",
+            );
+        });
 }
 
 /// G-code Files: where the machine's programs are saved on this computer, and the folder
@@ -1101,9 +1239,10 @@ fn g_code_folders(ui: &mut egui::Ui, machine: &mut Machine) -> Option<MachineOut
     let mut asked = None;
     ui.group(|ui| {
         ui.set_width(ui.available_width());
-        ui.strong("G-code Files").on_hover_hint(
-            "Each project's G-code goes in a folder of its own, named after the project",
-        );
+        ui.strong(cut_craft_i18n::t!("G-code Files"))
+            .on_hover_hint(cut_craft_i18n::t!(
+                "Each project's G-code goes in a folder of its own, named after the project"
+            ));
         egui::Grid::new("machine_g_code_folders")
             .num_columns(2)
             .show(ui, |ui| {
@@ -1128,7 +1267,7 @@ fn g_code_folders(ui: &mut egui::Ui, machine: &mut Machine) -> Option<MachineOut
                 ] {
                     ui.label(label).on_hover_hint(tip);
                     ui.horizontal(|ui| {
-                        let browse = ui.button("Browse…");
+                        let browse = ui.button(cut_craft_i18n::t!("Browse…"));
                         let width = ui.available_width();
                         ui.add(
                             egui::TextEdit::singleline(value)
@@ -1145,21 +1284,23 @@ fn g_code_folders(ui: &mut egui::Ui, machine: &mut Machine) -> Option<MachineOut
                 ui.label("");
                 ui.checkbox(
                     &mut machine.send_to.short_names,
-                    "Short names (8 letters) for controllers that need them",
+                    cut_craft_i18n::t!("Short names (8 letters) for controllers that need them"),
                 )
-                .on_hover_hint(
+                .on_hover_hint(cut_craft_i18n::t!(
                     "Some older controllers only read names of up to 8 letters off their card. \
                      Files that would end up with the same 8 letters get a number instead \
                      (Oaksign2.nc), so none overwrites another. Leave this off for FluidNC and \
-                     most WiFi controllers",
-                );
+                     most WiFi controllers"
+                ));
                 ui.end_row();
             });
         let can = machine.send_to.is_set();
         let manage = ui
-            .add_enabled(can, egui::Button::new("Machine Files…"))
-            .on_hover_hint("See, upload, rename and delete the files on the machine")
-            .on_disabled_hover_text("Set the machine's files folder first");
+            .add_enabled(can, egui::Button::new(cut_craft_i18n::t!("Machine Files…")))
+            .on_hover_hint(cut_craft_i18n::t!(
+                "See, upload, rename and delete the files on the machine"
+            ))
+            .on_disabled_hover_text(cut_craft_i18n::t!("Set the machine's files folder first"));
         if manage.clicked() {
             asked = Some(MachineOutcome::ManageFiles);
         }
@@ -1192,12 +1333,15 @@ fn drill_bank(ui: &mut egui::Ui, machine: &mut Machine) {
         .show(ui, |ui| {
             let mut has = machine.drill_bank.is_some();
             if ui
-                .checkbox(&mut has, "This machine has a drill bank")
-                .on_hover_hint(
+                .checkbox(
+                    &mut has,
+                    cut_craft_i18n::t!("This machine has a drill bank"),
+                )
+                .on_hover_hint(cut_craft_i18n::t!(
                     "A head with several drills side by side that drop down together, so a \
                      row of shelf-pin or dowel holes is drilled in one plunge. Most hobby \
-                     machines have none",
-                )
+                     machines have none"
+                ))
                 .changed()
             {
                 // a common start: five 5 mm drills 32 mm apart (the 32 mm cabinet system)
@@ -1224,24 +1368,23 @@ fn bank_layout(
             .num_columns(2)
             .show(ui, |ui| {
                 let (mut across, mut along) = (bank.horizontal.len(), bank.vertical.len());
-                ui.label("Drills along X")
-                    .on_hover_hint("How many drills are on the arm running left to right");
+                ui.label(cut_craft_i18n::t!("Drills along X"))
+                    .on_hover_hint(cut_craft_i18n::t!("How many drills are on the arm running left to right"));
                 let a = ui.add(Number::new(&mut across).range(0..=32).name("Drills along X"));
                 ui.end_row();
-                ui.label("Drills along Y")
-                    .on_hover_hint("How many drills are on the arm running front to back; 0 for a single row");
+                ui.label(cut_craft_i18n::t!("Drills along Y"))
+                    .on_hover_hint(cut_craft_i18n::t!("How many drills are on the arm running front to back; 0 for a single row"));
                 let b = ui.add(Number::new(&mut along).range(0..=32).name("Drills along Y"));
                 ui.end_row();
                 if a.changed() || b.changed() {
                     bank.set_counts(across, along);
                 }
-                ui.label("Pitch")
-                    .on_hover_hint("The distance between neighbouring drills, centre to centre");
+                ui.label(cut_craft_i18n::t!("Pitch"))
+                    .on_hover_hint(cut_craft_i18n::t!("The distance between neighbouring drills, centre to centre"));
                 measure(ui, "Pitch", &mut bank.pitch, per, &format!(" {length}"));
                 ui.end_row();
                 if !bank.horizontal.is_empty() && !bank.vertical.is_empty() {
-                    ui.label("Arms cross at").on_hover_hint(
-                        "The drill both arms share: its place along X, then along Y, counted from 1",
+                    ui.label(cut_craft_i18n::t!("Arms cross at")).on_hover_hint(cut_craft_i18n::t!("The drill both arms share: its place along X, then along Y, counted from 1"),
                     );
                     ui.horizontal(|ui| {
                         let limits = [bank.horizontal.len(), bank.vertical.len()];
@@ -1293,7 +1436,7 @@ fn bank_drills(
                 };
                 let crossing = bank.is_crossing(*id);
                 ui.label(if crossing {
-                    format!("{name} (both arms)")
+                    cut_craft_i18n::tr!("machines-both-arms", name = name.clone())
                 } else {
                     name.clone()
                 });
@@ -1303,10 +1446,10 @@ fn bank_drills(
                         Arm::Vertical => &mut bank.vertical[id.index],
                     };
                     ui.add(Number::new(&mut drill.number).name(format!("Drill {name} number")))
-                        .on_hover_hint(
+                        .on_hover_hint(cut_craft_i18n::t!(
                             "The number the controller picks this drill by; controllers that \
-                             take a bitmask expect 1, 2, 4, 8...",
-                        );
+                             take a bitmask expect 1, 2, 4, 8..."
+                        ));
                     if crossing {
                         let y = &mut bank.vertical[bank.central[1]].number;
                         ui.add(
@@ -1314,10 +1457,10 @@ fn bank_drills(
                                 .prefix("Y ")
                                 .name(format!("Drill {name} Y arm number")),
                         )
-                        .on_hover_hint(
+                        .on_hover_hint(cut_craft_i18n::t!(
                             "Its number on the Y arm, for controllers that number the \
-                                 arms apart",
-                        );
+                                 arms apart"
+                        ));
                     }
                 });
                 let drill = match id.arm {
@@ -1334,10 +1477,10 @@ fn bank_drills(
                 let is_reference = bank.same(bank.reference, *id);
                 if ui
                     .radio(is_reference, "")
-                    .on_hover_hint(
+                    .on_hover_hint(cut_craft_i18n::t!(
                         "The drill the machine positions by: the G-code's X and Y are where \
-                     this drill is",
-                    )
+                     this drill is"
+                    ))
                     .clicked()
                 {
                     bank.reference = *id;

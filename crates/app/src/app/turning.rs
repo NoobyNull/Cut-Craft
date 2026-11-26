@@ -234,13 +234,20 @@ impl super::CutCraftApp {
         let axis = (self.machines.active())
             .filter(|m| m.has_rotary())
             .map_or_default(|m| m.rotary_axis);
+        // thinned as Save Toolpaths thins them, so the preview plays the saved file
+        let settings = &self.options.toolpaths;
+        let thin = |t: Vec<Toolpath>| -> Vec<Toolpath> {
+            t.iter()
+                .map(|t| t.thinned(settings.tolerance(cut_craft_core::simplify::family(t))))
+                .collect()
+        };
         Making::new(
             &job,
             post,
             &axis,
             self.summary.rapid,
-            earlier,
-            toolpaths,
+            thin(earlier),
+            thin(toolpaths),
             self.display.detail,
         )
     }
@@ -249,7 +256,7 @@ impl super::CutCraftApp {
     /// Preview Control, cutting for no longer than the frame's budget; gone once the
     /// preview's controls close.
     pub(super) fn follow_turning(&mut self, ctx: &egui::Context) {
-        let Some(playback) = self.playback.as_ref().or(self.kept_playback.as_ref()) else {
+        let Some(playback) = self.player.current() else {
             self.turning = None;
             return;
         };
@@ -259,7 +266,7 @@ impl super::CutCraftApp {
             1.0
         };
         if let Some(turning) = self.turning.as_mut()
-            && !turning.follow(fraction, self.playback_budget)
+            && !turning.follow(fraction, self.player.budget)
         {
             ctx.request_repaint();
         }
@@ -276,8 +283,8 @@ impl super::CutCraftApp {
         look: &super::view3d::Look,
         on_gpu: bool,
     ) -> Option<super::view3d::gpu::Draw> {
-        let settled = !self.playing && self.playback_goal.is_none();
-        let redraw = self.playback_redraw;
+        let settled = !self.player.playing && self.player.goal.is_none();
+        let redraw = self.player.redraw;
         let turning = self.turning.as_mut()?;
         let faces = turning.faces(redraw, settled);
         let mark = ui.visuals().error_fg_color;

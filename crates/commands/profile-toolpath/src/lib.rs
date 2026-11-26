@@ -22,17 +22,17 @@ pub struct ProfileToolpath;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Side {
-    /// Cut a part out: the tool goes round the outside of each shape, so the part is the size
+    /// Cut a part out: the bit goes round the outside of each shape, so the part is the size
     /// drawn
     #[default]
     #[schemars(title = "Outside")]
     Outside,
-    /// Cut a hole: the tool goes round the inside of each shape, so the hole is the size
+    /// Cut a hole: the bit goes round the inside of each shape, so the hole is the size
     /// drawn
     #[schemars(title = "Inside")]
     Inside,
-    /// The tool's middle follows the line itself, open lines too, so the cut is as wide as the
-    /// tool
+    /// The bit's middle follows the line itself, open lines too, so the cut is as wide as the
+    /// bit
     #[schemars(title = "On the Line")]
     On,
 }
@@ -88,7 +88,7 @@ pub enum StartAt {
     BoundingBox,
 }
 
-/// How far out a sharp corner may go, in tool radii, before it is squared off: corners down to
+/// How far out a sharp corner may go, in bit radii, before it is squared off: corners down to
 /// about 29° come to a point.
 // ponytail: the limit is not known
 pub const MITRE_REACH: f64 = 4.0;
@@ -111,7 +111,7 @@ pub struct Params {
     #[serde(default)]
     #[schemars(skip)]
     pub through: bool,
-    /// The bit that cuts round the shapes; Select… picks one from your tools
+    /// The bit that cuts round the shapes; Select… picks one from your bits
     pub tool: Tool,
     /// Outside to cut a part out, Inside to cut a hole, On the Line to follow the line itself
     #[schemars(
@@ -168,13 +168,13 @@ pub struct Params {
     #[serde(default)]
     #[schemars(skip)]
     pub ramping: Ramping,
-    /// How the tool goes down into the material (helix, zig-zag, ramp or straight down), set
+    /// How the bit goes down into the material (helix, zig-zag, ramp or straight down), set
     /// in the Entry window; each place it goes down fits it to the room there. Unset on
     /// toolpaths made before entry modes, which keep their ramp
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
     pub entry: Option<EntrySettings>,
-    /// How the tool comes onto each path, from the waste side; a ramp then runs along the
+    /// How the bit comes onto each path, from the waste side; a ramp then runs along the
     /// lead in, and there is no spiral
     #[serde(default)]
     #[schemars(title = "Lead in / out", extend("x-tab" = "Leads"))]
@@ -196,7 +196,7 @@ pub struct Params {
     #[serde(default = "top_left")]
     #[schemars(extend("x-tab" = "Start At", "x-enable-when" = {"start_at": "bounding_box"}))]
     pub start_near: Anchor,
-    /// At outside corners the tool follows the vector's angle out to a point instead of
+    /// At outside corners the bit follows the vector's angle out to a point instead of
     /// rolling round the corner
     #[serde(default)]
     #[schemars(title = "Sharp External Corners", extend("x-tab" = "Corners"))]
@@ -270,7 +270,7 @@ impl Command for ProfileToolpath {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         let depth = p.cut_depth(doc.job.thickness);
         ensure_positive("depth", depth)?;
-        ensure_positive("tool diameter", p.tool.diameter)?;
+        ensure_positive("bit diameter", p.tool.diameter)?;
         ensure_positive("pass depth", p.tool.pass_depth)?;
         let (ids, paths) = doc.selected_paths(|path| path.closed || p.side == Side::On);
         if ids.is_empty() {
@@ -479,7 +479,7 @@ fn trochoidal(
     moves
 }
 
-/// One path the tool's centre follows.
+/// One path the bit's centre follows.
 struct Cut {
     points: Vec<Point>,
     closed: bool,
@@ -663,7 +663,7 @@ fn rank(n: usize, key: impl Fn(usize) -> (f64, f64)) -> Vec<usize> {
     rank
 }
 
-/// The cuts in the order they run, each with the point it starts at, and how far the tool
+/// The cuts in the order they run, each with the point it starts at, and how far the bit
 /// moves between them (from the origin to the first). `rank` puts them in order; without one
 /// each goes on to the nearest. Either way a cut waits for the cuts inside it.
 // ponytail: tries every cut at each step (n² start points); a spatial index if jobs get huge

@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-25
 see-also: import_component_3d_model, generate_border, scale_model_z_height, slice, view_3d, material_setup, rotary_machining_toolpath, rotary_lathe_toolpath, view_controls
 ---
 
@@ -164,7 +164,7 @@ file.
 
 ## See also
 
-- [Material Setup](help:material_setup), and **Import Component / 3D Model...** in the
+- [Material Setup](help:material_setup), and **Import 3D Model...** in the
   Import tools, whose form has the same setting
 - [3D View ▸ Changing a model's height](help:view_3d): the height buttons on a picked
   model, to change the model itself rather than where it sits

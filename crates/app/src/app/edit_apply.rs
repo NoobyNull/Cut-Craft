@@ -142,7 +142,7 @@ impl CutCraftApp {
             });
         self.status.set_message(&result.map_or_else(
             |e| e,
-            |n| format!("Saved {n} job sheet{}", if n == 1 { "" } else { "s" }),
+            |n| cut_craft_i18n::tr!("status-saved-job-sheets", count = n),
         ));
     }
 
@@ -236,8 +236,9 @@ impl CutCraftApp {
             form.applied = Some(params);
         }
         let label = self.registry.get(command).map_or("", |c| c.meta().label);
-        self.status.set_message(&format!(
-            "Editing the shape in {label}: change the form to change it"
+        self.status.set_message(&cut_craft_i18n::tr!(
+            "status-editing-the-shape",
+            tool = crate::tool_names::tool_name(command, label)
         ));
     }
 
@@ -245,15 +246,15 @@ impl CutCraftApp {
     /// with it: its other side on top, the side that was up underneath. A side never
     /// previewed comes up uncut, so the one that was up is kept underneath, not lost.
     pub(super) fn follow_side(&mut self) {
-        if self.doc.bottom_side == self.preview_side {
+        if self.doc.bottom_side == self.preview.side {
             return;
         }
-        self.preview_side = self.doc.bottom_side;
-        if self.simulation.is_none() {
+        self.preview.side = self.doc.bottom_side;
+        if self.preview.material.is_none() {
             return;
         }
         self.finish_playback();
-        let Some(mut top) = self.simulation.take() else {
+        let Some(mut top) = self.preview.material.take() else {
             return;
         };
         let mut now_up = if let Some(under) = top.other_side.take() {
@@ -266,8 +267,8 @@ impl CutCraftApp {
             fresh
         };
         now_up.other_side = Some(std::sync::Arc::new(top));
-        self.simulation = Some(now_up);
-        (self.simulation_coarse, self.fine_3d, self.surface_gpu) = (None, None, None);
+        self.preview.material = Some(now_up);
+        self.preview_changed();
     }
 
     /// `change` with the components Orientate 3D Model makes put on the level clipart was
@@ -389,12 +390,14 @@ impl CutCraftApp {
     /// hidden so a new shape that cannot be seen is not taken for lost.
     pub(super) fn placed_on(&self, level: u64) -> String {
         self.doc.levels.get(&level).map_or_else(String::new, |l| {
-            let hidden = if l.visible {
-                ""
-            } else {
-                " (hidden: show the level to see it)"
-            };
-            format!(": new component on level {}{hidden}", l.name)
+            cut_craft_i18n::tr!(
+                if l.visible {
+                    "status-placed-on-level"
+                } else {
+                    "status-placed-on-hidden-level"
+                },
+                level = l.name.clone()
+            )
         })
     }
 
@@ -448,8 +451,11 @@ impl CutCraftApp {
             form.params = fresh;
         }
         let placed = new_level.map_or_else(String::new, |l| self.placed_on(l));
-        self.status
-            .set_message(&format!("{} applied{placed}", cmd.meta().label));
+        self.status.set_message(&cut_craft_i18n::tr!(
+            "status-applied",
+            tool = crate::tool_names::name_of(&self.registry, id),
+            placed = placed
+        ));
         // new keep-out zones: the toolpaths are made again round them
         if id == "keep_out_zones" {
             self.keep_out_changed();
@@ -459,8 +465,10 @@ impl CutCraftApp {
             && let Ok(p) = serde_json::from_value(params.clone())
             && let Some(turns) = cmd_wrapped_spiral_layout::revolutions(&self.doc, &p)
         {
-            self.status
-                .set_message(&format!("Each strand makes {turns:.2} revolutions"));
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-strand-revolutions",
+                turns = format!("{turns:.2}")
+            ));
         }
         // a toolpath made already out of date (Plate Production's, cutting each plate's own
         // text) is recalculated straight away, then warned about
@@ -523,14 +531,14 @@ impl CutCraftApp {
     }
 
     /// The whole job's cutting time, minutes: every shown toolpath, the moves between them,
-    /// the tool changes and the trip back home.
+    /// the bit changes and the trip back home.
     pub(super) fn job_minutes(&self) -> f64 {
         self.cut_times().total
     }
 
     /// What the cutting times go by: the Toolpath Summary's rapid rate, the active
     /// machine's top speeds, cornering and (unless the Toolpath Summary is told not to)
-    /// accelerations, its tool changer, and the tool change times in Options.
+    /// accelerations, its tool changer, and the bit change times in Options.
     pub(super) fn motion(&self) -> cut_craft_core::cut_time::Motion {
         let machine = self.machines.active();
         let o = &self.options.toolpaths;

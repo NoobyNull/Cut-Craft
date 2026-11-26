@@ -15,7 +15,7 @@ fn a_tool_number_another_bit_has_is_said_in_red_but_0_is_shared_freely() {
     assert!(sharing_number(&tools, 2).is_empty(), "0: changed by hand");
     let note = number_taken(3, &sharing_number(&tools, 0)).unwrap();
     assert!(
-        note.starts_with("Tool number 3 is also 60° V-Bit's. A tool changer"),
+        note.starts_with("Bit number 3 is also 60° V-Bit's. A tool changer"),
         "{note}"
     );
     assert_eq!(number_taken(3, &[]), None);
@@ -115,7 +115,7 @@ fn the_window_draws_groups_tools_and_holds_its_size() {
     }
     let later = ctx.memory(|mem| mem.area_rect(tool_window()));
     assert_eq!(first, later, "panels inside the window do not grow it");
-    m.pick = Some(Pick::Group("Metric Tools".into()));
+    m.pick = Some(Pick::Group("Metric Bits".into()));
     assert_eq!(frame(&mut m, &ctx), None);
 }
 
@@ -407,7 +407,7 @@ fn a_question_never_moves_the_tree_or_the_buttons_under_it() {
 fn deleting_a_group_asks_first_naming_its_hidden_and_loaded_tools() {
     let db = ToolDatabase::starter();
     let mut m = Manager::new(&db);
-    let group = "Metric Tools".to_owned();
+    let group = "Metric Bits".to_owned();
     let inside: Vec<String> = db
         .tools
         .iter()
@@ -425,9 +425,9 @@ fn deleting_a_group_asks_first_naming_its_hidden_and_loaded_tools() {
     m.act(TreeAction::Delete);
     assert_eq!(m.draft.tools.len(), db.tools.len(), "nothing gone yet");
     let question = m.delete_question().expect("it asks");
-    assert!(question.contains("Metric Tools"), "{question}");
+    assert!(question.contains("Metric Bits"), "{question}");
     assert!(
-        question.contains(&format!("{} tools", inside.len())),
+        question.contains(&format!("{} bits", inside.len())),
         "{question}"
     );
     assert!(question.contains("hidden"), "{question}");
@@ -461,7 +461,7 @@ fn the_materials_library_button_asks_first_when_it_would_keep_deletions() {
     m.open_materials_library();
     assert!(m.pending.is_none(), "it asks first");
     let question = m.library_question().expect("a question");
-    assert!(question.contains("1 deleted tool"), "{question}");
+    assert!(question.contains("1 deleted bit"), "{question}");
     assert!(question.contains(&gone), "{question}");
     m.answer_library(false);
     assert!(m.pending.is_none() && m.library_question().is_none());
@@ -498,17 +498,17 @@ fn a_renamed_tool_is_not_asked_about_as_deleted() {
 fn tree_buttons_add_copy_and_delete_in_the_copy_only() {
     let db = ToolDatabase::starter();
     let mut m = Manager::new(&db);
-    m.pick = Some(Pick::Group("Metric Tools/End Mills".into()));
+    m.pick = Some(Pick::Group("Metric Bits/End Mills".into()));
     m.act(TreeAction::NewTool);
     let Some(Pick::Tool(i)) = m.pick else {
         panic!("the new tool is picked")
     };
-    assert_eq!(m.draft.tools[i].group, "Metric Tools/End Mills");
+    assert_eq!(m.draft.tools[i].group, "Metric Bits/End Mills");
     m.act(TreeAction::Copy);
     assert_eq!(m.draft.tools.len(), db.tools.len() + 2);
     m.act(TreeAction::Delete);
     assert_eq!(m.draft.tools.len(), db.tools.len() + 1);
-    m.pick = Some(Pick::Group("Imperial Tools".into()));
+    m.pick = Some(Pick::Group("Imperial Bits".into()));
     let Some(Outcome::Export(out)) = m.act(TreeAction::Export) else {
         panic!("exports")
     };
@@ -523,7 +523,7 @@ fn tree_buttons_add_copy_and_delete_in_the_copy_only() {
     );
 }
 
-/// The starter tools as My Tools, with an "Amana" catalogue of two tools; the
+/// The starter tools as My Bits, with an "Amana" catalogue of two tools; the
 /// catalogue's first tool's index.
 fn with_catalogue() -> (Manager, usize) {
     let mut db = ToolDatabase::starter();
@@ -655,8 +655,8 @@ fn a_tool_s_group_follows_its_maker_and_type_until_moved() {
     assert_eq!(m.draft.tools[i].group, "Catalogues/Amana/Up-cut");
 }
 
-/// A laser toolpath's Select… offers only lasers, any other toolpath's only bits; the Tool
-/// Database opened on its own (or for a holder) shows every tool.
+/// A laser toolpath's Select… offers only lasers, any other toolpath's only bits; the Bit
+/// Library opened on its own (or for a holder) shows every tool.
 #[test]
 fn a_toolpath_forms_select_offers_only_the_kind_of_tool_it_cuts_with() {
     let laser = Tool {

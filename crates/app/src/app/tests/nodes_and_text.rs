@@ -5,29 +5,29 @@ use super::*;
 #[test]
 fn grouping_text_says_nothing_in_red_and_keeps_it_text() {
     let mut h = Harness::new();
-    let mut c = Change::builder(&h.app.doc);
+    let mut c = Change::builder(h.doc());
     let letter = c.add(Path::circle(Point::new(20.0, 20.0), 2.0));
     c.set_group(letter, Some(5));
     c.set_text(5, Some(serde_json::json!({"text": "o"})));
     let border = c.add(Path::circle(Point::new(20.0, 20.0), 15.0));
     c.select([letter, border]);
-    h.app.doc.apply(&c.finish()).unwrap();
+    h.given(&c.finish());
     h.frame(vec![]);
-    h.app.invoke(&h.ctx, "group");
+    h.invoke("group");
     h.frame(vec![]);
-    assert_eq!(h.app.tool_note(), None, "nothing to warn about");
+    assert_eq!(h.tool_note(), None, "nothing to warn about");
     assert!(
         !h.texts().iter().any(|t| t.contains("curves")),
         "no word of curves"
     );
-    assert_eq!(h.app.doc.text_group(letter), Some(5), "still text");
-    assert_eq!(h.app.doc.group_members(border).len(), 2, "one group");
+    assert_eq!(h.doc().text_group(letter), Some(5), "still text");
+    assert_eq!(h.doc().group_members(border).len(), 2, "one group");
 }
 
 #[test]
 fn freehand_follows_the_whole_drag() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "draw_freehand");
+    h.invoke("draw_freehand");
     let points = [(10.0, 10.0), (20.0, 30.0), (30.0, 10.0), (40.0, 30.0)];
     h.frame(vec![Event::PointerMoved(h.at(10.0, 10.0))]);
     h.press(h.at(10.0, 10.0), true, Modifiers::NONE);
@@ -36,7 +36,7 @@ fn freehand_follows_the_whole_drag() {
     }
     h.press(h.at(40.0, 30.0), false, Modifiers::NONE);
     h.frame(vec![]);
-    let drawn = h.app.doc.vectors.values().next().expect("a stroke");
+    let drawn = h.doc().vectors.values().next().expect("a stroke");
     let b = drawn.bounds();
     assert!(
         b.size().y > 15.0,
@@ -48,43 +48,35 @@ fn freehand_follows_the_whole_drag() {
 fn node_editing_drags_a_corner_and_offers_its_menu() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 10.0);
-    let id = *h.app.doc.selection.iter().next().unwrap();
-    h.app.invoke(&h.ctx, "node_edit");
-    assert_eq!(h.app.view_tool, Some(ViewTool::NodeEdit));
+    let id = *h.doc().selection.iter().next().unwrap();
+    h.invoke("node_edit");
+    assert_eq!(h.view_tool(), Some(ViewTool::NodeEdit));
     // smart snapping would line the corner up with the other top corner
-    h.app.options.snapping.smart_snapping = false;
+    h.given_options(|o| o.snapping.smart_snapping = false);
     let (from, to) = (h.at(30.0, 20.0), h.at(40.0, 25.0));
     h.drag(from, to);
-    let corners = cut_craft_core::nodes::nodes(&h.app.doc.vectors[&id]);
+    let corners = cut_craft_core::nodes::nodes(&h.doc().vectors[&id]);
     assert!(
         corners
             .iter()
             .any(|q| q.distance(Point::new(40.0, 25.0)) < 0.5),
         "the corner followed the drag: {corners:?}"
     );
-    assert_eq!(
-        h.app.doc.vectors.len(),
-        1,
-        "a node drag selects nothing new"
-    );
+    assert_eq!(h.doc().vectors.len(), 1, "a node drag selects nothing new");
     let target = h
-        .app
         .node_target(Point::new(10.0, 10.0), 1.0)
         .expect("a node there");
-    let menu = gui::node_menu(&h.app.doc, &target);
+    let menu = gui::node_menu(h.doc(), &target);
     // Smooth Point turns the corner's spans into Béziers; Node Position opens Move Node there
     let smooth = leaf(&menu, &["Smooth Point"]);
     assert!(smooth.action.contains("smooth_point"), "{}", smooth.action);
     let position = leaf(&menu, &["Node Position..."]);
     assert!(position.action.contains("move_node"), "{}", position.action);
     let delete = leaf(&menu, &["Delete Point"]);
-    h.app.invoke(&h.ctx, &delete.action);
-    assert_eq!(
-        cut_craft_core::nodes::nodes(&h.app.doc.vectors[&id]).len(),
-        3
-    );
-    h.app.invoke(&h.ctx, "node_edit");
-    assert_eq!(h.app.view_tool, None, "N toggles it off");
+    h.invoke(&delete.action);
+    assert_eq!(cut_craft_core::nodes::nodes(&h.doc().vectors[&id]).len(), 3);
+    h.invoke("node_edit");
+    assert_eq!(h.view_tool(), None, "N toggles it off");
 }
 
 #[test]
@@ -92,23 +84,22 @@ fn a_span_made_a_bezier_shows_handles_that_drag_to_bend_it() {
     use cut_craft_core::geometry::Segment;
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 10.0);
-    let id = *h.app.doc.selection.iter().next().unwrap();
-    h.app.invoke(&h.ctx, "node_edit");
-    h.app.options.snapping.smart_snapping = false;
-    h.app.options.snapping.snap_to_grid = false;
+    let id = *h.doc().selection.iter().next().unwrap();
+    h.invoke("node_edit");
+    h.given_options(|o| o.snapping.smart_snapping = false);
+    h.given_options(|o| o.snapping.snap_to_grid = false);
     // right-click the bottom side, Convert Span to Bezier
     let target = h
-        .app
         .node_target(Point::new(20.0, 10.0), 1.0)
         .expect("the bottom side");
-    let menu = gui::node_menu(&h.app.doc, &target);
+    let menu = gui::node_menu(h.doc(), &target);
     let convert = leaf(&menu, &["Convert Span to Bezier"]);
-    h.app.invoke(&h.ctx, &convert.action);
+    h.invoke(&convert.action);
     assert!(
-        h.app.doc.selection.contains(&id),
+        h.doc().selection.contains(&id),
         "still the one being edited"
     );
-    let crate::view2d::Overlay::Nodes { handles, .. } = h.app.node_overlay(None, 1.0) else {
+    let crate::view2d::Overlay::Nodes { handles, .. } = h.node_overlay(None, 1.0) else {
         panic!("the node overlay")
     };
     assert_eq!(
@@ -122,10 +113,10 @@ fn a_span_made_a_bezier_shows_handles_that_drag_to_bend_it() {
         .copied()
         .min_by(|a, b| a.1.x.total_cmp(&b.1.x))
         .unwrap();
-    let corners = cut_craft_core::nodes::nodes(&h.app.doc.vectors[&id]);
+    let corners = cut_craft_core::nodes::nodes(&h.doc().vectors[&id]);
     let (from, to) = (h.at(handle.x, handle.y), h.at(handle.x, handle.y - 6.0));
     h.drag(from, to);
-    let path = &h.app.doc.vectors[&id];
+    let path = &h.doc().vectors[&id];
     assert_eq!(
         cut_craft_core::nodes::nodes(path),
         corners,
@@ -147,7 +138,7 @@ fn sketch_carving_shows_the_areas_it_would_carve_while_its_form_is_open() {
     use cut_craft_core::bitmap::Bitmap;
     use cut_craft_core::geometry::{Point, Rect};
     let mut h = Harness::new();
-    let mut c = Change::builder(&h.app.doc);
+    let mut c = Change::builder(h.doc());
     // a white picture with a dark stripe down its middle column
     let grey = (0..9 * 9)
         .map(|i| if i % 9 == 4 { 0 } else { 255 })
@@ -161,26 +152,26 @@ fn sketch_carving_shows_the_areas_it_would_carve_while_its_form_is_open() {
         depth: Vec::new(),
         rgb: Vec::new(),
     });
-    h.app.record(Ok(c.finish()), "added");
-    h.app.invoke(&h.ctx, "sketch_carving_toolpath");
+    h.make(c.finish(), "added");
+    h.invoke("sketch_carving_toolpath");
     h.frame(vec![]);
-    let areas = &h.app.sketch_areas.as_ref().expect("found").areas;
+    let areas = h.sketch_areas().expect("found");
     assert!(!areas.is_empty(), "the stripe shows");
     assert!(
         areas.iter().all(|r| r.min.x >= 15.0 && r.max.x <= 30.0),
         "{areas:?}"
     );
-    h.app.form = None;
+    h.close_form();
     h.frame(vec![]);
-    assert!(h.app.sketch_areas.is_none(), "gone with the form");
+    assert!(h.sketch_areas().is_none(), "gone with the form");
 }
 
 #[test]
 fn forms_open_with_values_from_the_document() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 20.0);
-    h.app.invoke(&h.ctx, "set_size");
-    let params = &h.app.form.as_ref().unwrap().params;
+    h.invoke("set_size");
+    let params = h.form_settings();
     assert_eq!(
         (params["width"].as_f64(), params["height"].as_f64()),
         (Some(50.0), Some(20.0))
@@ -190,54 +181,50 @@ fn forms_open_with_values_from_the_document() {
 #[test]
 fn text_grouped_with_a_border_stays_editable_inside_the_group() {
     let mut h = Harness::new();
-    let mut full = h.app.registry.get("draw_text").unwrap().default_params();
+    let mut full = h.default_settings("draw_text");
     full["text"] = Value::from("HI");
     full["font"] = Value::from("Test Boxes");
-    h.app.apply("draw_text", &full).unwrap();
-    h.app.form = None;
-    let letters = h.app.doc.selection.clone();
+    h.run("draw_text", &full).unwrap();
+    h.close_form();
+    let letters = h.doc().selection.clone();
     let letter = *letters.iter().next().unwrap();
-    let box_ = h.app.doc.vectors[&letter].bounds();
+    let box_ = h.doc().vectors[&letter].bounds();
     h.rectangle(box_.min.x - 200.0, box_.min.y - 200.0, 600.0, 600.0);
-    h.app.invoke(&h.ctx, "select_all_vectors");
-    h.app.invoke(&h.ctx, "group");
-    assert!(
-        h.app.tool_note().is_none(),
-        "no warning: the text stays text"
-    );
-    h.app.doc.selection.clear();
+    h.invoke("select_all_vectors");
+    h.invoke("group");
+    assert!(h.tool_note().is_none(), "no warning: the text stays text");
+    h.select([]);
     h.frame(vec![]);
     // the letters are still text: Edit Text works on the group
-    h.app.invoke(&h.ctx, "select_all_vectors");
-    assert!(h.app.available("edit_text"));
-    h.app.doc.selection.clear();
+    h.invoke("select_all_vectors");
+    assert!(h.available("edit_text"));
+    h.select([]);
     h.frame(vec![]);
     // double-click steps in, a second double-click on the letters opens Edit Text
     let on_letter = h.at(box_.min.x, box_.center().y);
     h.double_click(on_letter);
-    assert!(h.app.doc.inside_group.is_some());
+    assert!(h.doc().inside_group.is_some());
     h.double_click(on_letter);
-    let form = h.app.form.as_ref().expect("Edit Text's form");
     assert_eq!(
-        (form.id, form.params["text"].as_str()),
+        (h.form_id().unwrap(), h.form_settings()["text"].as_str()),
         ("draw_text", Some("HI"))
     );
     assert_eq!(
-        h.app.doc.selection.len(),
+        h.doc().selection.len(),
         letters.len(),
         "the text alone is picked"
     );
     // the edited text is still in the group with its border
-    let mut params = form.params.clone();
+    let mut params = h.form_settings().clone();
     params["text"] = Value::from("HO");
-    h.app.apply("draw_text", &params).unwrap();
-    let letter = *h.app.doc.selection.iter().next().unwrap();
+    h.run("draw_text", &params).unwrap();
+    let letter = *h.doc().selection.iter().next().unwrap();
     assert_eq!(
-        h.app.doc.group_members(letter).len(),
-        h.app.doc.vectors.len(),
+        h.doc().group_members(letter).len(),
+        h.doc().vectors.len(),
         "one group still"
     );
-    assert!(h.app.doc.text_group(letter).is_some(), "still text");
+    assert!(h.doc().text_group(letter).is_some(), "still text");
 }
 
 #[test]
@@ -245,20 +232,19 @@ fn the_join_icons_join_two_vectors_their_way() {
     let mut h = Harness::new();
     let line =
         |x0: f64, x1: f64| Path::polyline(&[Point::new(x0, 10.0), Point::new(x1, 10.0)], false);
-    let change = Change::swap(&h.app.doc, [], vec![line(0.0, 10.0), line(20.0, 30.0)]);
-    h.app.doc.apply(&change).unwrap();
+    let change = Change::swap(h.doc(), [], vec![line(0.0, 10.0), line(20.0, 30.0)]);
+    h.given(&change);
     for id in [
         "join_straight_line",
         "join_smooth_curve",
         "join_move_end_points",
     ] {
-        assert!(h.app.available(id), "{id}");
+        assert!(h.available(id), "{id}");
     }
-    h.app.invoke(&h.ctx, "join_smooth_curve");
-    assert_eq!(h.app.doc.vectors.len(), 1, "{}", h.app.status.message);
+    h.invoke("join_smooth_curve");
+    assert_eq!(h.doc().vectors.len(), 1, "{}", h.status_message());
     let edit = h
-        .app
-        .toolbar
+        .toolbar()
         .groups
         .iter()
         .find(|g| g.name == "Join, Combine and Trim")
@@ -269,18 +255,17 @@ fn the_join_icons_join_two_vectors_their_way() {
 #[test]
 fn edit_text_opens_draw_text_on_the_selected_text() {
     let mut h = Harness::new();
-    assert!(!h.app.available("edit_text"), "no text selected");
+    assert!(!h.available("edit_text"), "no text selected");
     let params = serde_json::json!({ "text": "HI", "font": "Test Boxes" });
-    let mut full = h.app.registry.get("draw_text").unwrap().default_params();
+    let mut full = h.default_settings("draw_text");
     for (k, v) in params.as_object().unwrap() {
         full[k] = v.clone();
     }
-    h.app.apply("draw_text", &full).unwrap();
-    assert!(h.app.available("edit_text"));
-    h.app.invoke(&h.ctx, "edit_text");
-    let form = h.app.form.as_ref().expect("Draw Text's form");
+    h.run("draw_text", &full).unwrap();
+    assert!(h.available("edit_text"));
+    h.invoke("edit_text");
     assert_eq!(
-        (form.id, form.params["text"].as_str()),
+        (h.form_id().unwrap(), h.form_settings()["text"].as_str()),
         ("draw_text", Some("HI"))
     );
 }
@@ -293,15 +278,19 @@ fn a_recent_file_that_is_there_but_will_not_open_stays_listed() {
     let whole = cut_craft_core::file::save_job(&Document::default());
     std::fs::write(&path, &whole[..whole.len() / 2]).unwrap();
     let mut h = Harness::at_start();
-    h.app.recent = vec![path.clone()];
-    h.app.invoke(&h.ctx, "open_recent:0");
-    assert_eq!(h.app.screen, Screen::Start);
+    h.given_recent_files(vec![path.clone()]);
+    h.invoke("open_recent:0");
+    assert_eq!(h.screen(), Screen::Start);
     assert!(
-        h.app.status.message.contains("damaged"),
+        h.status_message().contains("damaged"),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
-    assert_eq!(h.app.recent, vec![path.clone()], "kept to try again later");
+    assert_eq!(
+        h.recent_shown(),
+        vec![path.clone()],
+        "kept to try again later"
+    );
     std::fs::remove_file(&path).unwrap();
 }
 
@@ -312,22 +301,18 @@ fn run_and_form_items_apply_or_open_a_command_with_their_params() {
         "Add",
         &cmd_add_layer::Params { name: "Top".into() },
     );
-    assert!(h.app.available(&add.action));
-    h.app.invoke(&h.ctx, &add.action);
-    assert_eq!(
-        h.app.doc.layers.last().map(|l| l.name.as_str()),
-        Some("Top")
-    );
-    let mut rename: cmd_layer_properties::Params = h.app.doc.layers[0].clone().into();
+    assert!(h.available(&add.action));
+    h.invoke(&add.action);
+    assert_eq!(h.doc().layers.last().map(|l| l.name.as_str()), Some("Top"));
+    let mut rename: cmd_layer_properties::Params = h.doc().layers[0].clone().into();
     rename.name = "Renamed".into();
     let rename = gui::MenuItem::form::<cmd_layer_properties::LayerProperties>("Rename", &rename);
-    h.app.invoke(&h.ctx, &rename.action);
-    let form = h.app.form.as_ref().unwrap();
+    h.invoke(&rename.action);
     assert_eq!(
-        (form.id, form.params["name"].as_str()),
+        (h.form_id().unwrap(), h.form_settings()["name"].as_str()),
         ("layer_properties", Some("Renamed"))
     );
-    assert!(!h.app.available("run:no_such_command:{}"));
+    assert!(!h.available("run:no_such_command:{}"));
 }
 
 #[test]
@@ -344,26 +329,21 @@ fn files_dropped_on_the_window_open_import_or_install() {
     // on the start page there is no job to import into
     let mut h = Harness::at_start();
     h.drop_files(std::slice::from_ref(&picture), true);
-    assert!(h.app.doc.bitmaps.is_empty());
-    assert!(
-        h.app.status.message.contains("job"),
-        "{}",
-        h.app.status.message
-    );
+    assert!(h.doc().bitmaps.is_empty());
+    assert!(h.status_message().contains("job"), "{}", h.status_message());
     // in a job a picture is imported; dragging over says what a drop will do
     let mut h = Harness::new();
     h.drop_files(std::slice::from_ref(&picture), false);
     assert!(h.text_at("Drop to open or import").is_some());
     h.drop_files(&[picture], true);
-    assert_eq!(h.app.doc.bitmaps.len(), 1, "imported");
+    assert_eq!(h.doc().bitmaps.len(), 1, "imported");
     // a post-processor is installed
-    h.app.posts = cut_craft_machines::Library::new(Some(dir.join("posts")));
+    h.given_posts_folder(dir.join("posts"));
     let post = dir.join("router.pp");
     std::fs::write(&post, cut_craft_post::BUILT_IN[0].1).unwrap();
     h.drop_files(&[post], true);
     assert!(
-        h.app
-            .posts
+        h.posts()
             .entries()
             .iter()
             .any(cut_craft_machines::Entry::is_custom)
@@ -376,25 +356,25 @@ fn the_new_version_reopens_the_job_that_was_open() {
     let mut h = Harness::new();
     let job = std::env::temp_dir().join(format!("cut-craft-reopen-{}.ccjob", std::process::id()));
     std::fs::write(&job, b"job").unwrap();
-    h.app.session.path = Some(job.clone());
-    h.app.screen = Screen::Job;
-    assert_eq!(h.app.job_to_reopen(), Some(job.clone()));
+    h.given_job_path(job.clone());
+    h.given_job_screen();
+    assert_eq!(h.job_to_reopen(), Some(job.clone()));
     // the start page has no job open
-    h.app.screen = Screen::Start;
-    assert_eq!(h.app.job_to_reopen(), None);
+    h.given_start_screen();
+    assert_eq!(h.job_to_reopen(), None);
     // a job never saved, or whose file has gone, opens nothing
-    h.app.screen = Screen::Job;
+    h.given_job_screen();
     std::fs::remove_file(&job).unwrap();
-    assert_eq!(h.app.job_to_reopen(), None);
-    h.app.session.path = None;
-    assert_eq!(h.app.job_to_reopen(), None);
+    assert_eq!(h.job_to_reopen(), None);
+    h.given_no_job_path();
+    assert_eq!(h.job_to_reopen(), None);
 }
 
 #[test]
 fn editing_placed_text_replaces_it() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "draw_text");
-    h.app.form.as_mut().unwrap().params["font"] = "Test Boxes".into();
+    h.invoke("draw_text");
+    h.edit_form(|p| p["font"] = "Test Boxes".into());
     let at = Point::new(20.0, 20.0);
     let click = Drag {
         start: at,
@@ -402,32 +382,24 @@ fn editing_placed_text_replaces_it() {
         from_center: false,
         constrain: false,
     };
-    h.app.draw("draw_text", click);
-    let form = h.app.form.as_mut().unwrap();
-    form.params["text"] = "HI".into();
-    let params = form.params.clone();
-    h.app.apply_form("draw_text", &params).unwrap();
-    assert_eq!(h.app.doc.texts.len(), 1, "the placeholder was replaced");
-    assert_eq!(h.app.doc.texts.values().next().unwrap()["text"], "HI");
+    h.draw("draw_text", click);
+    h.edit_form(|p| p["text"] = "HI".into());
+    let params = h.form_settings().clone();
+    h.apply_form("draw_text", &params).unwrap();
+    assert_eq!(h.doc().texts.len(), 1, "the placeholder was replaced");
+    assert_eq!(h.doc().texts.values().next().unwrap()["text"], "HI");
 }
 
 #[test]
 fn options_changes_wait_for_apply_which_keeps_the_window_open() {
     let mut h = options_with_a_change_not_applied();
-    assert_eq!(
-        h.app.options.general.recent_file_list_size, 9,
-        "not used yet"
-    );
-    assert!(h.app.options_dirty());
+    assert_eq!(h.options().general.recent_file_list_size, 9, "not used yet");
+    assert!(h.options_dirty());
     assert!(h.text_at(super::options_apply::NOT_APPLIED).is_some());
     click_button(&mut h, "Apply");
-    assert_eq!(
-        h.app.options.recent_count(),
-        files::RECENT_COUNT,
-        "used now"
-    );
-    assert!(!h.app.options_dirty());
-    assert!(h.app.options_window, "still open");
+    assert_eq!(h.options().recent_count(), files::RECENT_COUNT, "used now");
+    assert!(!h.options_dirty());
+    assert!(h.options_window_open(), "still open");
     h.frame(vec![]);
     assert!(h.text_at(super::options_apply::ALL_APPLIED).is_some());
 }
@@ -436,17 +408,17 @@ fn options_changes_wait_for_apply_which_keeps_the_window_open() {
 fn node_editing_picks_nodes_with_a_box_and_a_drag_moves_them_together() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 10.0);
-    let id = *h.app.doc.selection.iter().next().unwrap();
-    h.app.invoke(&h.ctx, "node_edit");
-    h.app.options.snapping.smart_snapping = false;
-    h.app.options.snapping.geometry_snapping = false;
+    let id = *h.doc().selection.iter().next().unwrap();
+    h.invoke("node_edit");
+    h.given_options(|o| o.snapping.smart_snapping = false);
+    h.given_options(|o| o.snapping.geometry_snapping = false);
     // a box round the two right-hand corners picks them
     h.drag(h.at(25.0, 5.0), h.at(35.0, 25.0));
-    assert_eq!(h.app.picked_nodes.len(), 2);
-    assert_eq!(h.app.doc.selection.len(), 1, "the vector stays selected");
+    assert_eq!(h.picked_nodes().len(), 2);
+    assert_eq!(h.doc().selection.len(), 1, "the vector stays selected");
     // dragging one of them moves both 5 mm right
     h.drag(h.at(30.0, 10.0), h.at(35.0, 10.0));
-    let corners = cut_craft_core::nodes::nodes(&h.app.doc.vectors[&id]);
+    let corners = cut_craft_core::nodes::nodes(&h.doc().vectors[&id]);
     for corner in [Point::new(35.0, 10.0), Point::new(35.0, 20.0)] {
         assert!(
             corners.iter().any(|q| q.distance(corner) < 0.5),
@@ -460,16 +432,16 @@ fn node_editing_picks_nodes_with_a_box_and_a_drag_moves_them_together() {
     );
     // a box with no nodes in it goes back to selecting vectors
     h.drag(h.at(100.0, 100.0), h.at(120.0, 120.0));
-    assert!(h.app.picked_nodes.is_empty());
+    assert!(h.picked_nodes().is_empty());
 }
 
 #[test]
 fn a_polyline_is_drawn_point_by_point_with_curves_and_its_keys() {
     use cut_craft_core::geometry::Segment;
     let mut h = Harness::new();
-    h.app.options.snapping.smart_snapping = false;
-    h.app.options.snapping.geometry_snapping = false;
-    h.app.invoke(&h.ctx, "draw_polyline");
+    h.given_options(|o| o.snapping.smart_snapping = false);
+    h.given_options(|o| o.snapping.geometry_snapping = false);
+    h.invoke("draw_polyline");
     h.frame(vec![]);
     // clicks make straight spans, a drag a curved one
     let click = |h: &mut Harness, x, y| {
@@ -484,17 +456,17 @@ fn a_polyline_is_drawn_point_by_point_with_curves_and_its_keys() {
     let left = h.at(0.0, 50.0);
     h.frame(vec![Event::PointerMoved(left), Event::Text("20".into())]);
     h.frame(vec![key(Key::Enter)]);
-    assert_eq!(h.app.polyline.points.len(), 4);
+    assert_eq!(h.polyline_drawn().len(), 4);
     assert!(
-        h.app.polyline.points[3].distance(Point::new(40.0, 50.0)) < 1e-3,
+        h.polyline_drawn()[3].distance(Point::new(40.0, 50.0)) < 1e-3,
         "{:?}",
-        h.app.polyline.points[3]
+        h.polyline_drawn()[3]
     );
     // Backspace takes it back, Tab closes and makes the polyline
     h.frame(vec![key(Key::Backspace)]);
-    assert_eq!(h.app.polyline.points.len(), 3);
+    assert_eq!(h.polyline_drawn().len(), 3);
     h.frame(vec![key(Key::Tab)]);
-    let path = h.app.doc.vectors.values().last().expect("drawn");
+    let path = h.doc().vectors.values().last().expect("drawn");
     assert!(path.closed);
     assert_eq!(path.segments.len(), 3);
     assert!(
@@ -502,38 +474,38 @@ fn a_polyline_is_drawn_point_by_point_with_curves_and_its_keys() {
         "the dragged span"
     );
     assert!(matches!(path.segments[0], Segment::Line { .. }));
-    assert!(h.app.polyline.is_empty(), "ready for the next");
-    assert_eq!(h.app.form.as_ref().map(|f| f.id), Some("draw_polyline"));
+    assert!(h.polyline_drawn().is_empty(), "ready for the next");
+    assert_eq!(h.form_id(), Some("draw_polyline"));
     // S: curve mode, Space finishes an open one
     h.frame(vec![key(Key::S)]);
-    assert!(h.app.polyline.curved);
+    assert!(h.polyline_curved());
     click(&mut h, 100.0, 100.0);
     click(&mut h, 150.0, 120.0);
     click(&mut h, 200.0, 100.0);
     h.frame(vec![key(Key::Space)]);
-    let path = h.app.doc.vectors.values().last().unwrap();
+    let path = h.doc().vectors.values().last().unwrap();
     assert!(!path.closed);
     assert!(
         path.segments
             .iter()
             .all(|s| matches!(s, Segment::Cubic { .. }))
     );
-    assert!(h.app.polyline.curved, "the mode is kept");
+    assert!(h.polyline_curved(), "the mode is kept");
 }
 
 #[test]
 fn double_clicking_a_polylines_last_point_finishes_it_there() {
     let mut h = Harness::new();
-    h.app.options.snapping.smart_snapping = false;
-    h.app.options.snapping.geometry_snapping = false;
-    h.app.invoke(&h.ctx, "draw_polyline");
+    h.given_options(|o| o.snapping.smart_snapping = false);
+    h.given_options(|o| o.snapping.geometry_snapping = false);
+    h.invoke("draw_polyline");
     h.frame(vec![]);
     let (a, b) = (h.at(10.0, 10.0), h.at(60.0, 10.0));
     h.click(a, Modifiers::NONE);
     h.double_click(b);
-    assert!(h.app.polyline.is_empty(), "finished");
-    assert!(!h.app.polyline.curved, "still straight lines");
-    let path = h.app.doc.vectors.values().last().expect("drawn");
+    assert!(h.polyline_drawn().is_empty(), "finished");
+    assert!(!h.polyline_curved(), "still straight lines");
+    let path = h.doc().vectors.values().last().expect("drawn");
     assert!(!path.closed);
     assert_eq!(path.segments.len(), 1);
 }
@@ -543,13 +515,13 @@ fn edit_polyline_from_an_end_node_draws_on_and_extends_the_same_vector() {
     use cut_craft_core::nodes::NodeAt;
     use cut_craft_core::params::Xy;
     let mut h = Harness::new();
-    h.app.options.snapping.smart_snapping = false;
-    h.app.options.snapping.geometry_snapping = false;
+    h.given_options(|o| o.snapping.smart_snapping = false);
+    h.given_options(|o| o.snapping.geometry_snapping = false);
     let line = serde_json::json!({
         "points": [{ "x": 10.0, "y": 10.0 }, { "x": 50.0, "y": 10.0 }], "closed": false
     });
-    h.app.apply("draw_polyline", &line).unwrap();
-    let id = *h.app.doc.vectors.keys().next().unwrap();
+    h.run("draw_polyline", &line).unwrap();
+    let id = *h.doc().vectors.keys().next().unwrap();
     // the node menu offers it at either end, not in the middle of a closed shape
     let at = |x, y| NodeAt {
         vector: id,
@@ -557,36 +529,36 @@ fn edit_polyline_from_an_end_node_draws_on_and_extends_the_same_vector() {
         reach: 1.0,
     };
     let offered = |h: &Harness, x, y| {
-        gui::node_menu(&h.app.doc, &at(x, y))
+        gui::node_menu(h.doc(), &at(x, y))
             .iter()
             .find(|i| i.name == "Edit Polyline")
             .map(|i| i.action.clone())
     };
     let action = offered(&h, 50.0, 10.0).expect("at the end");
     assert!(offered(&h, 10.0, 10.0).is_some_and(|a| a.ends_with(":start")));
-    h.app.invoke(&h.ctx, &action);
+    h.invoke(&action);
     h.frame(vec![]);
     let to = h.at(50.0, 40.0);
     h.click(to, Modifiers::NONE);
     h.frame(vec![key(Key::Space)]);
-    assert_eq!(h.app.doc.vectors.len(), 1, "extended, not a new vector");
-    let path = &h.app.doc.vectors[&id];
+    assert_eq!(h.doc().vectors.len(), 1, "extended, not a new vector");
+    let path = &h.doc().vectors[&id];
     assert_eq!(path.segments.len(), 2);
     assert!(path.segments[1].end().distance(Point::new(50.0, 40.0)) < 1e-3);
     // undo takes the extension back
-    h.app.history.undo(&mut h.app.doc);
-    assert_eq!(h.app.doc.vectors[&id].segments.len(), 1);
+    h.undo_step();
+    assert_eq!(h.doc().vectors[&id].segments.len(), 1);
 }
 
 #[test]
 fn with_create_fillets_open_a_click_rounds_a_corner_and_a_click_on_the_fillet_takes_it_out() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 40.0, 30.0);
-    h.app.invoke(&h.ctx, "create_fillets");
-    assert!(h.app.filleting());
+    h.invoke("create_fillets");
+    assert!(h.filleting());
     h.frame(vec![]);
     let shape = |h: &Harness| {
-        let path = h.app.doc.vectors.values().next().unwrap();
+        let path = h.doc().vectors.values().next().unwrap();
         let arcs = path
             .segments
             .iter()
@@ -596,7 +568,7 @@ fn with_create_fillets_open_a_click_rounds_a_corner_and_a_click_on_the_fillet_ta
     };
     h.click(h.at(10.0, 10.0), Modifiers::NONE);
     assert_eq!(shape(&h), (5, 1), "one corner rounded");
-    assert!(h.app.filleting(), "the form stays open");
+    assert!(h.filleting(), "the form stays open");
     // the fillet's middle: a click there takes it out
     let mid = 10.0 + 3.0 - 3.0 * std::f64::consts::FRAC_1_SQRT_2;
     h.frame(vec![]);
@@ -614,107 +586,103 @@ fn with_join_open_ends_open_two_clicks_on_ends_join_the_vectors() {
         line((10.0, 10.0), (40.0, 10.0)),
         line((45.0, 10.0), (80.0, 10.0)),
     ];
-    let change = Change::swap(&h.app.doc, [], paths);
-    h.app.doc.apply(&change).unwrap();
-    h.app.invoke(&h.ctx, "join_open_ends");
-    assert!(h.app.joining_ends());
+    let change = Change::swap(h.doc(), [], paths);
+    h.given(&change);
+    h.invoke("join_open_ends");
+    assert!(h.joining_ends());
     h.frame(vec![]);
     // a click away from any end picks nothing
     h.click(h.at(25.0, 10.0), Modifiers::NONE);
-    assert!(h.app.join_ends_first().is_none());
+    assert!(h.join_end_picked().is_none());
     h.frame(vec![]);
     h.click(h.at(40.0, 10.0), Modifiers::NONE);
-    assert!(h.app.join_ends_first().is_some(), "the first end is picked");
+    assert!(h.join_end_picked().is_some(), "the first end is picked");
     h.frame(vec![]);
     h.click(h.at(45.0, 10.0), Modifiers::NONE);
-    assert_eq!(h.app.doc.vectors.len(), 1, "joined into one");
-    assert!(h.app.join_ends_first().is_none(), "ready for the next pair");
-    assert!(h.app.joining_ends(), "the tool stays open");
+    assert_eq!(h.doc().vectors.len(), 1, "joined into one");
+    assert!(h.join_end_picked().is_none(), "ready for the next pair");
+    assert!(h.joining_ends(), "the tool stays open");
     // its two ends clicked, the one vector closes
     h.frame(vec![]);
     h.click(h.at(10.0, 10.0), Modifiers::NONE);
     h.frame(vec![]);
     h.click(h.at(80.0, 10.0), Modifiers::NONE);
-    assert!(h.app.doc.vectors.values().next().unwrap().closed);
+    assert!(h.doc().vectors.values().next().unwrap().closed);
 }
 
 #[test]
 fn escape_lets_a_picked_open_end_go_and_keeps_join_open_ends_open() {
     let mut h = Harness::new();
     let path = Path::polyline(&[Point::new(10.0, 10.0), Point::new(40.0, 10.0)], false);
-    let change = Change::swap(&h.app.doc, [], vec![path]);
-    h.app.doc.apply(&change).unwrap();
-    h.app.invoke(&h.ctx, "join_open_ends");
+    let change = Change::swap(h.doc(), [], vec![path]);
+    h.given(&change);
+    h.invoke("join_open_ends");
     h.frame(vec![]);
     h.click(h.at(40.0, 10.0), Modifiers::NONE);
-    assert!(h.app.join_ends_first().is_some());
+    assert!(h.join_end_picked().is_some());
     h.frame(vec![key(Key::Escape)]);
-    assert!(h.app.join_ends_first().is_none(), "the end let go");
-    assert!(h.app.joining_ends(), "the tool still open");
+    assert!(h.join_end_picked().is_none(), "the end let go");
+    assert!(h.joining_ends(), "the tool still open");
 }
 
 #[test]
 fn the_right_click_menu_turns_vectors_into_construction_lines_and_back() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 30.0);
-    let menu = |app: &CutCraftApp| app.menus.selection_menu(&app.doc);
-    h.choose(menu, &["Make Construction Line"]);
-    let id = *h.app.doc.vectors.keys().next().unwrap();
-    assert!(h.app.doc.is_construction(id));
+    h.choose_on_selection_menu(&["Make Construction Line"]);
+    let id = *h.doc().vectors.keys().next().unwrap();
+    assert!(h.doc().is_construction(id));
     // all of the selection is construction lines now: the item turns them back
-    h.choose(menu, &["Make Real Line"]);
-    assert!(!h.app.doc.is_construction(id));
-    h.app.invoke(&h.ctx, "undo");
-    assert!(h.app.doc.is_construction(id), "undone, it is one again");
+    h.choose_on_selection_menu(&["Make Real Line"]);
+    assert!(!h.doc().is_construction(id));
+    h.invoke("undo");
+    assert!(h.doc().is_construction(id), "undone, it is one again");
 }
 
 #[test]
 fn hiding_construction_lines_lets_go_of_them_and_showing_brings_them_back() {
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 50.0, 30.0);
-    h.app.invoke(&h.ctx, "make_construction_line");
-    let id = *h.app.doc.vectors.keys().next().unwrap();
-    assert!(h.app.display.construction, "shown to start with");
-    h.app.invoke(&h.ctx, "show_construction_lines");
-    assert_eq!(
-        h.app.display.checked("show_construction_lines"),
-        Some(false)
-    );
-    assert!(!h.app.doc.shown(id) && !h.app.doc.editable(id));
+    h.invoke("make_construction_line");
+    let id = *h.doc().vectors.keys().next().unwrap();
+    assert!(h.display().construction, "shown to start with");
+    h.invoke("show_construction_lines");
+    assert_eq!(h.display().checked("show_construction_lines"), Some(false));
+    assert!(!h.doc().shown(id) && !h.doc().editable(id));
     assert!(
-        h.app.doc.selection.is_empty(),
+        h.doc().selection.is_empty(),
         "a hidden line is not left picked"
     );
     // a job opened while they are hidden keeps them hidden
-    h.app.doc.hide_construction = false;
+    h.given_document(|d| d.hide_construction = false);
     h.frame(vec![]);
-    assert!(h.app.doc.hide_construction);
-    h.app.invoke(&h.ctx, "show_construction_lines");
-    assert!(h.app.doc.shown(id));
+    assert!(h.doc().hide_construction);
+    h.invoke("show_construction_lines");
+    assert!(h.doc().shown(id));
 }
 
 #[test]
 fn show_open_vector_ends_is_a_view_menu_switch() {
     let mut h = Harness::new();
-    assert!(!h.app.display.open_ends, "off to start with");
-    h.app.invoke(&h.ctx, "show_open_vector_ends");
-    assert!(h.app.display.open_ends);
-    assert_eq!(h.app.display.checked("show_open_vector_ends"), Some(true));
+    assert!(!h.display().open_ends, "off to start with");
+    h.invoke("show_open_vector_ends");
+    assert!(h.display().open_ends);
+    assert_eq!(h.display().checked("show_open_vector_ends"), Some(true));
 }
 
 #[test]
 fn freehands_stabilizing_circle_is_drawn_round_the_paths_end_while_dragging() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "draw_freehand");
-    h.app.form.as_mut().unwrap().params["stabilize"] = Value::from(2.0);
-    h.app.stroke = vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0)];
+    h.invoke("draw_freehand");
+    h.edit_form(|p| p["stabilize"] = Value::from(2.0));
+    h.given_stroke(vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0)]);
     let drag = cut_craft_core::Drag {
         start: Point::new(0.0, 0.0),
         end: Point::new(10.0, 0.0),
         from_center: false,
         constrain: false,
     };
-    let paths = h.app.preview("draw_freehand", drag);
+    let paths = h.drawing_preview("draw_freehand", drag);
     assert_eq!(paths.len(), 2, "the path and the circle");
     let b = paths[1].bounds();
     assert!((b.center() - Point::new(8.0, 0.0)).length() < 1e-6, "{b:?}");
@@ -724,17 +692,16 @@ fn freehands_stabilizing_circle_is_drawn_round_the_paths_end_while_dragging() {
 #[test]
 fn a_click_between_two_letters_with_draw_text_open_pulls_them_together() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "draw_text");
-    let mut params = h.app.form.as_ref().unwrap().params.clone();
+    h.invoke("draw_text");
+    let mut params = h.form_settings().clone();
     params["text"] = "HI".into();
     params["font"] = "Test Boxes".into();
     params["height"] = 10.0.into();
     params["anchor"] = serde_json::json!({ "x": 10.0, "y": 10.0 });
-    h.app.form.as_mut().unwrap().params = params.clone();
-    h.app.apply_form("draw_text", &params).unwrap();
+    h.edit_form(|p| *p = params.clone());
+    h.apply_form("draw_text", &params).unwrap();
     let width = |h: &Harness| {
-        h.app
-            .doc
+        h.doc()
             .vectors
             .values()
             .map(cut_craft_core::geometry::Path::bounds)
@@ -746,11 +713,9 @@ fn a_click_between_two_letters_with_draw_text_open_pulls_them_together() {
     let before = width(&h);
     h.frame(vec![]);
     // between the H and the I, at the gap's middle
-    h.app
-        .text_click(Point::new(19.0, 15.0), 1.0, Modifiers::NONE);
-    let form = h.app.form.as_ref().unwrap();
+    h.text_click(Point::new(19.0, 15.0), 1.0, Modifiers::NONE);
     assert_eq!(
-        form.params["spacing"]["kerning"][0],
+        h.form_settings()["spacing"]["kerning"][0],
         serde_json::json!([0, 0, -0.5])
     );
     assert!(
@@ -759,21 +724,18 @@ fn a_click_between_two_letters_with_draw_text_open_pulls_them_together() {
         width(&h)
     );
     // Shift and Ctrl push them apart by four steps; a click off the text places the anchor
-    h.app.text_click(
+    h.text_click(
         Point::new(18.5, 15.0),
         1.0,
         Modifiers::SHIFT | Modifiers::CTRL,
     );
-    let form = h.app.form.as_ref().unwrap();
     assert_eq!(
-        form.params["spacing"]["kerning"][0],
+        h.form_settings()["spacing"]["kerning"][0],
         serde_json::json!([0, 0, 1.5])
     );
-    h.app
-        .text_click(Point::new(80.0, 80.0), 1.0, Modifiers::NONE);
-    let form = h.app.form.as_ref().unwrap();
+    h.text_click(Point::new(80.0, 80.0), 1.0, Modifiers::NONE);
     assert_eq!(
-        form.params["anchor"],
+        h.form_settings()["anchor"],
         serde_json::json!({ "x": 80.0, "y": 80.0 })
     );
 }
@@ -781,17 +743,16 @@ fn a_click_between_two_letters_with_draw_text_open_pulls_them_together() {
 #[test]
 fn dragging_the_green_handle_over_edited_text_bends_it_into_an_arc() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "draw_text");
-    let mut params = h.app.form.as_ref().unwrap().params.clone();
+    h.invoke("draw_text");
+    let mut params = h.form_settings().clone();
     params["text"] = "HIHIH".into();
     params["font"] = "Test Boxes".into();
     params["height"] = 10.0.into();
     params["anchor"] = serde_json::json!({ "x": 10.0, "y": 10.0 });
-    h.app.form.as_mut().unwrap().params = params.clone();
-    h.app.apply_form("draw_text", &params).unwrap();
+    h.edit_form(|p| *p = params.clone());
+    h.apply_form("draw_text", &params).unwrap();
     h.frame(vec![]);
-    let p: cmd_draw_text::Params =
-        serde_json::from_value(h.app.form.as_ref().unwrap().params.clone()).unwrap();
+    let p: cmd_draw_text::Params = serde_json::from_value(h.form_settings().clone()).unwrap();
     let [top, _] = cmd_draw_text::arc_handles(&p).expect("handles on the edited text");
     let drag = Drag {
         start: top,
@@ -799,23 +760,22 @@ fn dragging_the_green_handle_over_edited_text_bends_it_into_an_arc() {
         from_center: false,
         constrain: false,
     };
-    h.app.drawing_gesture(
+    h.drawing_gesture(
         "draw_text",
         Some(view2d::Gesture::Dropped { drag, shift: false }),
         1.0,
         Modifiers::NONE,
     );
-    let arc = h.app.form.as_ref().unwrap().params["arc"].as_f64().unwrap();
+    let arc = h.form_value("arc").as_f64().unwrap();
     assert!(arc > 10.0, "bent up: {arc}");
     let low = h
-        .app
-        .doc
+        .doc()
         .vectors
         .values()
         .map(|v| v.bounds().min.y)
         .fold(f64::INFINITY, f64::min);
     assert!(low < 9.0, "the ends dropped: {low}");
-    assert_eq!(h.app.doc.vectors.len(), 5, "the letters replaced");
+    assert_eq!(h.doc().vectors.len(), 5, "the letters replaced");
 }
 
 #[test]
@@ -824,24 +784,24 @@ fn h_and_v_make_mirror_lines_and_the_arrows_move_picked_nodes_mirrored() {
     use cut_craft_core::nodes::nodes;
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 20.0);
-    h.app.invoke(&h.ctx, "node_edit");
-    assert_eq!(h.app.view_tool, Some(ViewTool::NodeEdit));
-    let id = *h.app.doc.vectors.keys().next().unwrap();
+    h.invoke("node_edit");
+    assert_eq!(h.view_tool(), Some(ViewTool::NodeEdit));
+    let id = *h.doc().vectors.keys().next().unwrap();
     // the two top nodes picked, as a box round them picks them
     let top = JobRect::new(Point::new(5.0, 25.0), Point::new(35.0, 35.0));
-    h.app.picked_nodes = h.app.nodes_in(top);
-    assert_eq!(h.app.picked_nodes.len(), 2);
+    h.pick_nodes_in(top);
+    assert_eq!(h.picked_nodes().len(), 2);
     h.frame(vec![key(Key::H)]);
     assert_eq!(
-        h.app.node_mirror,
+        h.node_mirror(),
         [true, false],
         "H: a mirror line, not Mirror"
     );
-    let step = h.app.options.snapping.grid_spacing;
+    let step = h.options().snapping.grid_spacing;
     // the arrows move the two sides opposite ways: Left takes the left node left and the
     // right node right
     h.frame(vec![key(Key::ArrowLeft)]);
-    let path = &h.app.doc.vectors[&id];
+    let path = &h.doc().vectors[&id];
     let xs_above = |y: f64| -> Vec<f64> {
         nodes(path)
             .iter()
@@ -860,8 +820,7 @@ fn h_and_v_make_mirror_lines_and_the_arrows_move_picked_nodes_mirrored() {
     bottom.sort_by(f64::total_cmp);
     assert_eq!(bottom, [10.0, 30.0], "the rest of the shape stayed");
     assert!(
-        h.app
-            .picked_nodes
+        h.picked_nodes()
             .iter()
             .all(|n| (n.at.x - 10.0 + step).abs() < 1e-9 || (n.at.x - 30.0 - step).abs() < 1e-9),
         "the picks follow"
@@ -869,14 +828,14 @@ fn h_and_v_make_mirror_lines_and_the_arrows_move_picked_nodes_mirrored() {
     // V adds the other line, H again takes its line off; the overlay draws what is on
     h.frame(vec![key(Key::V)]);
     h.frame(vec![key(Key::H)]);
-    assert_eq!(h.app.node_mirror, [false, true]);
-    match h.app.node_overlay(None, 1.0) {
+    assert_eq!(h.node_mirror(), [false, true]);
+    match h.node_overlay(None, 1.0) {
         crate::view2d::Overlay::Nodes { moving, .. } => assert_eq!(moving.len(), 1, "one line"),
         _ => panic!("the node overlay"),
     }
     // leaving node editing takes the lines away
-    h.app.invoke(&h.ctx, "node_edit");
-    assert_eq!(h.app.node_mirror, [false, false]);
+    h.invoke("node_edit");
+    assert_eq!(h.node_mirror(), [false, false]);
 }
 
 #[test]
@@ -884,100 +843,91 @@ fn picked_nodes_are_let_go_when_the_selection_changes_or_an_undo_moves_them() {
     use cut_craft_core::geometry::Rect as JobRect;
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 20.0);
-    let first = *h.app.doc.vectors.keys().next().unwrap();
+    let first = *h.doc().vectors.keys().next().unwrap();
     h.rectangle(100.0, 10.0, 20.0, 20.0);
-    let second = *h.app.doc.vectors.keys().last().unwrap();
-    h.app.doc.selection = [first].into();
-    h.app.invoke(&h.ctx, "node_edit");
+    let second = *h.doc().vectors.keys().last().unwrap();
+    h.select([first]);
+    h.invoke("node_edit");
     let top = JobRect::new(Point::new(5.0, 25.0), Point::new(35.0, 35.0));
-    h.app.picked_nodes = h.app.nodes_in(top);
-    assert_eq!(h.app.picked_nodes.len(), 2);
+    h.pick_nodes_in(top);
+    assert_eq!(h.picked_nodes().len(), 2);
     // another vector picked: the arrows move it, not the first one's nodes
-    h.app.doc.selection = [second].into();
-    let before = h.app.doc.vectors[&first].clone();
+    h.select([second]);
+    let before = h.doc().vectors[&first].clone();
     h.frame(vec![key(Key::ArrowLeft)]);
-    assert_eq!(h.app.doc.vectors[&first], before, "the first one stays");
-    assert!(h.app.picked_nodes.is_empty());
+    assert_eq!(h.doc().vectors[&first], before, "the first one stays");
+    assert!(h.picked_nodes().is_empty());
     // picked again, nudged, then undone: the picks are where no node is any more
-    h.app.doc.selection = [first].into();
-    h.app.picked_nodes = h.app.nodes_in(top);
+    h.select([first]);
+    h.pick_nodes_in(top);
     h.frame(vec![key(Key::ArrowLeft)]);
-    h.app.invoke(&h.ctx, "undo");
+    h.invoke("undo");
     h.frame(vec![]);
-    assert!(h.app.picked_nodes.is_empty(), "{:?}", h.app.picked_nodes);
+    assert!(h.picked_nodes().is_empty(), "{:?}", h.picked_nodes());
     // and leaving node editing lets them go
-    h.app.picked_nodes = h.app.nodes_in(top);
-    h.app.invoke(&h.ctx, "node_edit");
+    h.pick_nodes_in(top);
+    h.invoke("node_edit");
     h.frame(vec![]);
-    assert!(h.app.picked_nodes.is_empty());
+    assert!(h.picked_nodes().is_empty());
 }
 
 #[test]
 fn draw_text_lists_words_spelt_wrong_with_suggestions_and_keeps_added_words() {
     let mut h = Harness::new();
     let aff = "TRY esianrtolcdugmphbyfvkwz\nSFX S Y 1\nSFX S 0 s .\n";
-    h.app.speller = Some(cut_craft_core::spell::Speller::from_hunspell(
+    h.given_speller(cut_craft_core::spell::Speller::from_hunspell(
         aff,
         "2\nwood/S\nsign\n",
     ));
-    h.app.speller_looked = true;
-    h.app.invoke(&h.ctx, "draw_text");
-    h.app.form.as_mut().unwrap().params["text"] = "Woood sign Zed".into();
-    h.app.screen = Screen::Job;
-    h.app.pages.set_pinned(Page::Design, true);
+    h.invoke("draw_text");
+    h.edit_form(|p| p["text"] = "Woood sign Zed".into());
+    h.given_job_screen();
+    h.pin(Page::Design);
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Spelling").is_some(), "the spelling section");
     assert!(h.text_at("Woood").is_some(), "the word spelt wrong");
     assert!(h.text_at("Wood").is_some(), "its suggestion");
-    h.app.fix_spelling("Woood", "Wood");
-    assert_eq!(h.app.form.as_ref().unwrap().params["text"], "Wood sign Zed");
-    h.app.user_word("Zed", true);
-    let s = h.app.speller.as_ref().unwrap();
+    h.fix_spelling("Woood", "Wood");
+    assert_eq!(h.form_value("text"), "Wood sign Zed");
+    h.user_word("Zed", true);
+    let s = h.speller();
     assert_eq!(s.misspelled("Wood sign Zed"), Vec::<String>::new());
-    h.app.user_word("Zed", false);
-    assert_eq!(h.app.speller.as_ref().unwrap().misspelled("Zed"), ["Zed"]);
+    h.user_word("Zed", false);
+    assert_eq!(h.speller().misspelled("Zed"), ["Zed"]);
 }
 
 #[test]
 fn gadgets_ends_with_add_ons_which_opens_its_window() {
     let mut h = Harness::new();
-    let gadgets = &h
-        .app
-        .menus
-        .menus
-        .iter()
-        .find(|m| m.name == "Gadgets")
-        .unwrap()
-        .items;
+    let gadgets = h.menu_items("Gadgets");
     let last = gadgets.last().unwrap();
     assert_eq!(
         (last.name.as_str(), last.action.as_str()),
         ("Add-ons...", "addons")
     );
-    assert!(h.app.available("addons"));
-    h.app.invoke(&h.ctx, "addons");
-    assert!(h.app.addons.open);
+    assert!(h.available("addons"));
+    h.invoke("addons");
+    assert!(h.addons_open());
 }
 
 #[test]
 fn a_height_handle_drag_applies_its_height_at_most_ten_times_a_second() {
     let mut h = Harness::new();
-    h.app.doc = cut_craft_core::testing::domed();
-    h.app.doc.selected_components = [EntityId(1)].into();
-    h.app.orbit = view3d::Orbit::TOP;
-    h.app.view = View::ThreeD;
-    h.app.invoke(&h.ctx, "transform");
+    h.open_document(cut_craft_core::testing::domed());
+    h.select_components([EntityId(1)]);
+    h.given_orbit(view3d::Orbit::TOP);
+    h.show_view(View::ThreeD);
+    h.invoke("transform");
     h.frame(vec![]);
     h.frame(vec![]);
     let from = h
-        .app
-        .handles_3d
+        .handles_3d()
         .iter()
         .find(|(k, _)| *k == Handle3d::Height)
         .map(|(_, at)| *at)
         .expect("the height handle");
-    let quarter = h.app.fit_3d.unwrap().height() / VIEW_ZOOM_QUARTERS;
+    let quarter = h.fit_3d().height() / VIEW_ZOOM_QUARTERS;
     h.frame(vec![Event::PointerMoved(from)]);
     h.press(from, true, Modifiers::NONE);
     // ten moves a fiftieth of a second apart: a fifth of a second in all
@@ -986,7 +936,7 @@ fn a_height_handle_drag_applies_its_height_at_most_ten_times_a_second() {
         h.time -= 0.08;
         let to = from - vec2(0.0, quarter * f32::from(i) / 10.0);
         h.frame(vec![Event::PointerMoved(to)]);
-        revisions.insert(h.app.history.revision());
+        revisions.insert(h.job_revision());
     }
     assert!(
         revisions.len() <= 3,
@@ -996,7 +946,7 @@ fn a_height_handle_drag_applies_its_height_at_most_ten_times_a_second() {
     let to = from - vec2(0.0, quarter);
     h.press(to, false, Modifiers::NONE);
     h.frame(vec![]);
-    let height = h.app.doc.components[&EntityId(1)].shaping.shape_height;
+    let height = h.doc().components[&EntityId(1)].shaping.shape_height;
     assert!(
         (height - 200.0).abs() < 5.0,
         "the last height is applied: {height}"
@@ -1006,7 +956,7 @@ fn a_height_handle_drag_applies_its_height_at_most_ten_times_a_second() {
 #[test]
 fn the_status_bar_stays_one_line_however_long_its_text() {
     let mut h = Harness::new();
-    h.app.status.set_message("Ready");
+    h.given_status("Ready");
     h.frame(vec![]);
     h.frame(vec![]);
     let version = concat!("v", env!("CARGO_PKG_VERSION"));
@@ -1016,7 +966,7 @@ fn the_status_bar_stays_one_line_however_long_its_text() {
         "0331. Flowers.STL\nDouble-click to add it to the project, or drag it onto a view. {}",
         "Click to pick it (Ctrl or Shift for more), right-click for more. ".repeat(6)
     );
-    h.app.status.set_message(&long);
+    h.given_status(&long);
     h.frame(vec![]);
     h.frame(vec![]);
     let (_, rows) = status_text(&h, "Flowers.STL").expect("the status text");
@@ -1049,27 +999,26 @@ fn a_drawing_imports_along_the_selected_open_line_and_its_window_moves_it_below(
     use cut_craft_core::geometry::{Path, Point, Rect};
     let mut h = Harness::new();
     // a straight open line 200 long, selected
-    let mut c = Change::builder(&h.app.doc);
+    let mut c = Change::builder(h.doc());
     let line = c.add(Path::polyline(
         &[Point::new(0.0, 100.0), Point::new(200.0, 100.0)],
         false,
     ));
     c.select([line]);
-    h.app.record(Ok(c.finish()), "line");
-    assert!(super::line_to_import_along(&h.app.doc));
-    let before = h.app.history.undo_depth();
+    h.make(c.finish(), "line");
+    assert!(super::line_to_import_along(h.doc()));
+    let before = h.undo_steps();
     let svg = std::env::temp_dir().join(format!("cut-craft-along-{}.svg", std::process::id()));
     std::fs::write(
         &svg,
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="10mm" viewBox="0 0 20 10"><rect x="0" y="0" width="20" height="10"/></svg>"#,
     )
     .unwrap();
-    h.app.import_into(&svg, line);
+    h.import_into(&svg, line);
     h.frame(vec![]);
     h.frame(vec![]);
     let drawn = |h: &Harness| {
-        h.app
-            .doc
+        h.doc()
             .vectors
             .iter()
             .filter(|(id, _)| **id != line)
@@ -1091,14 +1040,13 @@ fn a_drawing_imports_along_the_selected_open_line_and_its_window_moves_it_below(
         h.text_at("Import Along Line").is_some(),
         "its window is open"
     );
-    h.app.fit_import.as_mut().unwrap().side = cut_craft_core::bend::Side::Below;
-    h.app.place_fit_import();
+    h.fit_import_side(cut_craft_core::bend::Side::Below);
     let b = drawn(&h);
     assert!(
         (b.max.y - 100.0).abs() < 1e-6 && (b.min.y).abs() < 1e-6,
         "{b:?}"
     );
-    assert_eq!(h.app.history.undo_depth(), before + 1, "still one step");
+    assert_eq!(h.undo_steps(), before + 1, "still one step");
     let _ = std::fs::remove_file(svg);
 }
 
@@ -1129,40 +1077,37 @@ fn polygons_stars_and_ellipses_open_in_their_drawing_tools() {
     ];
     for (id, params, key, want) in shapes {
         let mut h = Harness::new();
-        h.app.apply(id, &params).unwrap();
-        let shape = *h.app.doc.vectors.keys().next().unwrap();
-        h.app.invoke(&h.ctx, id);
+        h.run(id, &params).unwrap();
+        let shape = *h.doc().vectors.keys().next().unwrap();
+        h.invoke(id);
         h.frame(vec![]);
-        let form = h.app.form.as_ref().unwrap();
-        assert_eq!(form.drawn, Some(shape), "{id} edits the selected shape");
-        assert_eq!(form.params[key].as_f64(), Some(want), "{id}");
+        assert_eq!(h.form_drawn(), Some(shape), "{id} edits the selected shape");
+        assert_eq!(h.form_settings()[key].as_f64(), Some(want), "{id}");
         assert!(h.text_at("Create").is_none(), "{id}");
         // changed on the form, the same shape changes
-        let form = h.app.form.as_mut().unwrap();
-        form.params["center"]["x"] = Value::from(60.0);
-        form.dirty = true;
+        h.edit_form(|p| p["center"]["x"] = Value::from(60.0));
+        h.touch_form();
         h.frame(vec![]);
-        assert_eq!(h.app.doc.vectors.len(), 1, "{id}: no second shape");
-        let middle = h.app.doc.vectors.values().next().unwrap().bounds().center();
+        assert_eq!(h.doc().vectors.len(), 1, "{id}: no second shape");
+        let middle = h.doc().vectors.values().next().unwrap().bounds().center();
         assert!((middle.y - 40.0).abs() < 1.0, "{id}: {middle:?}");
         // E opens the same tool on it
-        h.app.form = None;
-        assert_eq!(h.app.object_to_edit().map(|(_, c, _)| c), Some(id));
+        h.close_form();
+        assert_eq!(h.object_to_edit().map(|(_, c, _)| c), Some(id));
     }
     // a square: Draw Polygon reads it as a four-sided polygon, E as the rectangle it is
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 20.0);
     assert_eq!(
-        h.app.object_to_edit().map(|(_, c, _)| c),
+        h.object_to_edit().map(|(_, c, _)| c),
         Some("draw_rectangle")
     );
-    h.app.invoke(&h.ctx, "draw_polygon");
+    h.invoke("draw_polygon");
     h.frame(vec![]);
-    let form = h.app.form.as_ref().unwrap();
-    assert!(form.drawn.is_some(), "Draw Polygon edits the square");
-    assert_eq!(form.params["sides"].as_u64(), Some(4));
+    assert!(h.form_drawn().is_some(), "Draw Polygon edits the square");
+    assert_eq!(h.form_settings()["sides"].as_u64(), Some(4));
     assert_eq!(
-        form.params["rotation"].as_f64(),
+        h.form_settings()["rotation"].as_f64(),
         Some(135.0),
         "a whole angle"
     );
@@ -1174,25 +1119,25 @@ fn del_in_node_edit_deletes_the_picked_nodes_not_the_shape() {
     use cut_craft_core::nodes::nodes;
     let mut h = Harness::new();
     h.rectangle(10.0, 10.0, 20.0, 20.0);
-    h.app.invoke(&h.ctx, "node_edit");
-    let id = *h.app.doc.vectors.keys().next().unwrap();
+    h.invoke("node_edit");
+    let id = *h.doc().vectors.keys().next().unwrap();
     // the top right corner picked, as a box round it picks it
     let corner = JobRect::new(Point::new(25.0, 25.0), Point::new(35.0, 35.0));
-    h.app.picked_nodes = h.app.nodes_in(corner);
-    assert_eq!(h.app.picked_nodes.len(), 1);
+    h.pick_nodes_in(corner);
+    assert_eq!(h.picked_nodes().len(), 1);
     h.frame(vec![key(Key::Delete)]);
-    let path = h.app.doc.vectors.get(&id).expect("the shape is kept");
+    let path = h.doc().vectors.get(&id).expect("the shape is kept");
     assert_eq!(nodes(path).len(), 3, "the picked corner went");
-    assert!(h.app.picked_nodes.is_empty());
+    assert!(h.picked_nodes().is_empty());
     // two more picked: the shape can lose no more than it can, and says so
     let all = JobRect::new(Point::new(0.0, 0.0), Point::new(40.0, 40.0));
-    h.app.picked_nodes = h.app.nodes_in(all);
+    h.pick_nodes_in(all);
     h.frame(vec![key(Key::Delete)]);
-    let path = h.app.doc.vectors.get(&id).expect("still kept");
+    let path = h.doc().vectors.get(&id).expect("still kept");
     assert_eq!(nodes(path).len(), 3, "a closed shape keeps three nodes");
     assert!(
-        h.app.status.message.contains("needs"),
+        h.status_message().contains("needs"),
         "{}",
-        h.app.status.message
+        h.status_message()
     );
 }

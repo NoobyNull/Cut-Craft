@@ -1,4 +1,4 @@
-//! Help: the Help Contents and pages, tips, tours, hints, tooltips and About.
+//! Help: the Help Contents and pages, the search, hints, tooltips and About.
 
 use super::*;
 
@@ -18,7 +18,7 @@ fn about_lists_the_github_contributors() {
         "{listed:?}"
     );
     let mut h = Harness::new();
-    h.app.info = Some(Info::About);
+    h.open_info(Info::About);
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Contributors on GitHub").is_some());
@@ -37,7 +37,7 @@ fn about_lists_the_github_contributors() {
 #[test]
 fn about_thanks_vectric_and_says_cut_craft_is_independent() {
     let mut h = Harness::new();
-    h.app.info = Some(Info::About);
+    h.open_info(Info::About);
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("Acknowledgements").is_some());
@@ -50,7 +50,7 @@ fn about_thanks_vectric_and_says_cut_craft_is_independent() {
 #[test]
 fn about_states_cut_craft_s_own_licence() {
     let mut h = Harness::new();
-    h.app.info = Some(Info::About);
+    h.open_info(Info::About);
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("License").is_some());
@@ -117,21 +117,16 @@ fn licence_file_is_polyform_strict_with_the_credit_line_and_the_extra_permission
 fn rail_and_ribbon_show_the_hovered_tools_guidance_in_a_tip_box() {
     use crate::options::WindowLayout;
     let mut h = Harness::new();
-    h.app.options.general.layout = WindowLayout::Ribbon;
+    h.given_options(|o| o.general.layout = WindowLayout::Ribbon);
     h.frame(vec![]);
     h.frame(vec![]);
     // nothing hovered: the tool in hand and its next step, at the browser's foot
     assert_eq!(h.texts_at("Next:").len(), 1, "the Ribbon's tip box");
     let mut h = Harness::new();
-    h.app.options.general.layout = WindowLayout::Rail;
+    h.given_options(|o| o.general.layout = WindowLayout::Rail);
     h.frame(vec![]);
     assert!(h.texts_at("Next:").is_empty(), "no list open, no tip box");
-    h.app.rail_group = h
-        .app
-        .tool_model()
-        .all_groups()
-        .iter()
-        .position(|g| g.name == "Create Vectors");
+    h.open_rail_group("Create Vectors");
     h.frame(vec![]);
     let row = h.text_at("Draw Rectangle").expect("a tool row");
     h.frame(vec![Event::PointerMoved(row)]);
@@ -142,18 +137,18 @@ fn rail_and_ribbon_show_the_hovered_tools_guidance_in_a_tip_box() {
 #[test]
 fn about_s_credits_button_opens_the_credits_window() {
     let mut h = Harness::new();
-    h.app.info = Some(Info::About);
+    h.open_info(Info::About);
     h.frame(vec![]);
     h.frame(vec![]);
     click_button(&mut h, "Credits…");
-    assert_eq!(h.app.info, Some(Info::Credits));
+    assert_eq!(h.info(), Some(Info::Credits));
 }
 
 #[test]
 fn the_credits_window_thanks_lists_and_searches_every_credit() {
     let total = crate::credits::all().len();
     let mut h = Harness::new();
-    h.app.info = Some(Info::Credits);
+    h.open_info(Info::Credits);
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(
@@ -166,7 +161,7 @@ fn the_credits_window_thanks_lists_and_searches_every_credit() {
         "{:?}",
         h.texts()
     );
-    h.app.credits.search = "usvg".to_owned();
+    h.search_credits("usvg");
     h.frame(vec![]);
     // usvg is under MIT in one version and the MPL in older ones
     assert!(
@@ -179,7 +174,7 @@ fn the_credits_window_thanks_lists_and_searches_every_credit() {
             .iter()
             .any(|t| t.starts_with("Mozilla Public License 2.0: "))
     );
-    h.app.credits.search = "no-such-library".to_owned();
+    h.search_credits("no-such-library");
     h.frame(vec![]);
     assert!(
         h.texts()
@@ -197,15 +192,15 @@ fn help_items_open_their_windows() {
         ("credits", Info::Credits),
         ("toolpath_summary", Info::Summary),
     ] {
-        h.app.invoke(&h.ctx, id);
-        assert_eq!(h.app.info, Some(info));
+        h.invoke(id);
+        assert_eq!(h.info(), Some(info));
     }
 }
 
 #[test]
 fn the_3d_pencil_help_shows_what_it_cuts_with_pictures() {
     let h = Harness::new();
-    let page = h.app.help_markdown("3d_pencil_toolpath");
+    let page = h.help_markdown("3d_pencil_toolpath");
     assert!(page.contains("pictures/pencil-before-after.png"));
     assert!(page.contains("pictures/pencil-pass.gif"));
     assert!(
@@ -221,7 +216,7 @@ fn the_3d_pencil_help_shows_what_it_cuts_with_pictures() {
 #[test]
 fn a_tools_help_page_shows_its_toolbar_icon_by_its_name() {
     let h = Harness::new();
-    let page = h.app.help_markdown("3d_pencil_toolpath");
+    let page = h.help_markdown("3d_pencil_toolpath");
     assert!(
         page.contains(
             "# ![3D Pencil Toolpath icon](bytes://help-icons/48/toolpaths/3d_pencil_toolpath.png) \
@@ -234,7 +229,7 @@ fn a_tools_help_page_shows_its_toolbar_icon_by_its_name() {
 #[test]
 fn the_toolpaths_help_lists_each_tool_by_its_icon() {
     let h = Harness::new();
-    let page = h.app.help_markdown("toolpaths");
+    let page = h.help_markdown("toolpaths");
     assert!(
         page.contains(
             "- ![](bytes://help-icons/24/toolpaths/3d_pencil_toolpath.png) \
@@ -242,7 +237,7 @@ fn the_toolpaths_help_lists_each_tool_by_its_icon() {
         ),
         "{page}"
     );
-    let design = h.app.help_markdown("design");
+    let design = h.help_markdown("design");
     assert!(
         design.contains("- ![](bytes://help-icons/24/drawing/create_vectors/draw_circle.png) "),
         "{design}"
@@ -253,12 +248,11 @@ fn the_toolpaths_help_lists_each_tool_by_its_icon() {
 fn every_tools_help_page_shows_its_buttons_icon() {
     let h = Harness::new();
     let missing: Vec<&str> = h
-        .app
         .help_topics()
         .into_iter()
         .filter(|t| !help::OWN_PAGES.contains(t))
-        .filter(|t| match h.app.help_icon_uri(t, help::PAGE_ICON) {
-            Some(uri) => !h.app.help_markdown(t).contains(&uri),
+        .filter(|t| match h.help_icon_uri(t, help::PAGE_ICON) {
+            Some(uri) => !h.help_markdown(t).contains(&uri),
             None => true,
         })
         .collect();
@@ -268,10 +262,10 @@ fn every_tools_help_page_shows_its_buttons_icon() {
 #[test]
 fn help_search_finds_tools_by_name_not_by_their_icons_file() {
     let mut h = Harness::new();
-    let found = h.app.help_search_results("pencil");
+    let found = h.help_search_results("pencil");
     assert_eq!(found[0].0, "3d_pencil_toolpath", "{found:?}");
     // the search reads each page's words, never an icon's file path or folder
-    for (t, _, md) in &h.app.help_index {
+    for (t, _, md) in h.help_searched_pages() {
         assert!(!md.contains("help-icons"), "{t}");
         assert!(!md.contains("create_vectors"), "{t}");
     }
@@ -280,7 +274,7 @@ fn help_search_finds_tools_by_name_not_by_their_icons_file() {
 #[test]
 fn the_help_window_shows_tool_icons_on_pages_and_in_search_results() {
     let mut h = Harness::new();
-    h.app.info = Some(Info::Help("3d_pencil_toolpath"));
+    h.open_info(Info::Help("3d_pencil_toolpath"));
     h.frame(vec![]);
     h.frame(vec![]);
     let big = "bytes://help-icons/48/toolpaths/3d_pencil_toolpath.png";
@@ -289,7 +283,7 @@ fn the_help_window_shows_tool_icons_on_pages_and_in_search_results() {
         matches!(image, Ok(egui::load::BytesPoll::Ready { .. })),
         "the page's icon handed to egui"
     );
-    h.app.help_search = "pencil".into();
+    h.search_help("pencil");
     h.frame(vec![]);
     h.frame(vec![]);
     let small = "bytes://help-icons/24/toolpaths/3d_pencil_toolpath.png";
@@ -326,7 +320,7 @@ fn the_wheel_zooms_about_the_cursor() {
     let mut h = Harness::new();
     let at = view_middle(&h) + vec2(40.0, -30.0);
     let (before, under) = {
-        let t = h.app.view_transform.unwrap();
+        let t = h.view_2d_transform();
         (t.scale, t.to_job(at))
     };
     h.frame(vec![Event::PointerMoved(at)]);
@@ -338,7 +332,7 @@ fn the_wheel_zooms_about_the_cursor() {
         modifiers: Modifiers::NONE,
     }]);
     h.frame(vec![]);
-    let t = h.app.view_transform.unwrap();
+    let t = h.view_2d_transform();
     assert!(t.scale > before, "scrolling up zooms in");
     assert!(t.to_job(at).distance(under) < 0.01, "about the cursor");
 }
@@ -346,26 +340,15 @@ fn the_wheel_zooms_about_the_cursor() {
 #[test]
 fn every_tool_on_the_pages_can_be_asked_its_first_step() {
     let h = Harness::new();
-    let mut with_step = 0;
-    for group in h
-        .app
-        .toolbar
-        .all_design_groups()
-        .iter()
-        .chain(&h.app.toolbar.toolpath_groups)
-    {
-        for id in group.tools {
-            if h.app.first_step_of(id).is_some() {
-                with_step += 1;
-            }
-        }
-    }
+    let with_step = (h.page_tools().into_iter())
+        .filter(|id| h.first_step_of(id).is_some())
+        .count();
     assert!(with_step >= 40, "{with_step} tools say what to select");
     for id in ["weld_vectors", "two_rail_sweep", "profile_toolpath", "move"] {
-        assert!(h.app.first_step_of(id).is_some(), "{id}");
+        assert!(h.first_step_of(id).is_some(), "{id}");
     }
     for id in ["draw_rectangle", "job_setup", "zoom_to_job", "undo"] {
-        assert_eq!(h.app.first_step_of(id), None, "{id}");
+        assert_eq!(h.first_step_of(id), None, "{id}");
     }
 }
 
@@ -374,7 +357,7 @@ fn the_design_page_shows_the_hovered_tools_guidance_under_its_icons() {
     let mut h = Harness::new();
     // tall enough for the buttons at their full size and what comes under them
     h.window = vec2(1280.0, 1600.0);
-    h.app.pages.set_pinned(Page::Design, true);
+    h.pin(Page::Design);
     h.frame(vec![]);
     h.frame(vec![]);
     // nothing hovered: the tool in hand, Select, and its next step
@@ -389,7 +372,7 @@ fn the_design_page_shows_the_hovered_tools_guidance_under_its_icons() {
         h.texts_at("Next:")
     );
     // hovering Draw Circle's button: its description, its next step, and the status bar's line
-    h.app.options.general.fold_tool_groups = true;
+    h.given_options(|o| o.general.fold_tool_groups = true);
     h.frame(vec![]);
     // the circles' flyout: Draw Circle, with Draw Ellipse under it
     flyout_arrow_naming(&mut h, "Draw Ellipse");
@@ -415,10 +398,9 @@ fn the_design_page_shows_the_hovered_tools_guidance_under_its_icons() {
 #[test]
 fn the_rails_tool_rows_and_a_flyouts_list_carry_the_guidance_too() {
     let mut h = Harness::new();
-    h.app.options.general.layout = crate::options::WindowLayout::Rail;
+    h.given_options(|o| o.general.layout = crate::options::WindowLayout::Rail);
     h.frame(vec![]);
-    let groups = h.app.tool_model().all_groups();
-    h.app.rail_group = groups.iter().position(|g| g.name == "Create Vectors");
+    h.open_rail_group("Create Vectors");
     h.frame(vec![]);
     // the Rail's list of Create Vectors: its rows name each tool
     let row = h.text_at("Draw Rectangle").expect("a tool row");
@@ -444,12 +426,12 @@ fn the_rails_tool_rows_and_a_flyouts_list_carry_the_guidance_too() {
 #[test]
 fn the_3d_views_help_shows_auto_rotate_with_its_moving_picture() {
     let h = Harness::new();
-    assert!(h.app.all_help_topics().contains(&"view_3d"));
+    assert!(h.all_help_topics().contains(&"view_3d"));
     assert!(
-        h.app.help_markdown("contents").contains("(help:view_3d)"),
+        h.help_markdown("contents").contains("(help:view_3d)"),
         "linked from Contents"
     );
-    let page = h.app.help_markdown("view_3d");
+    let page = h.help_markdown("view_3d");
     assert!(page.contains("Auto-rotate") && page.contains("Speed"));
     assert!(page.contains("pictures/auto-rotate.gif"));
     assert!(
@@ -463,7 +445,7 @@ fn the_3d_views_help_shows_auto_rotate_with_its_moving_picture() {
 #[test]
 fn the_3d_views_help_says_how_to_bring_up_a_models_height_buttons() {
     let h = Harness::new();
-    let page = h.app.help_markdown("view_3d");
+    let page = h.help_markdown("view_3d");
     for words in [
         "Changing a model's height",
         "**click** the model",
@@ -492,12 +474,12 @@ fn the_3d_views_help_says_how_to_bring_up_a_models_height_buttons() {
         );
     }
     assert!(
-        h.app.help_markdown("contents").contains("height buttons"),
+        h.help_markdown("contents").contains("height buttons"),
         "Contents names it"
     );
     for tool in ["transform", "scale_model_z_height"] {
         assert!(
-            h.app.help_markdown(tool).contains("(help:view_3d)"),
+            h.help_markdown(tool).contains("(help:view_3d)"),
             "{tool} links it"
         );
     }
@@ -506,14 +488,14 @@ fn the_3d_views_help_says_how_to_bring_up_a_models_height_buttons() {
 #[test]
 fn the_progress_help_explains_the_time_left_with_a_picture() {
     let h = Harness::new();
-    assert!(h.app.all_help_topics().contains(&"progress"));
+    assert!(h.all_help_topics().contains(&"progress"));
     assert!(
-        h.app.help_markdown("contents").contains("(help:progress)"),
+        h.help_markdown("contents").contains("(help:progress)"),
         "linked from Contents"
     );
-    assert!(h.app.help_markdown("web_api").contains("(help:progress)"));
-    assert!(h.app.help_markdown("toolpaths").contains("(help:progress)"));
-    let page = h.app.help_markdown("progress");
+    assert!(h.help_markdown("web_api").contains("(help:progress)"));
+    assert!(h.help_markdown("toolpaths").contains("(help:progress)"));
+    let page = h.help_markdown("progress");
     for words in [
         "pictures/progress-window.png",
         "working out how long it will take",
@@ -541,16 +523,16 @@ fn the_progress_help_explains_the_time_left_with_a_picture() {
 #[test]
 fn the_settings_help_says_changes_wait_for_apply_with_pictures() {
     let h = Harness::new();
-    assert!(h.app.all_help_topics().contains(&"settings"));
+    assert!(h.all_help_topics().contains(&"settings"));
     assert!(
-        h.app.help_markdown("contents").contains("(help:settings)"),
+        h.help_markdown("contents").contains("(help:settings)"),
         "linked from Contents"
     );
     assert!(
-        h.app.help_markdown("web_api").contains("(help:settings)"),
+        h.help_markdown("web_api").contains("(help:settings)"),
         "and from the Web API's steps"
     );
-    let page = h.app.help_markdown("settings");
+    let page = h.help_markdown("settings");
     for words in [
         "Apply",
         "Cancel",
@@ -568,7 +550,7 @@ fn the_settings_help_says_changes_wait_for_apply_with_pictures() {
     for words in [
         "Snapping Options",
         "Machine Configuration",
-        "Tool Database",
+        "Bit Library",
         "Materials Library",
     ] {
         assert!(page.contains(words), "{words}");
@@ -591,12 +573,12 @@ fn the_settings_help_says_changes_wait_for_apply_with_pictures() {
 #[test]
 fn the_updates_help_shows_one_click_install_and_relaunch_with_pictures() {
     let h = Harness::new();
-    assert!(h.app.all_help_topics().contains(&"updates"));
+    assert!(h.all_help_topics().contains(&"updates"));
     assert!(
-        h.app.help_markdown("contents").contains("(help:updates)"),
+        h.help_markdown("contents").contains("(help:updates)"),
         "linked from Contents"
     );
-    let page = h.app.help_markdown("updates");
+    let page = h.help_markdown("updates");
     for words in [
         "Download, install and relaunch?",
         "Install Now",
@@ -628,9 +610,9 @@ fn help_contents_links_to_the_pages_and_their_tools() {
     let mut h = Harness::new();
     // the tools are listed by their icons, drawn at their own size, as the app does
     egui_extras::install_image_loaders(&h.ctx);
-    h.app.pages.set_pinned(Page::Design, true);
-    h.app.invoke(&h.ctx, "help_contents");
-    assert_eq!(h.app.info, Some(Info::Help("contents")));
+    h.pin(Page::Design);
+    h.invoke("help_contents");
+    assert_eq!(h.info(), Some(Info::Help("contents")));
     // a new window measures itself on its first frame, and its scroll bar on the next
     h.frame(vec![]);
     h.frame(vec![]);
@@ -656,7 +638,7 @@ fn help_contents_links_to_the_pages_and_their_tools() {
         .expect("Contents links the Design page");
     h.click(at, Modifiers::NONE);
     h.frame(vec![]);
-    assert_eq!(h.app.info, Some(Info::Help("design")));
+    assert_eq!(h.info(), Some(Info::Help("design")));
     // listed by their icons: wheeled down to the first group's last tools
     h.frame(vec![
         Event::PointerMoved(Pos2::new(200.0, 400.0)),
@@ -679,8 +661,8 @@ fn help_contents_links_to_the_pages_and_their_tools() {
         .expect("its tools are listed");
     h.click(at, Modifiers::NONE);
     h.frame(vec![]);
-    assert_eq!(h.app.info, Some(Info::Help("setup_material")));
-    let vars = h.app.help_markdown("document_variables");
+    assert_eq!(h.info(), Some(Info::Help("setup_material")));
+    let vars = h.help_markdown("document_variables");
     assert!(
         vars.contains("{depth}"),
         "a tool's help is its doc comments"
@@ -691,7 +673,7 @@ fn help_contents_links_to_the_pages_and_their_tools() {
 #[test]
 fn every_help_link_goes_to_a_help_page() {
     let h = Harness::new();
-    let topics = h.app.all_help_topics();
+    let topics = h.all_help_topics();
     let problems = cut_craft_help::problems(|id| topics.contains(&id));
     assert!(problems.is_empty(), "{problems:#?}");
 }
@@ -700,7 +682,6 @@ fn every_help_link_goes_to_a_help_page() {
 fn every_tool_on_the_pages_has_a_help_page() {
     let h = Harness::new();
     let missing: Vec<&str> = h
-        .app
         .help_topics()
         .into_iter()
         .filter(|id| cut_craft_help::page(id).is_none() && *id != "tips")
@@ -727,7 +708,7 @@ fn every_command_has_a_help_page_to_update() {
 #[test]
 fn a_tools_help_page_shows_its_steps_settings_and_related_pages() {
     let h = Harness::new();
-    let pocket = h.app.help_markdown("pocket_toolpath");
+    let pocket = h.help_markdown("pocket_toolpath");
     assert!(pocket.contains("## Settings"), "{pocket}");
     // see-also on its own page, beside it
     assert!(side_bar(&h, "pocket_toolpath").contains(&"profile_toolpath".into()));
@@ -741,12 +722,11 @@ fn every_help_page_has_related_pages_beside_it() {
     // see-also (crates/help/pages/...) or link them in its words
     let h = Harness::new();
     let lonely: Vec<&str> = h
-        .app
         .all_help_topics()
         .into_iter()
         .filter(|t| !matches!(*t, "contents" | "design" | "toolpaths" | "tips"))
         .filter(|t| {
-            let bar = h.app.help_sidebar(t, &h.app.help_page(t));
+            let bar = h.help_sidebar(t);
             // see-also naming tools of its own group lists them under Other tools like this
             let own = cut_craft_help::page(t).map_or_default(|p| cut_craft_help::links(&p));
             bar.related.is_empty() && own.iter().all(|l| *l == "contents")
@@ -762,23 +742,23 @@ fn every_help_page_has_related_pages_beside_it() {
 #[test]
 fn back_and_forward_walk_the_help_pages_read() {
     let mut h = Harness::new();
-    h.app.invoke(&h.ctx, "help_contents");
+    h.invoke("help_contents");
     h.frame(vec![]);
     h.frame(vec![]);
-    assert_eq!(h.app.info, Some(Info::Help("contents")));
+    assert_eq!(h.info(), Some(Info::Help("contents")));
     let at = *h.texts_at("Did You Know?").last().expect("the tips button");
     h.click(at, Modifiers::NONE);
     h.frame(vec![]);
-    assert_eq!(h.app.info, Some(Info::Help("tips")));
+    assert_eq!(h.info(), Some(Info::Help("tips")));
     let at = h.text_at("◀ Back").expect("Back");
     h.click(at, Modifiers::NONE);
     h.frame(vec![]);
-    assert_eq!(h.app.info, Some(Info::Help("contents")), "Back to Contents");
+    assert_eq!(h.info(), Some(Info::Help("contents")), "Back to Contents");
     let at = h.text_at("Forward ▶").expect("Forward");
     h.click(at, Modifiers::NONE);
     h.frame(vec![]);
     assert_eq!(
-        h.app.info,
+        h.info(),
         Some(Info::Help("tips")),
         "Forward to the tips again"
     );
@@ -788,7 +768,6 @@ fn back_and_forward_walk_the_help_pages_read() {
 fn a_question_finds_the_help_that_answers_it() {
     let mut h = Harness::new();
     let found: Vec<&str> = h
-        .app
         .help_search_results("how do I hold the part with bridges?")
         .into_iter()
         .map(|(t, ..)| t)
@@ -801,7 +780,7 @@ fn a_question_finds_the_help_that_answers_it() {
 fn a_tools_help_page_falls_back_to_its_own_description() {
     let h = Harness::new();
     // Profile's params carry no doc comment of their own; its crate says what it does
-    let profile = h.app.help_markdown("profile_toolpath");
+    let profile = h.help_markdown("profile_toolpath");
     assert!(!profile.contains("No help written"), "{profile}");
     assert!(
         profile.contains("Cuts along the selected vectors, outside, inside or on the line"),
@@ -816,11 +795,11 @@ fn a_tools_help_page_falls_back_to_its_own_description() {
 #[test]
 fn a_pages_question_mark_opens_its_help() {
     let mut h = Harness::new();
-    h.app.pages.set_pinned(Page::Design, true);
+    h.pin(Page::Design);
     h.frame(vec![]);
     let at = h.text_at("?").expect("the page's ? button");
     h.click(at, Modifiers::NONE);
-    assert_eq!(h.app.info, Some(Info::Help("design")));
+    assert_eq!(h.info(), Some(Info::Help("design")));
 }
 
 #[test]
@@ -865,15 +844,15 @@ fn a_page_whose_contents_ask_for_more_room_keeps_its_place() {
 fn orientate_3d_models_rings_turn_the_model_about_their_axis_and_the_sphere_about_all() {
     let mut h = Harness::new();
     let file = pyramid_stl("rings");
-    h.app.import_file(&file);
-    h.app.view = View::ThreeD;
+    h.import(&file);
+    h.show_view(View::ThreeD);
     h.frame(vec![]);
     h.frame(vec![]);
-    let (rings, sphere) = h.app.rings_3d.clone();
+    let (rings, sphere) = h.turn_rings();
     let axes: Vec<&str> = rings.iter().map(|(a, _)| *a).collect();
     assert_eq!(axes, ["x", "y", "z"], "red, green and blue rings");
     let (centre, _) = sphere.expect("the grey sphere");
-    let turn = |h: &Harness| h.app.form.as_ref().unwrap().params["turn"].clone();
+    let turn = |h: &Harness| h.form_value("turn").clone();
     assert_eq!(
         turn(&h)["mode"],
         "view",
@@ -885,19 +864,19 @@ fn orientate_3d_models_rings_turn_the_model_about_their_axis_and_the_sphere_abou
     let t = turn(&h);
     assert!(t["x"].as_f64().unwrap().abs() > 1.0, "{t}");
     assert_eq!((t["y"].as_f64(), t["z"].as_f64()), (Some(0.0), Some(0.0)));
-    assert!(h.app.turn_ring.is_none(), "let go");
+    assert!(!h.turning_a_ring(), "let go");
     // the sphere, dragged across and up: about all three (X and Z here)
     let before = turn(&h);
     h.drag(centre, centre + vec2(60.0, -60.0));
     let t = turn(&h);
     assert!(t["z"].as_f64() != before["z"].as_f64() && t["x"].as_f64() != before["x"].as_f64());
     // anywhere else turns the view, not the model
-    let orbit = h.app.orbit;
-    let corner = h.app.fit_3d.unwrap().left_bottom() + vec2(10.0, -10.0);
+    let orbit = h.orbit();
+    let corner = h.fit_3d().left_bottom() + vec2(10.0, -10.0);
     let before = turn(&h);
     h.drag(corner, corner + vec2(60.0, 0.0));
     assert_eq!(turn(&h), before);
-    assert_ne!(h.app.orbit, orbit, "the view turned");
+    assert_ne!(h.orbit(), orbit, "the view turned");
     let _ = std::fs::remove_file(file);
 }
 
@@ -909,7 +888,7 @@ fn old_tile_files_are_asked_about_on_saving_and_on_sending_with_tiling_turned_of
     let dir = std::env::temp_dir().join(format!("cut-craft-old-tiles-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("card").join("sign")).unwrap();
-    h.app.options.confirmations.earlier_gcode = EarlierGcode::Ask;
+    h.given_options(|o| o.confirmations.earlier_gcode = EarlierGcode::Ask);
     let form = SaveForm {
         mode: crate::files::SaveMode::VisibleToOneFile,
         group: false,
@@ -918,7 +897,7 @@ fn old_tile_files_are_asked_about_on_saving_and_on_sending_with_tiling_turned_of
         changes: crate::files::ToolChanges::ToolChanger,
         job_sheet: false,
     };
-    let post = h.app.form_post(&form).unwrap();
+    let post = h.form_post(&form).unwrap();
     let ext = post.extension.clone();
     for n in 1..=2 {
         let tile = format!("sign_tile{n}.{ext}");
@@ -927,19 +906,20 @@ fn old_tile_files_are_asked_about_on_saving_and_on_sending_with_tiling_turned_of
     }
     // saving sign.nc where an earlier tiled save left its tiles asks Replace or Archive
     let path = dir.join(format!("sign.{ext}"));
-    h.app.save_over_earlier(&form, post.clone(), path);
-    let ask = h.app.earlier_ask.take().expect("asked");
+    h.save_over_earlier(&form, post.clone(), path);
+    let ask = h.earlier_asked().expect("asked");
     assert!(!ask.sending);
     assert_eq!(ask.earlier.len(), 2, "{:?}", ask.earlier);
+    h.answer_earlier(None, false);
     // and so does sending, the answer then sending on
-    h.app.machines.add();
-    h.app.machines.active_mut().unwrap().send_to.folder = dir.join("card").display().to_string();
-    h.app.session.path = Some(std::path::PathBuf::from("/jobs/sign.ccjob"));
-    h.app.send_choosing(&form, post, EarlierGcode::Ask);
-    let ask = h.app.earlier_ask.as_ref().expect("asked");
+    h.given_machine();
+    h.edit_machine(|m| m.send_to.folder = dir.join("card").display().to_string());
+    h.given_job_path(std::path::PathBuf::from("/jobs/sign.ccjob"));
+    h.send_choosing(&form, post, EarlierGcode::Ask);
+    let ask = h.earlier_asked().expect("asked");
     assert!(ask.sending);
     assert_eq!(ask.earlier.len(), 2);
-    h.app.answer_earlier(Some(EarlierGcode::Replace), false);
+    h.answer_earlier(Some(EarlierGcode::Replace), false);
     let mut left: Vec<String> = std::fs::read_dir(dir.join("card").join("sign"))
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
@@ -952,7 +932,7 @@ fn old_tile_files_are_asked_about_on_saving_and_on_sending_with_tiling_turned_of
 #[test]
 fn the_status_bar_keeps_its_hint_while_the_pointer_is_on_it() {
     let mut h = Harness::new();
-    h.app.status.set_message("Ready");
+    h.given_status("Ready");
     h.frame(vec![]);
     let hint = "0331. Flowers.STL\nDouble-click to add it to the project";
     cut_craft_bug_report::hint::hint(&h.ctx, hint);
@@ -978,8 +958,7 @@ fn the_community_links_are_in_help_not_on_the_start_page() {
     assert!(h.text_at("Facebook").is_none());
     assert!(h.text_at("Cut Craft on GitHub").is_some());
     let help = h
-        .app
-        .current_menus()
+        .menu_bar()
         .menus
         .iter()
         .find(|m| m.name == "Help")
@@ -988,18 +967,12 @@ fn the_community_links_are_in_help_not_on_the_start_page() {
         .clone();
     let community = leaf(&help, &["Community"]);
     assert_eq!(community.children.len(), super::LINKS.len());
-    assert!(
-        community
-            .children
-            .iter()
-            .all(|i| h.app.available(&i.action))
-    );
+    assert!(community.children.iter().all(|i| h.available(&i.action)));
 }
 
-fn help_menu(app: &CutCraftApp) -> Vec<crate::gui::MenuItem> {
-    app.current_menus()
-        .menus
-        .iter()
+/// The Help menu's items, as the menu bar shows them now.
+fn help_menu(h: &Harness) -> Vec<crate::gui::MenuItem> {
+    (h.menu_bar().menus.iter())
         .find(|m| m.name == "Help")
         .unwrap()
         .items
@@ -1010,27 +983,26 @@ fn help_menu(app: &CutCraftApp) -> Vec<crate::gui::MenuItem> {
 fn help_contents_opens_from_the_help_menu_with_or_without_a_job() {
     for start in [Harness::at_start as fn() -> Harness, Harness::new] {
         let mut h = start();
-        for item in help_menu(&h.app)
+        for item in help_menu(&h)
             .iter()
             .filter(|i| !i.action.is_empty() && i.children.is_empty())
         {
-            assert!(h.app.available(&item.action), "{} is greyed", item.name);
+            assert!(h.available(&item.action), "{} is greyed", item.name);
         }
-        h.choose(help_menu, &["Help Contents"]);
-        assert_eq!(h.app.info, Some(Info::Help("contents")));
+        h.choose_on_menu_bar("Help", &["Help Contents"]);
+        assert_eq!(h.info(), Some(Info::Help("contents")));
     }
 }
 
 #[test]
 fn help_search_lists_matching_pages_and_opens_one() {
     let mut h = Harness::new();
-    let found = h.app.help_search_results("job setup");
+    let found = h.help_search_results("job setup");
     assert_eq!(
         found[0].0, "job_setup",
         "a name that matches first: {found:?}"
     );
     let tabs: Vec<&str> = h
-        .app
         .help_search_results("tabs")
         .into_iter()
         .map(|(t, ..)| t)
@@ -1041,14 +1013,13 @@ fn help_search_lists_matching_pages_and_opens_one() {
         "then the pages using it: {tabs:?}"
     );
     assert!(
-        h.app
-            .help_search_results("did you know")
+        h.help_search_results("did you know")
             .iter()
             .any(|(t, ..)| *t == "tips"),
         "the tips are a page of their own"
     );
-    h.app.invoke(&h.ctx, "help_contents");
-    h.app.help_search = "job setup".into();
+    h.invoke("help_contents");
+    h.search_help("job setup");
     h.frame(vec![]);
     h.frame(vec![]);
     // the first result, just under the count
@@ -1063,280 +1034,10 @@ fn help_search_lists_matching_pages_and_opens_one() {
         .expect("listed");
     h.click(at, Modifiers::NONE);
     h.frame(vec![]);
-    assert_eq!(h.app.info, Some(Info::Help("job_setup")));
+    assert_eq!(h.info(), Some(Info::Help("job_setup")));
     assert!(
-        h.app.help_search.is_empty(),
+        h.help_search().is_empty(),
         "the page shown in place of the list"
-    );
-}
-
-#[test]
-fn did_you_know_steps_through_the_tips() {
-    let mut h = Harness::at_start();
-    assert_eq!(h.app.tip, None, "tests start without it");
-    // it opens on a tip not seen yet: here, only the first
-    h.app.options.seen_tips = super::tips::TIPS[1..]
-        .iter()
-        .map(super::tips::Tip::key)
-        .collect();
-    h.choose(help_menu, &["Did You Know?..."]);
-    assert_eq!(h.app.tip, Some(0));
-    h.frame(vec![]);
-    h.frame(vec![]);
-    assert!(
-        h.text_at(&format!("Tip 1 of {}", super::tips::TIPS.len()))
-            .is_some()
-    );
-    let next = h.text_at("Next ▶").unwrap();
-    h.click(next, Modifiers::NONE);
-    h.frame(vec![]);
-    assert_eq!(h.app.tip, Some(1));
-    let previous = h.text_at("◀ Previous").unwrap();
-    h.click(previous, Modifiers::NONE);
-    h.frame(vec![]);
-    assert_eq!(h.app.tip, Some(0));
-    // the tip's length moves the buttons
-    let previous = h.text_at("◀ Previous").unwrap();
-    h.click(previous, Modifiers::NONE);
-    h.frame(vec![]);
-    assert_eq!(
-        h.app.tip,
-        Some(super::tips::TIPS.len() - 1),
-        "round to the last"
-    );
-    let show = h.text_at("Show a tip when Cut Craft starts").unwrap();
-    h.click(show, Modifiers::NONE);
-    h.frame(vec![]);
-    assert!(!h.app.options.general.show_tips_at_startup, "turned off");
-    let close = h.text_at("Close").unwrap();
-    h.click(close, Modifiers::NONE);
-    h.frame(vec![]);
-    assert_eq!(h.app.tip, None);
-}
-
-#[test]
-fn each_start_shows_a_tip_not_seen_yet_unless_turned_off() {
-    use super::tips::TIPS;
-    let mut h = Harness::at_start();
-    let mut shown = std::collections::HashSet::new();
-    for _ in 0..TIPS.len() {
-        h.app.tip = None;
-        h.app.tip_at_startup();
-        let n = h.app.tip.expect("a tip at start");
-        h.frame(vec![]);
-        assert!(shown.insert(n), "tip {n} came up twice before the rest");
-    }
-    // tests start in Classic, so the Canvas tip is among them
-    assert_eq!(shown.len(), TIPS.len(), "every tip once");
-    h.app.tip = None;
-    h.app.tip_at_startup();
-    assert!(h.app.tip.is_some(), "then round again");
-    h.frame(vec![]);
-    assert_eq!(h.app.options.seen_tips.len(), 1, "starting over");
-    h.app.tip = None;
-    h.app.options.general.show_tips_at_startup = false;
-    h.app.tip_at_startup();
-    assert_eq!(h.app.tip, None, "turned off");
-    h.app.options.general.show_tips_at_startup = true;
-    h.app.open_first_run();
-    h.app.tip_at_startup();
-    assert_eq!(h.app.tip, None, "not over first-time setup");
-}
-
-#[test]
-fn paging_through_tips_counts_them_as_seen() {
-    let mut h = Harness::at_start();
-    h.app.open_tips(0);
-    h.frame(vec![]);
-    h.frame(vec![]);
-    for _ in 0..3 {
-        let next = h.text_at("Next ▶").unwrap();
-        h.click(next, Modifiers::NONE);
-        h.frame(vec![]);
-    }
-    let seen: Vec<u64> = super::tips::TIPS[..4]
-        .iter()
-        .map(super::tips::Tip::key)
-        .collect();
-    assert_eq!(h.app.options.seen_tips, seen);
-}
-
-/// Where the Canvas tip is in the list.
-fn canvas_tip() -> usize {
-    super::tips::TIPS
-        .iter()
-        .position(|t| t.tries == Some(crate::options::WindowLayout::Canvas))
-        .expect("a tip offers Canvas")
-}
-
-#[test]
-fn the_canvas_tip_switches_to_canvas_and_is_not_shown_in_canvas() {
-    let mut h = Harness::at_start();
-    let n = canvas_tip();
-    assert!(super::tips::TIPS[n].weight > 1, "it comes up more often");
-    h.app.open_tips(n);
-    h.frame(vec![]);
-    h.frame(vec![]);
-    // the words name the button too: the button is under them
-    let try_it = *h.texts_at("Try Canvas").last().expect("a button to try it");
-    h.click(try_it, Modifiers::NONE);
-    h.frame(vec![]);
-    assert_eq!(
-        h.app.options.general.layout,
-        crate::options::WindowLayout::Canvas
-    );
-    assert_eq!(h.app.tip, None, "the tip closes");
-    // in Canvas: never at start, and Next and Previous step over it
-    h.app.options.seen_tips.clear();
-    for _ in 0..super::tips::TIPS.len() {
-        h.app.tip = None;
-        h.app.tip_at_startup();
-        assert_ne!(h.app.tip, Some(n), "not offered in Canvas");
-        h.frame(vec![]);
-    }
-    h.app.open_tips(n - 1);
-    h.frame(vec![]);
-    h.frame(vec![]);
-    let next = h.text_at("Next ▶").unwrap();
-    h.click(next, Modifiers::NONE);
-    h.frame(vec![]);
-    assert_eq!(h.app.tip, Some(n + 1), "stepped over");
-}
-
-#[test]
-fn every_tip_says_something_and_its_more_is_a_help_page() {
-    let h = Harness::new();
-    let topics = h.app.all_help_topics();
-    let mut seen = std::collections::HashSet::new();
-    for tip in super::tips::TIPS {
-        assert!(tip.text.split_whitespace().count() >= 10, "{}", tip.text);
-        assert!(seen.insert(tip.text), "said twice: {}", tip.text);
-        assert!(
-            topics.contains(&tip.topic),
-            "{} is not a help page: {}",
-            tip.topic,
-            tip.text
-        );
-        for name in ["Aspire", "Vectric"] {
-            assert!(!tip.text.contains(name), "{name} named: {}", tip.text);
-        }
-    }
-    let page = h.app.help_markdown("tips");
-    assert!(page.contains(super::tips::TIPS[0].text));
-}
-
-#[test]
-fn every_tip_tells_more_on_a_page_of_its_own_not_help_contents() {
-    // Tell Me More… on Help Contents leaves a beginner to hunt for what the tip meant
-    let vague: Vec<&str> = super::tips::TIPS
-        .iter()
-        .filter(|t| t.topic == "contents")
-        .map(|t| t.text)
-        .collect();
-    assert!(
-        vague.is_empty(),
-        "point these at their own page:\n{vague:#?}"
-    );
-}
-
-#[test]
-fn there_are_well_over_a_hundred_tips_on_every_subject() {
-    use super::tips::{Area, TIPS};
-    assert!(TIPS.len() >= 129, "only {} tips", TIPS.len());
-    for area in Area::ALL {
-        let n = TIPS.iter().filter(|t| t.area == area).count();
-        assert!(n >= 5, "{area:?} has only {n} tips");
-    }
-}
-
-#[test]
-fn the_tips_page_sorts_them_by_subject_and_links_each_to_its_help() {
-    let h = Harness::new();
-    let page = h.app.help_markdown("tips");
-    let mut at = 0;
-    for area in super::tips::Area::ALL {
-        let heading = format!("\n## {}\n", area.heading());
-        let found = page[at..]
-            .find(&heading)
-            .unwrap_or_else(|| panic!("{heading:?} missing, or out of order"));
-        at += found + heading.len();
-    }
-    for tip in super::tips::TIPS {
-        let line = format!("- {} [Tell me more](help:{})", tip.text, tip.topic);
-        assert!(page.contains(&line), "not listed with its link: {line}");
-    }
-}
-
-#[test]
-fn every_tip_has_an_illustration_of_its_own_or_its_tools_icon() {
-    use super::tips::Picture;
-    let h = Harness::new();
-    let icons = icon_set();
-    let mut seen = std::collections::HashSet::new();
-    let mut missing = vec![];
-    for tip in super::tips::TIPS {
-        match tip.picture {
-            Picture::Scene(picture) => {
-                assert!(
-                    picture.starts_with("tips/")
-                        && std::path::Path::new(picture)
-                            .extension()
-                            .is_some_and(|e| e == "png"),
-                    "{picture}: a drawn illustration from assets/icons/tips"
-                );
-                assert!(icons.contains(picture), "{picture} is not drawn");
-                assert!(seen.insert(picture), "{picture} illustrates two tips");
-            }
-            Picture::Icon(id) => {
-                let Some(key) = h.app.tip_icon(id) else {
-                    missing.push(id);
-                    continue;
-                };
-                assert!(!key.starts_with("tips/"), "{key}: an icon, not a scene");
-            }
-        }
-    }
-    let unused: Vec<_> = icons
-        .iter()
-        .filter(|k| k.starts_with("tips/") && !seen.contains(k.as_str()))
-        .collect();
-    assert!(unused.is_empty(), "illustrations no tip shows: {unused:?}");
-    assert!(missing.is_empty(), "no icon for these tips: {missing:?}");
-}
-
-#[test]
-fn a_tip_about_a_tool_shows_that_tools_icon() {
-    use super::tips::{Picture, TIPS};
-    let h = Harness::new();
-    let tip = TIPS
-        .iter()
-        .find(|t| t.picture == Picture::Icon("pocket_toolpath"))
-        .expect("a tip about pockets");
-    assert_eq!(
-        h.app.tip_picture(tip),
-        Some("toolpaths/pocket_toolpath.png"),
-        "the same picture as the button and its help page"
-    );
-    assert_eq!(h.app.tip_picture(&TIPS[0]), Some("tips/sample_project.png"));
-}
-
-#[test]
-fn the_tips_window_shows_the_illustration_above_the_words() {
-    let mut h = Harness::at_start();
-    h.app.open_tips(0);
-    h.frame(vec![]);
-    h.frame(vec![]);
-    let starting = |start: &str| {
-        h.shapes.iter().find_map(|clipped| match &clipped.shape {
-            egui::Shape::Text(t) if t.galley.text().starts_with(start) => Some(t.pos),
-            _ => None,
-        })
-    };
-    let words = starting("New to Cut Craft?").expect("the first tip's words");
-    let tip = starting("Tip 1 of").expect("the count");
-    assert!(
-        words.y - tip.y > 6.0 * 18.0,
-        "room for the picture between the count and the words: {tip:?} {words:?}"
     );
 }
 
@@ -1345,8 +1046,8 @@ fn every_picture_in_the_help_is_in_the_icon_set() {
     let known = icon_set();
     let h = Harness::new();
     let mut pictures = vec![];
-    for topic in h.app.all_help_topics() {
-        let md = h.app.help_markdown(topic);
+    for topic in h.all_help_topics() {
+        let md = h.help_markdown(topic);
         let mut at = md.as_str();
         while let Some(i) = at.find("](bytes://icons/") {
             let after = &at[i + "](bytes://icons/".len()..];
@@ -1376,22 +1077,21 @@ fn the_tool_changer_is_offered_only_for_a_machine_with_one_and_warned_about_with
     use crate::files::ToolChanges;
     let mut h = Harness::new();
     two_tools(&mut h);
-    let plan = vec![h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>()];
+    let plan = vec![h.doc().toolpaths.keys().copied().collect::<Vec<_>>()];
     // no machine set up: no tool changer to offer, and choosing it anyway warns in red
-    assert!(!h.app.has_tool_changer());
+    assert!(!h.has_tool_changer());
     let warned = |h: &Harness, changes| {
-        h.app
-            .preflight(&plan, changes)
+        h.preflight(&plan, changes)
             .iter()
             .any(|f| f.message.contains("no tool changer"))
     };
     assert!(warned(&h, ToolChanges::ToolChanger));
     assert!(!warned(&h, ToolChanges::SeparateFiles));
-    h.app.machines.add();
-    assert!(!h.app.has_tool_changer());
+    h.given_machine();
+    assert!(!h.has_tool_changer());
     assert!(warned(&h, ToolChanges::ToolChanger));
-    h.app.machines.active_mut().unwrap().set_slot_count(4);
-    assert!(h.app.has_tool_changer());
+    h.edit_machine(|m| m.set_slot_count(4));
+    assert!(h.has_tool_changer());
     assert!(!warned(&h, ToolChanges::ToolChanger));
 }
 
@@ -1402,10 +1102,9 @@ fn saving_warns_about_a_tool_changer_the_machine_does_not_have() {
     use crate::files::ToolChanges;
     let mut h = Harness::new();
     two_tools(&mut h);
-    let plan = vec![h.app.doc.toolpaths.keys().copied().collect::<Vec<_>>()];
+    let plan = vec![h.doc().toolpaths.keys().copied().collect::<Vec<_>>()];
     let warned = |h: &mut Harness, changes| {
-        h.app
-            .save_checks(&plan, changes)
+        h.save_checks(&plan, changes)
             .expect("checked")
             .iter()
             .any(|f| f.message.contains("no tool changer"))
@@ -1419,19 +1118,17 @@ fn save_toolpaths_lists_every_check_with_how_it_came_out_and_its_help() {
     // Matthew: "what is it actually checking ... what is it doing for me"
     use cut_craft_core::preflight::{Check, Finding};
     let mut h = ready_for_output();
-    h.app.invoke(&h.ctx, "save_toolpaths");
-    let form = h.app.save_form.clone().unwrap();
-    let post = h.app.form_post(&form).unwrap();
-    h.app.save_checks = vec![super::SaveChecks {
-        plan: h.app.plan(&form, &post).unwrap(),
-        changes: form.changes,
-        revision: h.app.history.revision(),
-        machine: h.app.machines.active,
-        found: Some(vec![
+    h.invoke("save_toolpaths");
+    let form = h.save_form();
+    let post = h.form_post(&form).unwrap();
+    h.given_checks_found(
+        &form,
+        &post,
+        vec![
             Finding::error(Check::Rapids, "Profile would crash".into()),
             Finding::warning(Check::GenericTool, "Profile: a generic bit".into()),
-        ]),
-    }];
+        ],
+    );
     h.frame(vec![]);
     h.frame(vec![]);
     let texts = h.texts();
@@ -1460,7 +1157,7 @@ fn save_toolpaths_lists_every_check_with_how_it_came_out_and_its_help() {
     h.frame(vec![]);
     assert!(
         matches!(
-            h.app.info,
+            h.info(),
             Some(super::Info::Help(super::check_list::OVERVIEW))
         ),
         "opens the checks' help"
@@ -1471,50 +1168,43 @@ fn save_toolpaths_lists_every_check_with_how_it_came_out_and_its_help() {
 fn the_collet_hitting_the_wood_is_always_asked_about_before_saving() {
     let mut h = ready_for_output();
     let form = one_file_form();
-    let post = h.app.form_post(&form).unwrap();
+    let post = h.form_post(&form).unwrap();
     let message = "Profile 1: the collet nut would hit the material".to_owned();
     let found = |severity| {
-        Some(vec![cut_craft_core::preflight::Finding {
+        vec![cut_craft_core::preflight::Finding {
             severity,
             message: message.clone(),
             check: cut_craft_core::preflight::Check::Collisions,
-        }])
-    };
-    let checks = |h: &Harness, severity| {
-        vec![super::SaveChecks {
-            plan: h.app.plan(&form, &post).unwrap(),
-            changes: form.changes,
-            revision: h.app.history.revision(),
-            machine: h.app.machines.active,
-            found: found(severity),
         }]
     };
     // an ordinary warning, ticked as read, saves without asking again
-    h.app.acknowledged.insert(message.clone());
-    h.app.save_checks = checks(&h, cut_craft_core::preflight::Severity::Warning);
-    assert!(h.app.ready_to_save(&form, false).is_some());
+    h.tick_as_read(&message);
+    h.given_checks_found(
+        &form,
+        &post,
+        found(cut_craft_core::preflight::Severity::Warning),
+    );
+    assert!(h.ready_to_save(&form, false).is_some());
     // a collision, ticked too, still asks
-    h.app.save_checks = checks(&h, cut_craft_core::preflight::Severity::MustAsk);
-    assert!(h.app.ready_to_save(&form, false).is_none());
-    assert!(h.app.save_anyway.is_some());
+    h.given_checks_found(
+        &form,
+        &post,
+        found(cut_craft_core::preflight::Severity::MustAsk),
+    );
+    assert!(h.ready_to_save(&form, false).is_none());
+    assert!(h.asking_save_anyway());
 }
 
 #[test]
 fn the_collision_help_explains_the_sizes_with_a_picture() {
     let h = Harness::new();
-    assert!(h.app.all_help_topics().contains(&"collisions"));
+    assert!(h.all_help_topics().contains(&"collisions"));
     assert!(
-        h.app
-            .help_markdown("contents")
-            .contains("(help:collisions)"),
+        h.help_markdown("contents").contains("(help:collisions)"),
         "linked from Contents"
     );
-    assert!(
-        h.app
-            .help_markdown("toolpaths")
-            .contains("(help:collisions)")
-    );
-    let page = h.app.help_markdown("collisions");
+    assert!(h.help_markdown("toolpaths").contains("(help:collisions)"));
+    let page = h.help_markdown("collisions");
     for words in [
         "Stick-out",
         "Collet nut across",
@@ -1539,10 +1229,10 @@ fn the_collision_help_explains_the_sizes_with_a_picture() {
 #[test]
 fn model_position_help_is_on_both_forms_with_pictures_and_links_that_go_somewhere() {
     let h = Harness::new();
-    let topics = h.app.all_help_topics();
+    let topics = h.all_help_topics();
     assert!(topics.contains(&"material_setup"));
     for form in ["material_setup", "orientate_3d_model"] {
-        let page = h.app.help_markdown(form);
+        let page = h.help_markdown(form);
         for picture in [
             "model-top-at-top.png",
             "model-bottom-on-bottom.png",

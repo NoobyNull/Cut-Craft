@@ -171,7 +171,7 @@ impl Command for FlutingToolpath {
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         ensure_positive("flute depth", p.flute_depth)?;
-        ensure_positive("tool diameter", p.tool.diameter)?;
+        ensure_positive("bit diameter", p.tool.diameter)?;
         if p.start_depth < 0.0 {
             return Err(CommandError::InvalidParams(
                 "set start depth to 0 or more".into(),

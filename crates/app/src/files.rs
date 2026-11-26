@@ -141,10 +141,10 @@ pub fn write_text(path: &Path, text: &str) -> Result<(), String> {
         .map_err(|e| format!("could not write {}: {e}", path.display()))
 }
 
-/// How a file's tool changes are made, on Save Toolpaths' form.
+/// How a file's bit changes are made, on Save Toolpaths' form.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ToolChanges {
-    /// A file for each tool in turn, the tool changed between files (no tool change in a
+    /// A file for each tool in turn, the bit changed between files (no bit change in a
     /// file): the safest without a tool changer.
     #[default]
     SeparateFiles,
@@ -251,7 +251,7 @@ pub fn grouped_by_bit(doc: &Document, plan: &[Vec<EntityId>], merge: bool) -> Ve
     files
 }
 
-/// `plan` with each file split where its tool changes, for a post that cannot change tools:
+/// `plan` with each file split where its bit changes, for a post that cannot change tools:
 /// a file for each tool in turn, run in order.
 pub fn by_tool(doc: &Document, plan: Vec<Vec<EntityId>>) -> Vec<Vec<EntityId>> {
     let tool = |id: &EntityId| &doc.toolpaths[id].tool.name;
@@ -336,7 +336,7 @@ pub fn save_files(
             if tools.len() > 1 && !post.changes_tools() {
                 return Err(format!(
                     "the toolpaths use different tools ({}) and {} does not change tools: \
-                     save them to multiple files or pick a post with tool changes",
+                     save them to multiple files or pick a post with bit changes",
                     tools.into_iter().collect::<Vec<_>>().join(", "),
                     post.name
                 ));
@@ -872,7 +872,7 @@ fn cache_base() -> Option<PathBuf> {
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
 }
 
-/// The tool database at `path`; the starter tools when there is none yet.
+/// The bit library at `path`; the starter tools when there is none yet.
 pub fn load_tools(path: &Path) -> Result<ToolDatabase, String> {
     if !path.exists() {
         return Ok(ToolDatabase::starter());
@@ -880,7 +880,7 @@ pub fn load_tools(path: &Path) -> Result<ToolDatabase, String> {
     ToolDatabase::from_json(&read(path)?).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// Where the tool database is copied before it is first changed by one shape per bit.
+/// Where the bit library is copied before it is first changed by one shape per bit.
 pub fn tools_backup_path(path: &Path) -> std::path::PathBuf {
     let mut name = path.file_name().unwrap_or_default().to_owned();
     name.push(".before-one-shape-per-bit");
@@ -895,6 +895,19 @@ pub fn load_tools_joining(path: &Path) -> Result<(ToolDatabase, Vec<String>), St
     let before = db.tools.len();
     let report = db.join_material_copies();
     if db.tools.len() != before && path.exists() {
+        if let Some(config) = path.parent() {
+            let auto = cut_craft_backup::Automatic::new(
+                config.to_path_buf(),
+                cut_craft_backup::KEEP,
+                env!("CARGO_PKG_VERSION"),
+            );
+            if let Err(e) = auto.make(
+                cut_craft_backup::Reason::BeforeLibraryChange,
+                cut_craft_backup::now(),
+            ) {
+                log::warn!("backup before joining bits: {e}");
+            }
+        }
         let backup = tools_backup_path(path);
         if !backup.exists() {
             std::fs::copy(path, &backup).map_err(|e| format!("{}: {e}", backup.display()))?;
@@ -904,7 +917,7 @@ pub fn load_tools_joining(path: &Path) -> Result<(ToolDatabase, Vec<String>), St
     Ok((db, report))
 }
 
-/// Tool database files Tool Database ▸ Import Tools reads.
+/// Bit library files Bit Library ▸ Import Bits reads.
 pub const TOOL_FILE_EXTENSIONS: [&str; 3] = ["vtdb", "tools", "json"];
 
 /// The tools in a Vectric `.vtdb`, a Fusion 360 `.tools` or a Cut Craft `.json` database.

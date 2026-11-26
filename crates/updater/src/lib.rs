@@ -36,7 +36,9 @@ use std::time::Duration;
 /// Power-Whittle organisation: for a while each release is published on both (the release
 /// workflow mirrors it), and later only on Power-Whittle. Both are read, so an update is
 /// found while the mirror is not made yet, falls behind, or once `NoobyNull`'s stops.
-pub const HOMES: [&str; 2] = ["Power-Whittle/Cut-Craft", "NoobyNull/Cut-Craft"];
+/// The Power-Whittle copy was first named `Cut-Craft`; versions that still ask for that name
+/// reach it through GitHub's redirect.
+pub const HOMES: [&str; 2] = ["Power-Whittle/PowerWhittle", "NoobyNull/Cut-Craft"];
 
 /// The newest releases of `home`, test builds among them (left out when read). Not
 /// `/releases/latest`: each computer's builds are attached as they finish, so the newest
@@ -555,14 +557,14 @@ mod tests {
         assert!(HOMES[0].starts_with("Power-Whittle/"), "{HOMES:?}");
         assert!(HOMES.contains(&"NoobyNull/Cut-Craft"));
         assert_eq!(
-            releases_url("Power-Whittle/Cut-Craft"),
-            "https://api.github.com/repos/Power-Whittle/Cut-Craft/releases?per_page=20"
+            releases_url("Power-Whittle/PowerWhittle"),
+            "https://api.github.com/repos/Power-Whittle/PowerWhittle/releases?per_page=20"
         );
     }
 
     #[test]
     fn an_update_is_found_in_whichever_repository_has_this_computer_s_newest_build() {
-        const PW: &str = "Power-Whittle/Cut-Craft";
+        const PW: &str = "Power-Whittle/PowerWhittle";
         const NN: &str = "NoobyNull/Cut-Craft";
         const LINUX_FILE: &str = "cut-craft-linux-x86_64.tar.gz";
         const WINDOWS_FILE: &str = "cut-craft-windows-x86_64.zip";

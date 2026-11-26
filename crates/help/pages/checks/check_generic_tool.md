@@ -9,9 +9,9 @@ see-also: checks_before_cutting, check_makers_figures
 
 ## What it looks for
 
-Whether each bit comes from a **maker's catalogue** in the Tool Database (it has a
+Whether each bit comes from a **maker's catalogue** in the Bit Library (it has a
 manufacturer, such as Amana or Whiteside), or is a **generic** bit like the ones Cut Craft
-starts with. It also says when a toolpath's bit is no longer in the Tool Database at all.
+starts with. It also says when a toolpath's bit is no longer in the Bit Library at all.
 
 ## Why it matters
 
@@ -21,7 +21,7 @@ starting values, and the bit in your collet may want something different.
 ## How to fix it
 
 This is a reminder, not a fault: tick it if you know your bit. To use a maker's figures,
-import the maker's tool library (**Import Tools** in the Tool Database), copy your bit into My Tools,
+import the maker's tool library (**Import Bits** in the Bit Library), copy your bit into My Bits,
 and pick it with the toolpath's **Select…**. Until then, watch the first cut with a hand
 near the stop button.
 

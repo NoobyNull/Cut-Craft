@@ -2,8 +2,8 @@
 //! cut and paste.
 
 use super::{
-    BUILT_INS, Change, CutCraftApp, EntityId, KEY_ACTION_NAMES, Key, KeyboardShortcut, LAYOUT_KEYS,
-    Modifiers, Page, Point, Screen, Shown, egui, files, gui, on_the_desktop, shortcut,
+    Change, CutCraftApp, EntityId, Key, KeyboardShortcut, Modifiers, Page, Point, Screen, Shown,
+    egui, files, on_the_desktop, shortcut,
 };
 
 impl CutCraftApp {
@@ -248,7 +248,7 @@ impl CutCraftApp {
         self.run_shortcuts(ctx);
         // Escape during a 3D handle drag cancels only the drag, staying in Transform mode
         let escape = KeyboardShortcut::new(Modifiers::NONE, Key::Escape);
-        if self.drag_3d.is_some()
+        if self.handle_drag.is_held()
             && !ctx.egui_wants_keyboard_input()
             && ctx.input_mut(|i| i.consume_shortcut(&escape))
         {
@@ -260,16 +260,17 @@ impl CutCraftApp {
             && ctx.input_mut(|i| i.consume_shortcut(&escape))
         {
             self.join_ends_forget();
-            self.status.set_message("End let go");
+            self.status
+                .set_message(&cut_craft_i18n::tr!("status-end-let-go"));
         }
         // Escape stops a preview playing (keeping what it has cut), and does nothing else
-        if self.playback.is_some()
+        if self.player.playback.is_some()
             && !ctx.egui_wants_keyboard_input()
             && ctx.input_mut(|i| i.consume_shortcut(&escape))
         {
             self.finish_playback();
             self.status
-                .set_message("Preview stopped: what it had cut is kept");
+                .set_message(&cut_craft_i18n::tr!("status-preview-stopped"));
         }
         // Escape with no form open, stepped inside a group, steps out one level
         if let Some(group) = self.doc.inside_group
@@ -322,8 +323,10 @@ impl CutCraftApp {
             }
             self.status.current_tool =
                 crate::tool_names::form_name(&self.registry, behind.id, behind.label);
-            self.status
-                .set_message(&format!("Back to {}, as you left it", behind.label));
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-back-to",
+                tool = self.status.current_tool.clone()
+            ));
             self.form = Some(behind);
             return;
         }
@@ -375,23 +378,16 @@ impl CutCraftApp {
         }
     }
 
-    /// Every action's own shortcuts: each command's, the built-ins' as the menus spell them,
-    /// the layouts', and dragging with the wheel pressed to pan.
+    /// Every action's own shortcuts: each command's, each built-in action's, and dragging with
+    /// the wheel pressed to pan.
     pub(super) fn default_bindings(&self) -> Vec<(String, shortcut::Trigger)> {
         let commands = self
             .registry
             .iter()
             .filter_map(|c| Some((c.id().to_owned(), shortcut::parse(c.meta().shortcut)?)));
-        let built_ins = self
-            .menus
-            .items()
-            .into_iter()
-            .filter(|i| BUILT_INS.contains(&i.action.as_str()))
-            .filter_map(|i| Some((i.action.clone(), shortcut::parse(&i.shortcut)?)));
-        let layouts = LAYOUT_KEYS
-            .iter()
-            .filter_map(|&(id, keys)| Some((id.to_owned(), shortcut::parse(keys)?)));
-        let keys = commands.chain(built_ins).chain(layouts);
+        let built_ins = (crate::app::built_ins::BUILT_INS.iter())
+            .filter_map(|b| Some((b.id.to_owned(), shortcut::parse(b.keys)?)));
+        let keys = commands.chain(built_ins);
         let mut bindings: Vec<_> = keys
             .map(|(id, keys)| (id, shortcut::Trigger::Key(keys)))
             .collect();
@@ -458,31 +454,18 @@ impl CutCraftApp {
         ctx.input(|i| buttons.iter().any(|&b| i.pointer.button_down(b)))
     }
 
-    /// Every action a shortcut can be set for, by id, with its name as the menus write it:
-    /// panning by dragging first, then the commands and the built-in menu items by name.
+    /// Every action a shortcut can be set for, by id, with its name: panning by dragging first,
+    /// then the commands and the built-in actions by name.
     pub(super) fn shortcut_actions(&self) -> Vec<(String, String)> {
         let mut actions: Vec<(String, String)> = vec![];
-        let named = self.menus.items();
-        let name_of = |id: &str| {
-            named
-                .iter()
-                .find(|i| i.action == id)
-                .map(|i| i.name.clone())
-                .or_else(|| {
-                    (KEY_ACTION_NAMES.iter())
-                        .find(|(a, _)| *a == id)
-                        .map(|(_, name)| (*name).to_owned())
-                })
-                .unwrap_or_else(|| gui::title_case(id))
-        };
         actions.extend(
             self.registry
                 .iter()
                 .map(|c| (c.id().to_owned(), self.tool_label(c.id()))),
         );
-        for id in BUILT_INS.iter().chain(LAYOUT_KEYS.iter().map(|(id, _)| id)) {
-            if !actions.iter().any(|(a, _)| a == id) {
-                actions.push(((*id).to_owned(), name_of(id)));
+        for b in crate::app::built_ins::BUILT_INS {
+            if !actions.iter().any(|(a, _)| a == b.id) {
+                actions.push((b.id.to_owned(), self.tool_label(b.id)));
             }
         }
         actions.sort_by(|a, b| a.1.cmp(&b.1));
@@ -495,114 +478,120 @@ impl CutCraftApp {
         actions
     }
 
-    /// The shortcut a menu shows for `id`: the first one set in Options, else the command's
-    /// own; `None` leaves the menu item's own.
+    /// The shortcut a menu shows for `id`: the first one set in Options, else the command's or
+    /// the built-in action's own; `None` leaves the menu item's own.
     pub(super) fn shortcut_text(&self, id: &str) -> Option<String> {
         match self.options.controls.shortcuts.get(id) {
             Some(set) => Some(set.first().cloned().unwrap_or_default()),
-            None => self.registry.get(id).map(|c| c.meta().shortcut.to_owned()),
+            None => (self.registry.get(id).map(|c| c.meta().shortcut))
+                .or_else(|| crate::app::built_ins::get(id).map(|b| b.keys))
+                .map(str::to_owned),
         }
     }
 
-    /// Cut, Copy, Paste, Increment and Save, Open Application Data Folder.
-    pub(super) fn clipboard_or_file_action(&mut self, ctx: &egui::Context, id: &str) {
-        match id {
-            "copy" | "cut" => {
-                self.clipboard = self
-                    .doc
-                    .selection
-                    .iter()
-                    .map(|id| self.doc.vectors[id].clone())
-                    .collect();
-                let doc = &self.doc;
-                let picked: std::collections::BTreeSet<EntityId> =
-                    doc.selection.iter().copied().collect();
-                let groups: Vec<Vec<u64>> = doc
-                    .selection
-                    .iter()
-                    .map(|&id| doc.chain_within(id, &picked))
-                    .collect();
-                self.clipboard_from = super::Copied {
-                    layers: doc.selection.iter().map(|&id| doc.layer_of(id)).collect(),
-                    job: self.job_epoch,
-                    texts: records_of(&groups, &doc.texts),
-                    names: records_of(&groups, &doc.part_names),
-                    groups,
-                };
-                self.clipboard_components = self
-                    .doc
-                    .selected_components
-                    .iter()
-                    .filter_map(|id| self.doc.components.get(id).cloned())
-                    .collect();
-                let text = serde_json::to_string(&self.clipboard).expect("paths serialize");
-                ctx.copy_text(text);
-                if id == "cut"
-                    && let Err(e) = self.apply("delete", &serde_json::json!({}))
-                {
-                    self.status.set_message(&e);
-                }
+    /// Copy, or Cut (`cut`): the selected vectors and 3D parts onto the clipboard, the
+    /// vectors as text too so they paste into another window.
+    pub(super) fn copy_selection(&mut self, ctx: &egui::Context, cut: bool) {
+        self.clipboard = self
+            .doc
+            .selection
+            .iter()
+            .map(|id| self.doc.vectors[id].clone())
+            .collect();
+        let doc = &self.doc;
+        let picked: std::collections::BTreeSet<EntityId> = doc.selection.iter().copied().collect();
+        let groups: Vec<Vec<u64>> = doc
+            .selection
+            .iter()
+            .map(|&id| doc.chain_within(id, &picked))
+            .collect();
+        self.clipboard_from = super::Copied {
+            layers: doc.selection.iter().map(|&id| doc.layer_of(id)).collect(),
+            job: self.job_epoch,
+            texts: records_of(&groups, &doc.texts),
+            names: records_of(&groups, &doc.part_names),
+            groups,
+        };
+        self.clipboard_components = self
+            .doc
+            .selected_components
+            .iter()
+            .filter_map(|id| self.doc.components.get(id).cloned())
+            .collect();
+        let text = serde_json::to_string(&self.clipboard).expect("paths serialize");
+        ctx.copy_text(text);
+        if cut && let Err(e) = self.apply("delete", &serde_json::json!({})) {
+            self.status.set_message(&e);
+        }
+    }
+
+    /// Paste and Paste in Place: pasted where they were copied from, in this job or another.
+    pub(super) fn paste_clipboard(&mut self) {
+        let mut c = Change::builder(&self.doc);
+        // a copied group pastes as a group of its own, on its layer, text still text
+        let from = &self.clipboard_from;
+        let ids = if from.groups.len() == self.clipboard.len() {
+            let paths = self.clipboard.iter().cloned().zip(from.groups.clone());
+            let shift = Some(Point::ZERO);
+            c.add_regrouped(paths.collect(), &from.texts, &from.names, shift)
+        } else {
+            self.clipboard.iter().map(|p| c.add(p.clone())).collect()
+        };
+        // on the layer it came from in this job; in another, on the current layer
+        let layers = if from.job == self.job_epoch {
+            from.layers.as_slice()
+        } else {
+            &[]
+        };
+        for (&id, layer) in ids.iter().zip(layers) {
+            if self.doc.layer(*layer).is_some() {
+                c.move_to_layer(id, *layer);
             }
-            // pasted where they were copied from, in this job or another (Paste in Place)
-            "paste" | "paste_in_place" => {
-                let mut c = Change::builder(&self.doc);
-                // a copied group pastes as a group of its own, on its layer, text still text
-                let from = &self.clipboard_from;
-                let ids = if from.groups.len() == self.clipboard.len() {
-                    let paths = self.clipboard.iter().cloned().zip(from.groups.clone());
-                    let shift = Some(Point::ZERO);
-                    c.add_regrouped(paths.collect(), &from.texts, &from.names, shift)
-                } else {
-                    self.clipboard.iter().map(|p| c.add(p.clone())).collect()
-                };
-                // on the layer it came from in this job; in another, on the current layer
-                let layers = if from.job == self.job_epoch {
-                    from.layers.as_slice()
-                } else {
-                    &[]
-                };
-                for (&id, layer) in ids.iter().zip(layers) {
-                    if self.doc.layer(*layer).is_some() {
-                        c.move_to_layer(id, *layer);
-                    }
-                }
-                c.select(ids);
-                for k in &self.clipboard_components {
-                    c.add_component(k.clone());
-                }
-                self.record(Ok(c.finish()), "Pasted");
-            }
-            "increment_and_save" => match self.session.path.clone() {
-                Some(path) => self.save_to(&files::incremented(&path, std::path::Path::exists)),
-                None => self.file_action("save_as"),
-            },
-            // the drawing as a PDF opened in the system viewer, which previews and prints it
-            // (a print window of our own, with scale and tiling, is not done)
-            "print" => {
-                let path = std::env::temp_dir().join("cut-craft-print.pdf");
-                let opened = files::export(&self.registry, "export_pdf", &self.doc, &path)
-                    .and_then(|()| {
-                        on_the_desktop();
-                        files::show_folder(&path).map_err(|e| e.to_string())
-                    });
-                if let Err(e) = opened {
-                    self.status.set_message(&format!("could not print: {e}"));
-                }
-            }
-            "open_application_data_folder" => {
-                let opened = files::config_dir()
-                    .ok_or_else(|| "no home folder".to_owned())
-                    .and_then(|dir| {
-                        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-                        on_the_desktop();
-                        files::show_folder(&dir).map_err(|e| e.to_string())
-                    });
-                if let Err(e) = opened {
-                    self.status
-                        .set_message(&format!("could not open the folder: {e}"));
-                }
-            }
-            _ => {}
+        }
+        c.select(ids);
+        for k in &self.clipboard_components {
+            c.add_component(k.clone());
+        }
+        self.record(Ok(c.finish()), "Pasted");
+    }
+
+    /// Increment and Save: saved under the next free numbered name.
+    pub(super) fn increment_and_save(&mut self) {
+        match self.session.path.clone() {
+            Some(path) => self.save_to(&files::incremented(&path, std::path::Path::exists)),
+            None => self.save_as(),
+        }
+    }
+
+    /// Print: the drawing as a PDF opened in the system viewer, which previews and prints it
+    /// (a print window of our own, with scale and tiling, is not done).
+    pub(super) fn print_drawing(&mut self) {
+        let path = std::env::temp_dir().join("cut-craft-print.pdf");
+        let opened = files::export(&self.registry, "export_pdf", &self.doc, &path).and_then(|()| {
+            on_the_desktop();
+            files::show_folder(&path).map_err(|e| e.to_string())
+        });
+        if let Err(e) = opened {
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-could-not-print",
+                error = e.clone()
+            ));
+        }
+    }
+
+    pub(super) fn open_application_data_folder(&mut self) {
+        let opened = files::config_dir()
+            .ok_or_else(|| "no home folder".to_owned())
+            .and_then(|dir| {
+                std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+                on_the_desktop();
+                files::show_folder(&dir).map_err(|e| e.to_string())
+            });
+        if let Err(e) = opened {
+            self.status.set_message(&cut_craft_i18n::tr!(
+                "status-could-not-open-folder",
+                error = e.clone()
+            ));
         }
     }
 
