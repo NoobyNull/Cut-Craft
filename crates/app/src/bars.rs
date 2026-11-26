@@ -176,6 +176,9 @@ impl Place {
     }
 }
 
+/// The action that opens the Customize Toolbars window, last on every bar's menu.
+pub const CUSTOMIZE: &str = "customize_toolbars";
+
 /// What a bar's menu says to put it back in the layout, by the layout it is in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Home {
@@ -229,6 +232,8 @@ pub fn menu(place: &Place, prefix: &str, home: Option<Home>) -> Vec<MenuItem> {
             MenuItem::with_action(home.attach_name(), &action("attach"))
         });
     }
+    menu.push(MenuItem::separator());
+    menu.push(MenuItem::with_action("Customize Toolbars...", CUSTOMIZE));
     menu
 }
 

@@ -15,6 +15,7 @@ mod check_list;
 mod command_form;
 mod commit;
 mod custom_toolbars;
+mod customize_toolbars;
 mod cutting;
 mod depth;
 mod dialog_windows;
@@ -668,6 +669,8 @@ pub(crate) struct CutCraftApp {
     canvas: canvas_layout::CanvasState,
     /// What the toolbars of your own have open.
     toolbars: custom_toolbars::ToolbarState,
+    /// View ▸ Customize Toolbars…, while it is open.
+    customize: customize_toolbars::Customize,
     /// Where the options are saved; `None` keeps them in memory (tests).
     options_path: Option<std::path::PathBuf>,
     /// Help ▸ Back Up Settings and the automatic backups ([`cut_craft_backup`]).

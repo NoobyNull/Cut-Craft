@@ -397,6 +397,7 @@ impl CutCraftApp {
         self.clearing_window(ctx);
         self.stl_window(ctx);
         self.options_window(ctx);
+        self.customize_window(ctx);
         self.settings_3d_window(ctx);
         self.tool_search(ctx);
         self.guide_window(ctx);

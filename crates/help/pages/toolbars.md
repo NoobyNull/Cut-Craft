@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-26
-see-also: favourites, interface_layout, settings
+see-also: favourites, customize_toolbars, interface_layout, settings
 ---
 
 # Toolbars of Your Own
@@ -63,6 +63,11 @@ Attached to the layout, a toolbar shows in every [window layout](help:interface_
 Right-click its tab, Rail button or Classic heading for the same menu.
 
 ## Changing a toolbar
+
+**View ▸ Customize Toolbars...** (also at the foot of every toolbar's menu) shows every tool
+beside every toolbar, with buttons to add, take off, move, make, rename and delete. See
+[Customize Toolbars](help:customize_toolbars). Or, on the toolbar itself:
+
 
 - **Drag** an item along its toolbar to move it; a line shows where it will go.
 - Or right-click an item and pick **Move Earlier** or **Move Later**.

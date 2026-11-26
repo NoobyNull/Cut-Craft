@@ -72,12 +72,12 @@ fn only_a_floating_bar_locks_and_turns() {
 fn a_bar_with_a_home_detaches_from_it_and_attaches_back() {
     let mut place = Place::Layout;
     let menu = menu(&place, "bar:", Some(Home::Header));
-    assert_eq!(menu.last().unwrap().name, "Detach");
-    assert!(act(&mut place, menu.last().unwrap()));
+    assert_eq!(home_item(&menu).name, "Detach");
+    assert!(act(&mut place, home_item(&menu)));
     assert!(matches!(place, Place::Floating(_)), "detached, it floats");
     let menu = super::menu(&place, "bar:", Some(Home::Header));
-    assert_eq!(menu.last().unwrap().name, "Attach to Header");
-    assert!(act(&mut place, menu.last().unwrap()));
+    assert_eq!(home_item(&menu).name, "Attach to Header");
+    assert!(act(&mut place, home_item(&menu)));
     assert_eq!(place, Place::Layout);
     // each layout names its own home
     let snapped = Place::Snapped { side: Side::Top };
@@ -94,7 +94,13 @@ fn a_bar_with_a_home_detaches_from_it_and_attaches_back() {
 }
 
 fn menu_last(place: &Place, home: Home) -> String {
-    menu(place, "bar:", Some(home)).last().unwrap().name.clone()
+    home_item(&menu(place, "bar:", Some(home))).name.clone()
+}
+
+/// A bar menu's Detach or Attach, before Customize Toolbars at its foot.
+fn home_item(menu: &[MenuItem]) -> &MenuItem {
+    assert_eq!(menu.last().unwrap().action, CUSTOMIZE);
+    &menu[menu.len() - 3]
 }
 
 #[test]

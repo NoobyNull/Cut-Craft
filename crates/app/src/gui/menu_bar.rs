@@ -341,6 +341,7 @@ impl MenuSystem {
                                 ),
                             ],
                         ),
+                        b("customize_toolbars"),
                     ],
                 ),
                 menu(

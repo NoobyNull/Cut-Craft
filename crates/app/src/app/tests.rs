@@ -13,6 +13,7 @@ mod calculating;
 mod canvas;
 mod collisions;
 mod custom_toolbars;
+mod customize_toolbars;
 mod did_you_know;
 mod drawing;
 mod favourites_bar;

@@ -303,6 +303,7 @@ tools-job-size-and-position = Job Size and Position
 tools-show-toolpaths-tab = Show Toolpaths Tab
 tools-design-layout = Design Layout
 tools-machining-layout = Machining Layout
+tools-customize-toolbars = Customize Toolbars
 tools-zoom-to-drawing = Zoom to Drawing
 tools-preview-toolpath = Preview Toolpath
 tools-preview-all-toolpaths = Preview All Toolpaths
