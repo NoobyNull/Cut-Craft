@@ -22,7 +22,7 @@ the [PowerWhittle timeline](https://github.com/orgs/Power-Whittle/projects/1) an
 
 | Week | Dates | Focus |
 | --- | --- | --- |
-| 1 | 25 Nov to 1 Dec | Land or close the open PRs; Matthew's decisions (rename by 1 Dec) |
+| 1 | 25 Nov to 1 Dec | Land or close the open PRs; Matthew's decisions (rename decided 26 Nov) |
 | 2 | 2 to 8 Dec | cargo-deny, usvg, flaky test, keep-out zone, run-context, settings restore |
 | 3 | 9 to 15 Dec | Walk the beginner path on Windows and Linux, help on every step, app struct and toolpath ids |
 | 4 | 16 to 22 Dec | Fix the snags; main green from 16 Dec; feature freeze 18 Dec; release candidate 21 Dec |
@@ -117,12 +117,12 @@ credits list is generated and checked by CI.
 | --- | --- | --- |
 | 5.1 | PolyForm Strict plus the any-use grant, generated credits folder, Help ▸ Credits window | Done (#684) |
 | 5.2 | Move off the one MPL dependency (usvg 0.37 to 0.45); add missing licence fields on two rotary crates | Not started (with 1.3); 2 to 5 Dec |
-| 5.3 | Update README, About text and landing page to the new terms | Not started; 9 to 12 Dec, after the rename decision |
+| 5.3 | Update README, About text and landing page to the new terms and name | Not started; 12 to 16 Dec, after 5.4 |
+| 5.4 | Rename the app to PowerWhittle: Matthew decided on 2026-11-26 that 1.0 launches under that name | Waiting on Matthew (build go); 2 to 15 Dec |
 
 ## After 1.0
 
-- **Rename** with a clean repo. Open question: whether the rename is the 1.0 launch itself.
-  Settle it before 5.1, since the licence text names the product.
+- **Clean repo** for PowerWhittle. When it happens is still open; the name itself changes at 1.0 (row 5.4).
 - **Paid subscription add-ons** with online activation and a grace period.
 - **Online catalogue** (#597 to #603) and gadget network access (#587).
 - **Auto Toolpath** (#595).
