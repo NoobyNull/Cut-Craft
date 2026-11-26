@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "fmt-export-as-grayscale-bitmap"
 description = "Export the model as a grayscale bitmap"
 version.workspace = true

@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-notes"
 description = "Notes"
 version.workspace = true

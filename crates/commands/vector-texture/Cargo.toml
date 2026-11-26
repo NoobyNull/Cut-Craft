@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-vector-texture"
 description = "Create Vector Texture"
 version.workspace = true

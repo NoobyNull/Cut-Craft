@@ -1,8 +1,10 @@
 [package]
+publish.workspace = true
 name = "cmd-rotary-machining-toolpath"
 description = "4-Axis Rotary Machining"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

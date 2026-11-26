@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-26
 see-also: relief_from_photo, open_gadgets_folder, settings, language, confirmation_choices, web_api
 ---
 

@@ -1,0 +1,46 @@
+# cargo-deny: what Cut Craft may depend on. CI runs `cargo deny check` (.github/workflows/lint.yml).
+
+[graph]
+all-features = true
+
+[advisories]
+# RustSec: security holes, unsound code, yanked and unmaintained crates
+yanked = "deny"
+unmaintained = "all"
+# Each entry: no maintained replacement yet, and no known hole. Revisit when one appears.
+ignore = [
+  { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained; used for dates only, no fix yet" },
+  { id = "RUSTSEC-2024-0436", reason = "paste unmaintained; a macro inside the depth add-on's ML crates" },
+  { id = "RUSTSEC-2026-0206", reason = "rustybuzz unmaintained; via usvg 0.37 in the SVG importer" },
+  { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained; no maintained drop-in yet" },
+  { id = "RUSTSEC-2026-0370", reason = "zvariant unmaintained; Linux accessibility and keyring" },
+  { id = "RUSTSEC-2026-0371", reason = "zbus_names unmaintained; Linux accessibility and keyring" },
+  { id = "RUSTSEC-2026-0372", reason = "zvariant_derive unmaintained; Linux accessibility and keyring" },
+]
+
+[licenses]
+# Fine to ship inside PolyForm Noncommercial 1.0.0 and inside MIT or Apache-2.0: all
+# permissive, none makes our own code open. GPL/LGPL appear only as an "or" choice.
+allow = [
+  "MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause", "BSD-3-Clause", "ISC", "Zlib", "zlib-acknowledgement",
+  "0BSD", "BSL-1.0", "Unlicense", "Unicode-3.0", "CDLA-Permissive-2.0",
+  "OFL-1.1", "Ubuntu-font-1.0",
+  # weak copyleft per file (usvg 0.37 only): changes to those files must stay open
+  "MPL-2.0",
+]
+confidence-threshold = 0.9
+unused-allowed-license = "allow"
+
+[licenses.private]
+# our own crates (publish = false) are under LICENSE, PolyForm Noncommercial
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

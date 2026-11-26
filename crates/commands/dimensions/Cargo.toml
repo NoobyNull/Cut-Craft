@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-dimensions"
 description = "Dimensions"
 version.workspace = true

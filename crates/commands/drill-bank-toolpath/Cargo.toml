@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-drill-bank-toolpath"
 description = "Drill Bank Toolpath"
 version.workspace = true

@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "fmt-create-job-sheet"
 description = "Create Job Sheet: the job's setup and toolpaths as an HTML page"
 version.workspace = true

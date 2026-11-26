@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-emboss"
 description = "Emboss Component"
 version.workspace = true

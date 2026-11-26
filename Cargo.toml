@@ -6,6 +6,8 @@ members = ["crates/app", "crates/help", "crates/i18n", "crates/core", "crates/sc
 version = "0.7.6"
 edition = "2024"
 license-file = "LICENSE"
+# Nothing here goes to crates.io; it also tells cargo-deny these are our own crates
+publish = false
 
 [workspace.dependencies]
 cut-craft-core = { path = "crates/core" }

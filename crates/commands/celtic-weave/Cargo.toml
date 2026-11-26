@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-celtic-weave"
 description = "Celtic Weave Creator"
 version.workspace = true

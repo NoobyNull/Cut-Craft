@@ -323,7 +323,7 @@ fn a_mouse_button_set_as_a_shortcut_runs_its_action() {
 }
 
 #[test]
-fn setting_a_shortcut_takes_the_next_button_and_asks_before_taking_anothers() {
+fn setting_a_shortcut_takes_the_next_button_and_asks_before_taking_another_buttons() {
     use super::shortcuts_page::Edit;
     let mut h = Harness::new();
     let at = view_middle(&h);

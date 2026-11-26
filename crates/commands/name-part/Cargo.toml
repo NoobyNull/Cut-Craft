@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-name-part"
 description = "Name Part"
 version.workspace = true

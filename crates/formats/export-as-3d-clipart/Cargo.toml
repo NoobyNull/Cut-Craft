@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "fmt-export-as-3d-clipart"
 description = "Cut Craft 3D clipart: export components and import them again"
 version.workspace = true

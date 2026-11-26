@@ -50,6 +50,8 @@ jobs:
         run: |
           useradd -m builder
           chown -R builder .
+          # the package names must split into separate words
+          # shellcheck disable=SC2046
           pacman -S --noconfirm --needed $(source PKGBUILD; echo "${depends[@]}" "${makedepends[@]}")
           su builder -c 'makepkg --noconfirm && makepkg --printsrcinfo > .SRCINFO'
           namcap PKGBUILD

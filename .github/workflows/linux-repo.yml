@@ -74,9 +74,11 @@ jobs:
             echo "::error::The REPO_SIGNING_KEY secret is not set; run scripts/make-repo-key."
             exit 1
           fi
-          export GNUPGHOME=$(mktemp -d)
+          GNUPGHOME=$(mktemp -d)
+          export GNUPGHOME
           printf '%s\n' "$REPO_SIGNING_KEY" | gpg --batch --import
-          export REPO_KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')
+          REPO_KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')
+          export REPO_KEY_ID
           export BASE_URL="https://noobynull.github.io/Cut-Craft"
           scripts/linux-repo packages site
       - uses: actions/upload-pages-artifact@v3

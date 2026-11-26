@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-select"
 description = "Select All Vectors / Open Vectors / Duplicate Vectors and Unselect All"
 version.workspace = true

@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-text-on-a-curve"
 description = "Text on a Curve"
 version.workspace = true

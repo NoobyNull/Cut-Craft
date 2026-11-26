@@ -101,6 +101,19 @@ are copied into `crates/i18n/locales/en/settings.ftl`, keyed by their English wo
 change a form, write that file again: `cargo test -p cut-craft --bin cut-craft
 write_settings_words -- --ignored` (a test fails until you do).
 
+## Lint checks
+
+The Lint workflow (`.github/workflows/lint.yml`) runs four more checks on every pull request:
+
+- **cargo-deny** (`deny.toml`): every library's licence must suit PolyForm Noncommercial and a
+  later MIT or Apache-2.0, every crate must come from crates.io, and no crate may have a RustSec
+  security advisory. It also runs daily, since advisories appear without any change here. A
+  new crate of ours needs `publish.workspace = true` and `license-file.workspace = true`. An
+  advisory with no fix goes in `deny.toml`'s `ignore`, with its reason.
+- **cargo-machete**: no crate lists a dependency it never uses.
+- **typos** (`_typos.toml`): common misspellings. Add a real word it mistakes for a typo there.
+- **actionlint**: mistakes in the workflow files and their shell scripts.
+
 ## Test suites by area
 
 Every test belongs to exactly one suite, by area of the app: Core geometry, Toolpath

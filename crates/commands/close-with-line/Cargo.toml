@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-close-with-line"
 description = "Close With a Line"
 version.workspace = true
@@ -7,8 +8,6 @@ license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true
-schemars.workspace = true
-serde.workspace = true
 
 [dev-dependencies]
 cut-craft-core = { workspace = true, features = ["testing"] }

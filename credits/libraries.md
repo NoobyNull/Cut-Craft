@@ -3037,7 +3037,7 @@ SOFTWARE.
 
 ## MIT License
 
-Used by: [form_urlencoded 1.2.2](https://crates.io/crates/form_urlencoded)
+Used by: [form_urlencoded 1.2.3](https://crates.io/crates/form_urlencoded)
 
 ```
 Copyright (c) 2013-2016 The rust-url developers
@@ -3070,7 +3070,7 @@ DEALINGS IN THE SOFTWARE.
 
 ## MIT License
 
-Used by: [data-url 0.3.2](https://crates.io/crates/data-url), [idna 1.1.0](https://crates.io/crates/idna), [percent-encoding 2.3.2](https://crates.io/crates/percent-encoding), [url 2.5.8](https://crates.io/crates/url)
+Used by: [data-url 0.3.2](https://crates.io/crates/data-url), [idna 1.1.0](https://crates.io/crates/idna), [percent-encoding 2.3.2](https://crates.io/crates/percent-encoding), [url 2.5.9](https://crates.io/crates/url)
 
 ```
 Copyright (c) 2013-2025 The rust-url developers
@@ -3264,6 +3264,33 @@ DEALINGS IN THE SOFTWARE.
 
 ## MIT License
 
+Used by: [libsqlite3-sys 0.39.1](https://crates.io/crates/libsqlite3-sys), [rusqlite 0.41.1](https://crates.io/crates/rusqlite)
+
+```
+Copyright (c) 2014 The rusqlite developers
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+```
+
+## MIT License
+
 Used by: [nom 7.1.3](https://crates.io/crates/nom)
 
 ```
@@ -3347,33 +3374,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
-
-```
-
-## MIT License
-
-Used by: [libsqlite3-sys 0.30.1](https://crates.io/crates/libsqlite3-sys), [rusqlite 0.32.1](https://crates.io/crates/rusqlite)
-
-```
-Copyright (c) 2014-2021 The rusqlite developers
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
 
 ```
 
@@ -3966,7 +3966,7 @@ DEALINGS IN THE SOFTWARE.
 
 ## MIT License
 
-Used by: [hashbrown 0.14.5](https://crates.io/crates/hashbrown), [hashbrown 0.16.1](https://crates.io/crates/hashbrown), [hashbrown 0.17.1](https://crates.io/crates/hashbrown)
+Used by: [hashbrown 0.16.1](https://crates.io/crates/hashbrown), [hashbrown 0.17.1](https://crates.io/crates/hashbrown)
 
 ```
 Copyright (c) 2016 Amanieu d'Antras
@@ -8278,7 +8278,7 @@ DEALINGS IN THE SOFTWARE.
 
 ## MIT License
 
-Used by: [adler2 2.0.1](https://crates.io/crates/adler2), [async-channel 2.5.0](https://crates.io/crates/async-channel), [async-executor 1.14.1](https://crates.io/crates/async-executor), [async-fs 2.2.0](https://crates.io/crates/async-fs), [async-io 2.6.0](https://crates.io/crates/async-io), [async-lock 3.5.0](https://crates.io/crates/async-lock), [async-process 2.5.0](https://crates.io/crates/async-process), [async-signal 0.2.14](https://crates.io/crates/async-signal), [async-task 4.7.1](https://crates.io/crates/async-task), [async-trait 0.1.92](https://crates.io/crates/async-trait), [atomic-waker 1.1.2](https://crates.io/crates/atomic-waker), [blocking 1.7.0](https://crates.io/crates/blocking), [concurrent-queue 2.5.0](https://crates.io/crates/concurrent-queue), [daachorse 3.0.3](https://crates.io/crates/daachorse), [dary_heap 0.3.9](https://crates.io/crates/dary_heap), [displaydoc 0.2.7](https://crates.io/crates/displaydoc), [dyn-clone 1.0.20](https://crates.io/crates/dyn-clone), [endi 1.1.1](https://crates.io/crates/endi), [enumn 0.1.14](https://crates.io/crates/enumn), [erased-serde 0.4.11](https://crates.io/crates/erased-serde), [event-listener-strategy 0.5.4](https://crates.io/crates/event-listener-strategy), [event-listener 5.4.2](https://crates.io/crates/event-listener), [fastrand 2.5.0](https://crates.io/crates/fastrand), [futures-lite 2.6.1](https://crates.io/crates/futures-lite), [glam 0.30.10](https://crates.io/crates/glam), [inventory 0.3.25](https://crates.io/crates/inventory), [itoa 1.0.18](https://crates.io/crates/itoa), [khronos-egl 6.0.0](https://crates.io/crates/khronos-egl), [linux-raw-sys 0.12.1](https://crates.io/crates/linux-raw-sys), [linux-raw-sys 0.4.15](https://crates.io/crates/linux-raw-sys), [minimal-lexical 0.2.1](https://crates.io/crates/minimal-lexical), [monostate-impl 0.1.18](https://crates.io/crates/monostate-impl), [monostate 0.1.18](https://crates.io/crates/monostate), [once_cell 1.21.4](https://crates.io/crates/once_cell), [oneshot 0.1.13](https://crates.io/crates/oneshot), [ordered-stream 0.2.0](https://crates.io/crates/ordered-stream), [parking 2.2.1](https://crates.io/crates/parking), [paste 1.0.15](https://crates.io/crates/paste), [pastey 0.2.3](https://crates.io/crates/pastey), [pin-project-lite 0.2.17](https://crates.io/crates/pin-project-lite), [piper 0.2.5](https://crates.io/crates/piper), [polling 3.11.0](https://crates.io/crates/polling), [prettyplease 0.3.0](https://crates.io/crates/prettyplease), [proc-macro-crate 3.5.0](https://crates.io/crates/proc-macro-crate), [proc-macro2 1.0.107](https://crates.io/crates/proc-macro2), [quote 1.0.47](https://crates.io/crates/quote), [ref-cast-impl 1.0.27](https://crates.io/crates/ref-cast-impl), [ref-cast 1.0.27](https://crates.io/crates/ref-cast), [rustc-hash 1.1.0](https://crates.io/crates/rustc-hash), [rustix 0.38.44](https://crates.io/crates/rustix), [rustix 1.1.5](https://crates.io/crates/rustix), [rustversion 1.0.23](https://crates.io/crates/rustversion), [semver 1.0.28](https://crates.io/crates/semver), [seq-macro 0.3.6](https://crates.io/crates/seq-macro), [serde 1.0.229](https://crates.io/crates/serde), [serde_core 1.0.229](https://crates.io/crates/serde_core), [serde_derive 1.0.229](https://crates.io/crates/serde_derive), [serde_derive_internals 0.30.0](https://crates.io/crates/serde_derive_internals), [serde_ignored 0.1.14](https://crates.io/crates/serde_ignored), [serde_json 1.0.154](https://crates.io/crates/serde_json), [serde_repr 0.1.21](https://crates.io/crates/serde_repr), [smol_str 0.2.2](https://crates.io/crates/smol_str), [syn 2.0.119](https://crates.io/crates/syn), [syn 3.0.9](https://crates.io/crates/syn), [thiserror-impl 1.0.69](https://crates.io/crates/thiserror-impl), [thiserror-impl 2.0.21](https://crates.io/crates/thiserror-impl), [thiserror 1.0.69](https://crates.io/crates/thiserror), [thiserror 2.0.21](https://crates.io/crates/thiserror), [typed-path 0.13.0](https://crates.io/crates/typed-path), [typeid 1.0.3](https://crates.io/crates/typeid), [typetag-impl 0.2.23](https://crates.io/crates/typetag-impl), [typetag 0.2.23](https://crates.io/crates/typetag), [unic-langid-impl 0.9.6](https://crates.io/crates/unic-langid-impl), [unic-langid 0.9.6](https://crates.io/crates/unic-langid), [unicode-ident 1.0.27](https://crates.io/crates/unicode-ident), [utf8-zero 0.8.1](https://crates.io/crates/utf8-zero), [x11-dl 2.21.0](https://crates.io/crates/x11-dl), [xdg-home 1.3.0](https://crates.io/crates/xdg-home), [zbus-lockstep-macros 0.5.2](https://crates.io/crates/zbus-lockstep-macros), [zbus-lockstep 0.5.2](https://crates.io/crates/zbus-lockstep), [zbus_names 3.0.0](https://crates.io/crates/zbus_names), [zmij 1.0.23](https://crates.io/crates/zmij), [zvariant_utils 2.1.0](https://crates.io/crates/zvariant_utils), [zvariant_utils 4.2.0](https://crates.io/crates/zvariant_utils)
+Used by: [adler2 2.0.1](https://crates.io/crates/adler2), [async-channel 2.5.0](https://crates.io/crates/async-channel), [async-executor 1.14.1](https://crates.io/crates/async-executor), [async-fs 2.2.0](https://crates.io/crates/async-fs), [async-io 2.6.0](https://crates.io/crates/async-io), [async-lock 3.5.0](https://crates.io/crates/async-lock), [async-process 2.5.0](https://crates.io/crates/async-process), [async-signal 0.2.14](https://crates.io/crates/async-signal), [async-task 4.7.1](https://crates.io/crates/async-task), [async-trait 0.1.92](https://crates.io/crates/async-trait), [atomic-waker 1.1.2](https://crates.io/crates/atomic-waker), [blocking 1.7.0](https://crates.io/crates/blocking), [concurrent-queue 2.5.0](https://crates.io/crates/concurrent-queue), [daachorse 3.0.3](https://crates.io/crates/daachorse), [dary_heap 0.3.9](https://crates.io/crates/dary_heap), [displaydoc 0.2.7](https://crates.io/crates/displaydoc), [dyn-clone 1.0.20](https://crates.io/crates/dyn-clone), [endi 1.1.1](https://crates.io/crates/endi), [enumn 0.1.14](https://crates.io/crates/enumn), [erased-serde 0.4.11](https://crates.io/crates/erased-serde), [event-listener-strategy 0.5.4](https://crates.io/crates/event-listener-strategy), [event-listener 5.4.2](https://crates.io/crates/event-listener), [fastrand 2.5.0](https://crates.io/crates/fastrand), [futures-lite 2.6.1](https://crates.io/crates/futures-lite), [glam 0.30.10](https://crates.io/crates/glam), [inventory 0.3.25](https://crates.io/crates/inventory), [itoa 1.0.18](https://crates.io/crates/itoa), [khronos-egl 6.0.0](https://crates.io/crates/khronos-egl), [linux-raw-sys 0.12.1](https://crates.io/crates/linux-raw-sys), [linux-raw-sys 0.4.15](https://crates.io/crates/linux-raw-sys), [minimal-lexical 0.2.1](https://crates.io/crates/minimal-lexical), [monostate-impl 0.1.18](https://crates.io/crates/monostate-impl), [monostate 0.1.18](https://crates.io/crates/monostate), [once_cell 1.21.4](https://crates.io/crates/once_cell), [oneshot 0.1.13](https://crates.io/crates/oneshot), [ordered-stream 0.2.0](https://crates.io/crates/ordered-stream), [parking 2.2.1](https://crates.io/crates/parking), [paste 1.0.15](https://crates.io/crates/paste), [pastey 0.2.3](https://crates.io/crates/pastey), [pin-project-lite 0.2.17](https://crates.io/crates/pin-project-lite), [piper 0.2.5](https://crates.io/crates/piper), [polling 3.11.0](https://crates.io/crates/polling), [prettyplease 0.3.0](https://crates.io/crates/prettyplease), [proc-macro-crate 3.5.0](https://crates.io/crates/proc-macro-crate), [proc-macro2 1.0.107](https://crates.io/crates/proc-macro2), [quote 1.0.47](https://crates.io/crates/quote), [ref-cast-impl 1.0.27](https://crates.io/crates/ref-cast-impl), [ref-cast 1.0.27](https://crates.io/crates/ref-cast), [rustc-hash 1.1.0](https://crates.io/crates/rustc-hash), [rustix 0.38.44](https://crates.io/crates/rustix), [rustix 1.1.6](https://crates.io/crates/rustix), [rustversion 1.0.23](https://crates.io/crates/rustversion), [semver 1.0.28](https://crates.io/crates/semver), [seq-macro 0.3.6](https://crates.io/crates/seq-macro), [serde 1.0.229](https://crates.io/crates/serde), [serde_core 1.0.229](https://crates.io/crates/serde_core), [serde_derive 1.0.229](https://crates.io/crates/serde_derive), [serde_derive_internals 0.30.0](https://crates.io/crates/serde_derive_internals), [serde_ignored 0.1.14](https://crates.io/crates/serde_ignored), [serde_json 1.0.154](https://crates.io/crates/serde_json), [serde_repr 0.1.21](https://crates.io/crates/serde_repr), [smol_str 0.2.2](https://crates.io/crates/smol_str), [syn 2.0.119](https://crates.io/crates/syn), [syn 3.0.9](https://crates.io/crates/syn), [thiserror-impl 1.0.69](https://crates.io/crates/thiserror-impl), [thiserror-impl 2.0.21](https://crates.io/crates/thiserror-impl), [thiserror 1.0.69](https://crates.io/crates/thiserror), [thiserror 2.0.21](https://crates.io/crates/thiserror), [typed-path 0.13.0](https://crates.io/crates/typed-path), [typeid 1.0.3](https://crates.io/crates/typeid), [typetag-impl 0.2.23](https://crates.io/crates/typetag-impl), [typetag 0.2.23](https://crates.io/crates/typetag), [unic-langid-impl 0.9.6](https://crates.io/crates/unic-langid-impl), [unic-langid 0.9.6](https://crates.io/crates/unic-langid), [unicode-ident 1.0.27](https://crates.io/crates/unicode-ident), [utf8-zero 0.8.1](https://crates.io/crates/utf8-zero), [x11-dl 2.21.0](https://crates.io/crates/x11-dl), [xdg-home 1.3.0](https://crates.io/crates/xdg-home), [zbus-lockstep-macros 0.5.2](https://crates.io/crates/zbus-lockstep-macros), [zbus-lockstep 0.5.2](https://crates.io/crates/zbus-lockstep), [zbus_names 3.0.0](https://crates.io/crates/zbus_names), [zmij 1.0.23](https://crates.io/crates/zmij), [zvariant_utils 2.1.0](https://crates.io/crates/zvariant_utils), [zvariant_utils 4.2.0](https://crates.io/crates/zvariant_utils)
 
 ```
 Permission is hereby granted, free of charge, to any
@@ -8434,7 +8434,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ## MIT License
 
-Used by: [pulldown-cmark 0.13.5](https://crates.io/crates/pulldown-cmark)
+Used by: [pulldown-cmark 0.13.6](https://crates.io/crates/pulldown-cmark)
 
 ```
 The MIT License
@@ -8517,37 +8517,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-```
-
-## MIT License
-
-Used by: [zip 2.6.1](https://crates.io/crates/zip)
-
-```
-The MIT License (MIT)
-
-Copyright (c) 2014 Mathijs van de Nes
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-Some files in the "tests/data" subdirectory of this repository are under other
-licences; see files named LICENSE.*.txt for details.
 ```
 
 ## MIT License
@@ -9709,7 +9678,7 @@ THE SOFTWARE.
 
 ## MIT License
 
-Used by: [hashlink 0.9.1](https://crates.io/crates/hashlink)
+Used by: [hashlink 0.12.2](https://crates.io/crates/hashlink)
 
 ```
 This work is derived in part from the `linked-hash-map` crate, Copyright (c)
@@ -10423,6 +10392,33 @@ SPDX-License-Identifier: Unicode-3.0
 
 Portions of ICU4X may have been adapted from ICU4C and/or ICU4J.
 ICU 1.8.1 to ICU 57.1 © 1995-2016 International Business Machines Corporation and others.
+
+```
+
+## zlib License
+
+Used by: [zlib-rs 0.6.8](https://crates.io/crates/zlib-rs)
+
+```
+(C) 2024 Trifecta Tech Foundation 
+
+This software is provided 'as-is', without any express or implied
+warranty. In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+
+3. This notice may not be removed or altered from any source distribution.
 
 ```
 

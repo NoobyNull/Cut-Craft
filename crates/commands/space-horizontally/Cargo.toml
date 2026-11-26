@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-space-horizontally"
 description = "Space Horizontally"
 version.workspace = true

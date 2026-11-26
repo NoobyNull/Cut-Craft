@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cut-craft-updater"
 description = "Help > Check for Updates: finds a newer release on GitHub, downloads and checks it, and swaps it in"
 version.workspace = true
@@ -19,7 +20,7 @@ tar = "0.4"
 toml = { version = "0.9", default-features = false, features = ["parse", "serde"] }
 # GitHub over HTTPS (rustls, no OpenSSL to install), trusting the computer's certificates
 ureq = { version = "3", features = ["platform-verifier"] }
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 
 [lints]
 workspace = true

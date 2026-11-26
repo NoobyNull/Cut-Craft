@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cut-craft-border-tile"
 description = "Generated border tiles: a depth map, its photo and its recipe kept together in the Library"
 version.workspace = true

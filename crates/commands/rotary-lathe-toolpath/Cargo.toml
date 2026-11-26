@@ -1,8 +1,10 @@
 [package]
+publish.workspace = true
 name = "cmd-rotary-lathe-toolpath"
 description = "Rotary Lathe"
 version.workspace = true
 edition.workspace = true
+license-file.workspace = true
 
 [dependencies]
 cut-craft-core.workspace = true

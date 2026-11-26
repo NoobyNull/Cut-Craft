@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-convert-span"
 description = "Node editing's Convert Span to Line / Arc / Bezier"
 version.workspace = true

@@ -1,4 +1,5 @@
 [package]
+publish.workspace = true
 name = "cmd-thread-milling-toolpath"
 description = "Thread Milling Toolpath"
 version.workspace = true
