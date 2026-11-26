@@ -453,8 +453,12 @@ impl CutCraftApp {
             WindowLayout::Ribbon => self.ribbon_layout(ui),
             WindowLayout::Canvas => self.canvas_layout(ui),
         }
-        // in every layout, over the drawing
-        self.floating_toolbars(ui.ctx());
+        // in every layout, beside or over the drawing (Canvas places its own, round its
+        // palette)
+        if self.options.general.layout != WindowLayout::Canvas {
+            let mut room = super::bars::Room::new(ui.available_rect_before_wrap());
+            self.placed_bars(ui, &mut room, 0.0);
+        }
         self.toolbar_rename_window(ui.ctx());
         self.toolbar_changes(ui.ctx());
     }

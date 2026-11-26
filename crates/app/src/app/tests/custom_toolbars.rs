@@ -2,8 +2,9 @@
 //! layout, opened, floated and renamed.
 
 use super::*;
+use crate::bars::{Floating, Place, Side};
 use crate::custom_toolbars::Item;
-use crate::options::{CanvasFlyouts, WindowLayout};
+use crate::options::{CanvasFlyouts, NewBars, SnappedBars, WindowLayout};
 
 /// Clicks the tab named `text` in the row of tabs holding the toolbar's (the menu bar
 /// has a Model too).
@@ -27,7 +28,10 @@ fn click_text(h: &mut Harness, text: &str) {
 /// A job in `layout` with a toolbar made from Draw Circle's right-click menu.
 fn with_toolbar(layout: WindowLayout) -> Harness {
     let mut h = Harness::new();
-    h.given_options(|o| o.general.layout = layout);
+    h.given_options(|o| {
+        o.general.layout = layout;
+        o.general.new_bars = NewBars::InTheLayout;
+    });
     h.choose(
         |app| app.row_menu("draw_circle"),
         &["Add to Toolbar", "New Toolbar"],
@@ -90,6 +94,7 @@ fn a_group_on_a_toolbar_opens_its_tools() {
     h.given_options(|o| {
         o.general.layout = WindowLayout::Rail;
         o.general.canvas_flyouts = CanvasFlyouts::OnClick;
+        o.general.new_bars = NewBars::InTheLayout;
     });
     h.invoke("toolbar:new:group:Create Vectors");
     h.show_rail_toolbar(0);
@@ -125,34 +130,136 @@ fn the_canvas_header_has_its_tab_too() {
     assert!(h.open_canvas_group().is_none());
 }
 
+/// Where a bar's grip is: the dots at its start, inside its frame.
+fn grip(bar: egui::Rect) -> egui::Pos2 {
+    egui::pos2(bar.left() + 7.0, bar.center().y)
+}
+
+fn floating(h: &Harness, n: usize) -> Floating {
+    match h.options().toolbars[n].place {
+        Place::Floating(floating) => floating,
+        place => panic!("not floating: {place:?}"),
+    }
+}
+
 #[test]
-fn a_floating_toolbar_leaves_its_tab_and_stays_where_it_is_dragged() {
+fn a_new_toolbar_floats_over_the_drawing_with_no_tab() {
+    let mut h = Harness::new();
+    h.given_options(|o| o.general.layout = WindowLayout::Ribbon);
+    h.choose(
+        |app| app.row_menu("draw_circle"),
+        &["Add to Toolbar", "New Toolbar"],
+    );
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(matches!(h.options().toolbars[0].place, Place::Floating(_)));
+    assert_eq!(h.ribbon_toolbar(), None, "no tab for it");
+    assert!(h.text_at("My Tools").is_none(), "its grip has no words");
+    assert!(h.toolbar_bar_rect(0).is_some(), "it is over the drawing");
+}
+
+#[test]
+fn a_floating_toolbar_goes_where_its_grip_is_dragged_and_stays_when_locked() {
     let mut h = with_toolbar(WindowLayout::Ribbon);
-    h.invoke("toolbar:float:0:true");
+    h.invoke("toolbar:place:0:float");
     h.frame(vec![]);
     h.frame(vec![]);
     assert_eq!(h.ribbon_toolbar(), None, "no tab for it now");
-    let name = h.text_at("My Tools").expect("its name over the drawing");
-    let [x, y] = h.options().toolbars[0].at.expect("where it is kept");
-    h.drag(name, name + egui::vec2(-150.0, 120.0));
+    let bar = h.toolbar_bar_rect(0).expect("over the drawing");
+    h.drag(grip(bar), grip(bar) + egui::vec2(150.0, 120.0));
     h.frame(vec![]);
-    let [x2, y2] = h.options().toolbars[0].at.expect("where it was left");
+    let moved = h.toolbar_bar_rect(0).expect("still there");
+    let by = moved.left_top() - bar.left_top();
     assert!(
-        (x2 - x + 150.0).abs() < 2.0 && (y2 - y - 120.0).abs() < 2.0,
-        "followed the pointer: {x},{y} to {x2},{y2}"
+        (by.x - 150.0).abs() < 2.0 && (by.y - 120.0).abs() < 2.0,
+        "followed the pointer: {by:?}"
     );
-    h.invoke("toolbar:float:0:false");
+    assert!(floating(&h, 0).offset.is_some(), "kept where it was left");
+    // a drag on a tool does not move the bar
+    let circle = moved.right_center() - egui::vec2(20.0, 0.0);
+    h.drag(circle, circle + egui::vec2(100.0, 100.0));
+    h.frame(vec![]);
+    assert_eq!(h.toolbar_bar_rect(0), Some(moved), "a tool is not a handle");
+    // locked, its grip leaves it where it is
+    h.invoke("toolbar:place:0:lock");
+    h.frame(vec![]);
+    h.drag(grip(moved), grip(moved) + egui::vec2(-100.0, 50.0));
+    h.frame(vec![]);
+    assert_eq!(h.toolbar_bar_rect(0), Some(moved), "locked");
+    h.invoke("toolbar:place:0:attach");
     h.frame(vec![]);
     h.frame(vec![]);
     assert!(h.text_at("My Tools").is_some(), "its tab is back");
-    assert!(!h.options().toolbars[0].floating);
+    assert_eq!(h.options().toolbars[0].place, Place::Layout);
+}
+
+#[test]
+fn a_turned_toolbar_runs_down() {
+    let mut h = with_toolbar(WindowLayout::Ribbon);
+    h.invoke("toolbar:add:0:tool:draw_rectangle");
+    h.invoke("toolbar:place:0:float");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let across = h.toolbar_bar_rect(0).expect("floating");
+    assert!(across.width() > across.height());
+    h.invoke("toolbar:place:0:turn");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let down = h.toolbar_bar_rect(0).expect("floating");
+    assert!(down.height() > down.width(), "{down:?}");
+}
+
+#[test]
+fn a_snapped_toolbar_pushes_the_drawing_over_or_lies_over_its_edge() {
+    let mut h = with_toolbar(WindowLayout::Rail);
+    h.frame(vec![]);
+    let before = h.view_rect();
+    h.invoke("toolbar:place:0:snap:right");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let pushed = h.view_rect();
+    assert!(
+        pushed.right() < before.right() - 10.0,
+        "the drawing made room"
+    );
+    assert!(
+        h.toolbar_bar_rect(0).is_none(),
+        "its own strip, not over the drawing"
+    );
+    assert_eq!(
+        h.options().toolbars[0].place,
+        Place::Snapped { side: Side::Right }
+    );
+    // Over the Drawing: nothing changes size, the bar lies along the drawing's right edge
+    h.given_options(|o| o.general.snapped_bars = SnappedBars::OverTheDrawing);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_eq!(h.view_rect(), before, "the drawing keeps its size");
+    let bar = h.toolbar_bar_rect(0).expect("over the drawing");
+    assert!(
+        bar.left() < before.right() && bar.right() >= before.right() - 2.0,
+        "along the drawing's right edge: {bar:?} {before:?}"
+    );
+}
+
+#[test]
+fn old_floating_toolbars_still_float_where_they_were() {
+    let mut h = Harness::new();
+    let old =
+        r#"[{"name":"Signs","items":[{"tool":"draw_circle"}],"floating":true,"at":[300.0,200.0]}]"#;
+    let toolbars: Vec<crate::custom_toolbars::Toolbar> = serde_json::from_str(old).unwrap();
+    h.given_options(|o| o.toolbars = toolbars);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let bar = h.toolbar_bar_rect(0).expect("floating");
+    assert_eq!(bar.left_top(), egui::pos2(300.0, 200.0));
 }
 
 #[test]
 fn rename_asks_for_the_name_and_delete_takes_it_away() {
     let mut h = with_toolbar(WindowLayout::Ribbon);
     h.choose(
-        |app| crate::custom_toolbars::toolbar_menu(&app.options.toolbars, 0),
+        |app| crate::custom_toolbars::toolbar_menu(&app.options.toolbars, 0, app.bar_home()),
         &["Rename Toolbar"],
     );
     h.frame(vec![]);
@@ -170,7 +277,7 @@ fn rename_asks_for_the_name_and_delete_takes_it_away() {
     assert_eq!(h.options().toolbars[0].name, "My Tools Shop");
     assert!(!h.renaming_toolbar(), "the box closed");
     h.choose(
-        |app| crate::custom_toolbars::toolbar_menu(&app.options.toolbars, 0),
+        |app| crate::custom_toolbars::toolbar_menu(&app.options.toolbars, 0, app.bar_home()),
         &["Delete Toolbar"],
     );
     h.frame(vec![]);
