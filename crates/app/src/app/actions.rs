@@ -100,10 +100,8 @@ impl CutCraftApp {
             toolbars: super::custom_toolbars::ToolbarState::default(),
             options_path: None,
             backups: super::backups::Backups::default(),
-            words_path: None,
             job_times_path: None,
-            speller: None,
-            speller_looked: false,
+            spelling: super::spelling::Spelling::default(),
             session: Session::default(),
             selected_toolpath: None,
             selected_group: None,
@@ -486,20 +484,9 @@ impl CutCraftApp {
             .and_then(std::path::Path::parent)
     }
 
-    /// Draw Text's dictionary: found once (Hunspell's, from the dictionaries folder or the
-    /// system), with the user's own words.
+    /// Draw Text's dictionary: see [`super::spelling::Spelling::speller`].
     fn speller(&mut self) -> Option<&mut cut_craft_core::spell::Speller> {
-        if !self.speller_looked {
-            self.speller_looked = true;
-            let words = self
-                .words_path
-                .as_ref()
-                .and_then(|p| std::fs::read_to_string(p).ok())
-                .unwrap_or_default();
-            self.speller =
-                cut_craft_core::spell::Speller::find().map(|s| s.with_user_words(words.lines()));
-        }
-        self.speller.as_mut()
+        self.spelling.speller()
     }
 
     /// Draw Text's spelling: the words of its text not in the dictionary, each with its
@@ -579,20 +566,8 @@ impl CutCraftApp {
 
     /// Adds `word` to the user's own words (or takes it off), kept in the words file.
     pub(super) fn user_word(&mut self, word: &str, add: bool) {
-        let Some(speller) = self.speller() else {
-            return;
-        };
-        if add {
-            speller.add_word(word);
-        } else {
-            speller.remove_word(word);
-        }
-        let words: Vec<String> = speller.user_words().iter().cloned().collect();
-        if let Some(path) = &self.words_path
-            && let Err(e) = std::fs::write(path, words.join("\n"))
-        {
-            self.status
-                .set_message(&crate::messages::cannot_keep_words(path, &e));
+        if let Err(e) = self.spelling.user_word(word, add) {
+            self.status.set_message(&e);
         }
     }
 

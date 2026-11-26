@@ -100,6 +100,7 @@ mod send;
 mod setup_material;
 mod shortcuts_page;
 mod snapping;
+mod spelling;
 mod split_views;
 mod surfacing;
 mod tabs;
@@ -711,14 +712,11 @@ pub(crate) struct CutCraftApp {
     options_path: Option<std::path::PathBuf>,
     /// Help ▸ Back Up Settings and the automatic backups ([`cut_craft_backup`]).
     backups: backups::Backups,
-    /// The user's own spelling words, one a line; none in tests.
-    words_path: Option<std::path::PathBuf>,
     /// Where how long each kind of slow job took is kept between runs
     /// ([`cut_craft_core::eta`]); `None` in tests.
     job_times_path: Option<std::path::PathBuf>,
-    /// Draw Text's dictionary, looked for once when spelling is first wanted.
-    speller: Option<cut_craft_core::spell::Speller>,
-    speller_looked: bool,
+    /// Draw Text's dictionary and the user's own words.
+    spelling: spelling::Spelling,
     session: Session,
     /// Toolpath picked in the Toolpaths panel.
     selected_toolpath: Option<EntityId>,
