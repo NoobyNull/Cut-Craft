@@ -142,7 +142,7 @@ impl CutCraftApp {
                 .map(|(&i, _)| i)
                 .collect()
         } else {
-            self.selected_toolpath.into_iter().collect()
+            self.toolpath_pick.picked().into_iter().collect()
         };
         if let Some(path) = toolpath_template_dialog()
             .set_file_name(format!("toolpaths.{}", files::TOOLPATH_TEMPLATE_EXTENSION))
@@ -668,11 +668,9 @@ impl CutCraftApp {
             self.doc.job = job;
         }
         (self.camera, self.view_tool) = (None, None);
-        (
-            self.selected_toolpath,
-            self.preview.material,
-            self.preview.coarse,
-        ) = (None, None, None);
+        // a new job starts with no toolpath picked, not even one Ctrl-clicked in the old one
+        self.toolpath_pick = super::toolpath_pick::ToolpathPick::default();
+        (self.preview.material, self.preview.coarse) = (None, None);
         (self.meshes.surface_gpu, self.meshes.turned) = (None, None);
         self.meshes.fine.clear();
         self.meshes.rough.clear();

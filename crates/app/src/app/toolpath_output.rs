@@ -68,7 +68,7 @@ impl CutCraftApp {
             doc: &self.doc,
             machine: self.machines.active(),
             posts: &self.posts,
-            selected_toolpath: self.selected_toolpath,
+            selected_toolpath: self.toolpath_pick.picked(),
             selected_group: self.selected_group.as_deref(),
             job_path: self.session.path.as_deref(),
             tolerances: &self.options.toolpaths,
@@ -102,7 +102,7 @@ impl CutCraftApp {
 
     /// Recalculate Toolpath: the selected one, worked out again.
     pub(super) fn recalculate_selected(&mut self) {
-        if let Some(id) = self.selected_toolpath {
+        if let Some(id) = self.toolpath_pick.picked() {
             self.recalculate_in_background(vec![id], "Toolpath recalculated", |_| {});
         }
     }
@@ -121,7 +121,7 @@ impl CutCraftApp {
 
     /// The toolpath list's button: the Delete Toolpath command on the selected one.
     pub(super) fn delete_selected_toolpath(&mut self) {
-        if let Some(id) = self.selected_toolpath.take()
+        if let Some(id) = self.toolpath_pick.take()
             && let Err(e) = self.apply("delete_toolpath", &serde_json::json!({ "toolpath": id }))
         {
             self.status.set_message(&e);

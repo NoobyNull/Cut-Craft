@@ -93,7 +93,7 @@ impl CutCraftApp {
         let Some(id) = self.immediate_output_toolpath() else {
             return;
         };
-        self.selected_toolpath = Some(id);
+        self.toolpath_pick.set(Some(id));
         self.selected_group = None;
         let form = self.immediate_output.clone();
         self.save_toolpaths(&form);

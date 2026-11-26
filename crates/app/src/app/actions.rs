@@ -71,8 +71,6 @@ impl CutCraftApp {
             design_unfold: None,
             toolpath_subtab: 0,
             toolpath_unfold: None,
-            more_toolpaths: std::collections::BTreeSet::new(),
-            toolpath_list_clicked: false,
             form_behind: None,
             ask_material: true,
             list_height: None,
@@ -103,7 +101,7 @@ impl CutCraftApp {
             job_times_path: None,
             spelling: super::spelling::Spelling::default(),
             session: Session::default(),
-            selected_toolpath: None,
+            toolpath_pick: super::toolpath_pick::ToolpathPick::default(),
             selected_group: None,
             immediate_output: SaveForm {
                 mode: files::SaveMode::Selected,
@@ -349,8 +347,7 @@ impl CutCraftApp {
         }
         // Delete just after picking a toolpath in the list deletes that toolpath
         if id == "delete"
-            && self.toolpath_list_clicked
-            && self.selected_toolpath.is_some()
+            && self.toolpath_pick.del_deletes_it()
             && self.pages.shown(Page::Toolpaths) != Shown::Hidden
         {
             self.invoke(ctx, "delete_toolpath");

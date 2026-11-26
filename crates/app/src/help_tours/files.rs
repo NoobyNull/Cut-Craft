@@ -46,7 +46,8 @@ pub(super) const TOURS: &[Tour] = &[
                           file. It keeps the settings and the bits, not the shapes.",
                 setup: |app, _| {
                     app.form = None;
-                    app.selected_toolpath = app.doc.toolpaths.keys().next().copied();
+                    app.toolpath_pick
+                        .set(app.doc.toolpaths.keys().next().copied());
                     app.pages.set_pinned(Page::Toolpaths, true);
                 },
                 mark: Mark::At("tool:save_selected_toolpath_as_template"),

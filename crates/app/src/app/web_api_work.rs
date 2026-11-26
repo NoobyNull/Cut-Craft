@@ -79,7 +79,7 @@ impl CutCraftApp {
             },
             Call::State => now(self
                 .job_needed()
-                .map(|()| job::state(&self.doc, self.selected_toolpath))),
+                .map(|()| job::state(&self.doc, self.toolpath_pick.picked()))),
             Call::Toolpaths => self.web_toolpaths(),
             Call::Posts => now(self.web_posts()),
             Call::Progress => now(Ok(self.web_progress())),
@@ -493,13 +493,13 @@ impl CutCraftApp {
     /// Runs `f` with the call's toolpath or group picked in the toolpath list, as the form's
     /// Selected mode reads it, then picks back what was.
     fn with_picked<R>(&mut self, gcode: &Gcode, f: impl FnOnce(&mut Self) -> R) -> R {
-        let was = (self.selected_toolpath, self.selected_group.clone());
+        let was = (self.toolpath_pick.clone(), self.selected_group.clone());
         if gcode.toolpath.is_some() || gcode.group.is_some() {
-            self.selected_toolpath = gcode.toolpath.map(EntityId);
+            self.toolpath_pick.only(gcode.toolpath.map(EntityId));
             self.selected_group.clone_from(&gcode.group);
         }
         let made = f(self);
-        (self.selected_toolpath, self.selected_group) = was;
+        (self.toolpath_pick, self.selected_group) = was;
         made
     }
 
@@ -698,7 +698,7 @@ impl CutCraftApp {
         }
         Ok(json!({
             "message": self.status.message,
-            "state": job::state(&self.doc, self.selected_toolpath),
+            "state": job::state(&self.doc, self.toolpath_pick.picked()),
         }))
     }
 
@@ -733,7 +733,7 @@ impl CutCraftApp {
             }
             Ok(json!({
                 "message": app.status.message,
-                "state": job::state(&app.doc, app.selected_toolpath),
+                "state": job::state(&app.doc, app.toolpath_pick.picked()),
             }))
         }))
     }

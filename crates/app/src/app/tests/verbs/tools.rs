@@ -131,12 +131,12 @@ impl Harness {
 
     /// Picks toolpath `id` in the Toolpaths list.
     pub(in super::super) fn select_toolpath(&mut self, id: EntityId) {
-        self.app.selected_toolpath = Some(id);
+        self.app.toolpath_pick.set(Some(id));
     }
 
     /// The toolpath picked in the Toolpaths list, if one is.
     pub(in super::super) fn selected_toolpath(&self) -> Option<EntityId> {
-        self.app.selected_toolpath
+        self.app.toolpath_pick.picked()
     }
 
     /// The toolpath the open form edits, if it edits one rather than making a new one.

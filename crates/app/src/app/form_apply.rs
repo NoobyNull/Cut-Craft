@@ -246,8 +246,8 @@ impl CutCraftApp {
             .into_iter()
             .take(if templates { 4 } else { 2 })
             {
-                let available =
-                    id == "hide_toolpath" && self.selected_toolpath.is_some() || self.available(id);
+                let available = id == "hide_toolpath" && self.toolpath_pick.picked().is_some()
+                    || self.available(id);
                 let button = self.icon_button(icon, "", tip, edge);
                 if ui
                     .add_enabled(available, button)
@@ -261,7 +261,8 @@ impl CutCraftApp {
         match clicked {
             Some("hide_toolpath") => {
                 if let Some((id, t)) = self
-                    .selected_toolpath
+                    .toolpath_pick
+                    .picked()
                     .and_then(|id| Some((id, self.doc.toolpaths.get(&id)?)))
                 {
                     let params = serde_json::json!({ "toolpath": id, "name": t.name, "visible": !t.visible });
@@ -348,7 +349,8 @@ impl CutCraftApp {
     /// Edit Toolpath: the selected toolpath's form, filled in with its settings.
     pub(super) fn edit_toolpath(&mut self) {
         let Some((id, toolpath)) = self
-            .selected_toolpath
+            .toolpath_pick
+            .picked()
             .and_then(|id| Some((id, self.doc.toolpaths.get(&id)?.clone())))
         else {
             return;
