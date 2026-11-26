@@ -78,6 +78,7 @@ mod mac;
 mod machine_fit;
 mod machine_setup;
 mod meshes_3d;
+mod motion_3d;
 mod node_editing;
 mod notes_panel;
 mod options_apply;
@@ -902,22 +903,13 @@ pub(crate) struct CutCraftApp {
     gpu_3d: Option<view3d::gpu::Gpu>,
     /// What the 3D view keeps of what it draws, each with what it was made from.
     meshes: meshes_3d::Meshes3d,
-    /// When the 3D view last moved (input time, seconds).
-    moved_3d: f64,
-    /// While Auto-rotate spins the 3D view: when it last turned it (input time, seconds).
-    spinning_3d: Option<f64>,
+    /// How the 3D view is moving: when it last moved, Auto-rotate, and its detail.
+    motion_3d: motion_3d::Motion3d,
     /// The picked components' outlines the 3D view draws (job coordinates, closed), kept
     /// with what they were traced for: the components and the document's revision.
     picked_outline: Option<PickedOutline>,
-    /// Picks the 3D view's detail while it moves from how quickly frames come (Options ▸
-    /// Adjust detail to keep the view smooth).
-    pacer: crate::frame_rate::Pacer,
     /// How briskly a calculation is going, for the status bar's Crawl / Walk / Run / Sprint.
     gauge: cut_craft_core::work::Gauge,
-    /// The detail the 3D view draws at this frame, and whether it is moving; the frame
-    /// (`egui::Context::cumulative_pass_nr`) that was judged.
-    detail_3d: (crate::options::Detail, bool),
-    paced_pass: u64,
     orbit: view3d::Orbit,
     framing: view3d::Framing,
     /// Where the 3D view last drew its view cube.

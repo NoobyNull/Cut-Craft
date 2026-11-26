@@ -153,7 +153,7 @@ impl CutCraftApp {
             split: self.split,
             orbit: self.orbit,
             framing: self.framing,
-            spinning: self.spinning_3d,
+            spinning: self.motion_3d.spin(),
             set_aside: None,
         };
         let mut capture = Capture {
@@ -177,7 +177,7 @@ impl CutCraftApp {
         self.view = View::ThreeD;
         self.orbit = orbit;
         self.framing = self.framing.fitted();
-        self.spinning_3d = None;
+        self.motion_3d.stop_spin();
         if picture.preview == Shown::Before
             && (self.preview.material.is_some() || self.player.playback.is_some())
         {
@@ -198,7 +198,7 @@ impl CutCraftApp {
         self.split = was.split;
         self.orbit = was.orbit;
         self.framing = was.framing;
-        self.spinning_3d = was.spinning;
+        self.motion_3d.set_spin(was.spinning);
         if let Some((simulation, playback)) = was.set_aside {
             self.preview.material = simulation;
             self.player.playback = playback;

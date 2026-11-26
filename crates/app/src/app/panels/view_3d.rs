@@ -327,8 +327,8 @@ impl CutCraftApp {
                     let settings = &self.options.space_mouse;
                     (self.orbit, self.framing) =
                         moved(view, (translate, rotate), seconds, settings, rotation);
-                    self.moved_3d = ctx.input(|i| i.time);
-                    self.spinning_3d = None;
+                    self.motion_3d.moved(ctx.input(|i| i.time));
+                    self.motion_3d.stop_spin();
                 }
                 Input::Button {
                     number,
@@ -361,7 +361,7 @@ impl CutCraftApp {
             if ui.small_button(label).clicked() {
                 self.orbit = orbit;
                 self.framing = self.framing.fitted();
-                self.spinning_3d = None;
+                self.motion_3d.stop_spin();
             }
         }
         if ui.small_button(tr!("panels-fit")).clicked() {
@@ -390,15 +390,16 @@ impl CutCraftApp {
     /// vertical, to see cuts that the lighting or perspective hides, with its speed beside it
     /// while it spins. Any drag in the view, the view cube or a 3D mouse stops it.
     pub(super) fn auto_rotate_buttons(&mut self, ui: &mut egui::Ui) {
-        let spinning = self.spinning_3d.is_some();
+        let spinning = self.motion_3d.spinning();
         if ui
             .selectable_label(spinning, tr!("panels-auto-rotate"))
             .on_hover_text(tr!("panels-turn-the-job-round-and"))
             .clicked()
         {
-            self.spinning_3d = (!spinning).then(|| ui.input(|i| i.time));
+            self.motion_3d
+                .set_spin((!spinning).then(|| ui.input(|i| i.time)));
         }
-        if self.spinning_3d.is_none() {
+        if !self.motion_3d.spinning() {
             return;
         }
         let mut speed = self.options.view_3d.spin_speed();
@@ -419,10 +420,10 @@ impl CutCraftApp {
     /// Turns the 3D view on while Auto-rotate spins it, and asks for the next frame: a flat
     /// job about its vertical, a rotary job round its cylinder's axis.
     pub(super) fn spin_3d(&mut self, ctx: &egui::Context) {
-        let Some(last) = self.spinning_3d else {
+        let now = ctx.input(|i| i.time);
+        let Some(turned) = self.motion_3d.spun(now) else {
             return;
         };
-        let now = ctx.input(|i| i.time);
         // a rotary job drawn wrapped turns round its cylinder's axis, a flat one on the spot
         let axis = match self.doc.job.rotary.filter(|_| self.display.auto_wrapping) {
             Some(r) if r.along == cut_craft_core::document::Along::X => {
@@ -432,8 +433,7 @@ impl CutCraftApp {
             None => cut_craft_core::glam::DVec3::Z,
         };
         let speed = self.options.view_3d.spin_speed();
-        self.orbit = self.orbit.spun_about(axis, now - last, speed);
-        self.spinning_3d = Some(now);
+        self.orbit = self.orbit.spun_about(axis, turned, speed);
         ctx.request_repaint();
     }
 
@@ -571,7 +571,7 @@ impl CutCraftApp {
         let hovered = pointed(on_cube.hover_pos());
         // any drag in the view or on the cube, or a click on the cube, stops Auto-rotate
         if response.dragged() || on_cube.dragged() || on_cube.clicked() {
-            self.spinning_3d = None;
+            self.motion_3d.stop_spin();
         }
         self.spin_3d(ui.ctx());
         if on_cube.dragged() {
@@ -607,7 +607,7 @@ impl CutCraftApp {
         let fit_now = response.hovered() && fit_key;
         self.double_click_3d(ui, &response, fit, drawing.is_none(), fit_now);
         if response.dragged() || on_cube.dragged() || before != (self.orbit, self.framing) {
-            self.moved_3d = ui.input(|i| i.time);
+            self.motion_3d.moved(ui.input(|i| i.time));
         }
         self.pace_3d(ui.ctx());
         self.paint_3d(ui, area);
@@ -711,7 +711,7 @@ impl CutCraftApp {
         look: view3d::Look,
         fit: egui::Rect,
     ) -> egui::Mesh {
-        let since = ui.input(|i| i.time) - self.moved_3d;
+        let since = self.motion_3d.since_moved(ui.input(|i| i.time));
         let simplify = self.options.view_3d.simplify_while_moving;
         let settle = self.options.view_3d.settle();
         if self.player.playback.is_none() && (!simplify || since >= settle) {
@@ -958,7 +958,7 @@ impl CutCraftApp {
     pub(in super::super) fn moving_cells(&self) -> usize {
         let view = &self.options.performance;
         if view.adjust_to_frame_rate {
-            self.detail_3d.0.min(view.still_detail).cells()
+            self.motion_3d.detail().0.min(view.still_detail).cells()
         } else {
             view.moving_cells()
         }
@@ -969,7 +969,7 @@ impl CutCraftApp {
     pub(in super::super) fn turning_cells(&self) -> usize {
         let view = &self.options.performance;
         if view.adjust_to_frame_rate {
-            self.detail_3d.0.min(view.still_detail).cells()
+            self.motion_3d.detail().0.min(view.still_detail).cells()
         } else {
             view.still_cells()
         }
@@ -979,34 +979,29 @@ impl CutCraftApp {
     /// controller sees the view as moving while it turns, a handle drags or a preview
     /// plays, and for the settle time after. Asks for a frame once still, to draw finely.
     pub(super) fn pace_3d(&mut self, ctx: &egui::Context) {
-        let pass = ctx.cumulative_pass_nr();
-        if self.paced_pass == pass {
-            return;
-        }
-        self.paced_pass = pass;
         let (now, seconds) = ctx.input(|i| (i.time, f64::from(i.unstable_dt)));
         let speed = &self.options.performance;
-        let settle = self.options.view_3d.settle();
-        let (still, fps) = (speed.still_detail, speed.fps_wanted());
-        let since = now - self.moved_3d;
-        let moving = since < settle
-            || (self.player.playing && self.player.playback.is_some())
-            || self.handle_drag.is_setting_height()
-            || self.handle_drag.is_held();
-        let level = self.pacer.frame(seconds, moving, still, fps);
-        self.detail_3d = (level, moving);
-        if moving && level < still {
-            ctx.request_repaint_after(std::time::Duration::from_secs_f64(
-                (settle - since).max(0.0) + 0.01,
-            ));
+        let frame = super::super::motion_3d::Frame {
+            pass: ctx.cumulative_pass_nr(),
+            now,
+            seconds,
+            busy: (self.player.playing && self.player.playback.is_some())
+                || self.handle_drag.is_setting_height()
+                || self.handle_drag.is_held(),
+            settle: self.options.view_3d.settle(),
+            still: speed.still_detail,
+            fps: speed.fps_wanted(),
+        };
+        if let Some(wait) = self.motion_3d.judge(&frame) {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(wait));
         }
     }
 
     /// The status bar's note of the 3D view's detail and frames a second (Options ▸ Show
     /// detail and frame rate in the status bar).
     pub(in super::super) fn frame_rate_note(&self) -> String {
-        let (level, moving) = self.detail_3d;
-        match self.pacer.fps().filter(|_| moving) {
+        let (level, _) = self.motion_3d.detail();
+        match self.motion_3d.fps() {
             Some(fps) => format!("3D detail: {} · {fps:.0} frames/s", level.name()),
             None => format!("3D detail: {}", level.name()),
         }

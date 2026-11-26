@@ -215,7 +215,7 @@ impl Harness {
 
     /// The 3D view's detail now, and whether it is the coarser one used while turning.
     pub(in super::super) fn detail_3d(&self) -> (crate::options::Detail, bool) {
-        self.app.detail_3d
+        self.app.motion_3d.detail()
     }
 
     /// The cells a side the 3D view draws with while it turns.
