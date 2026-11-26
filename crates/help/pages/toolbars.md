@@ -50,7 +50,9 @@ a row of dots at its start with no words: point at it to see the toolbar's name.
 
 **Options ▸ General ▸ Bars snapped to a side** picks what a snapped toolbar does to the
 drawing: **Push the drawing over** (it makes room, so nothing is hidden) or **Over the
-drawing** (the toolbar lies over the drawing's edge and nothing changes size).
+drawing** (the toolbar lies over the drawing's edge and nothing changes size). Over the
+drawing, a toolbar stays under the view's own bar (2D / 3D, sheet, snapping), and toolbars
+on sides next to each other never lie on top of one another.
 **Options ▸ General ▸ New toolbars start** picks whether a new toolbar floats or goes in the
 layout.
 
