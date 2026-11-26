@@ -59,12 +59,16 @@ impl Harness {
 
     /// Zooms the 2D view by `factor` about the screen point `at`, as the wheel does.
     pub(in super::super) fn zoom_2d_about(&mut self, at: Pos2, factor: f32) {
-        self.app.camera = self.app.view_transform.map(|t| t.zoomed_about(at, factor));
+        self.app.camera = self
+            .app
+            .views_drawn
+            .transform()
+            .map(|t| t.zoomed_about(at, factor));
     }
 
     /// Where the 2D view's area starts on screen.
     pub(in super::super) fn view_2d_corner(&self) -> Pos2 {
-        self.app.view_2d_at.expect("the 2D view is drawn")
+        self.app.views_drawn.at_2d().expect("the 2D view is drawn")
     }
 
     /// Shows the ribbon (or Canvas palette) tab named `name`.
@@ -109,13 +113,17 @@ impl Harness {
 
     /// The 2D view's area on screen.
     pub(in super::super) fn view_2d_area(&self) -> Rect {
-        self.app.view_area.expect("the 2D view was drawn")
+        self.app
+            .views_drawn
+            .area_2d()
+            .expect("the 2D view was drawn")
     }
 
     /// How many screen points a millimetre is in the 2D view.
     pub(in super::super) fn zoom_2d(&self) -> f32 {
         self.app
-            .view_transform
+            .views_drawn
+            .transform()
             .expect("the 2D view was drawn")
             .scale
     }
@@ -219,12 +227,18 @@ impl Harness {
 
     /// How the 2D view maps the job to the screen, as last drawn.
     pub(in super::super) fn view_2d_transform(&self) -> ViewTransform {
-        self.app.view_transform.expect("the 2D view was drawn")
+        self.app
+            .views_drawn
+            .transform()
+            .expect("the 2D view was drawn")
     }
 
     /// The 3D view's area on screen.
     pub(in super::super) fn view_3d_area(&self) -> Rect {
-        self.app.view_3d_area.expect("the 3D view is drawn")
+        self.app
+            .views_drawn
+            .area_3d()
+            .expect("the 3D view is drawn")
     }
 
     /// How the 3D view is panned and zoomed.

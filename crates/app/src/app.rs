@@ -124,6 +124,7 @@ mod units_ask;
 mod updates;
 mod view_modes;
 mod views;
+mod views_drawn;
 mod web_api;
 mod web_api_work;
 
@@ -634,20 +635,14 @@ pub(crate) struct CutCraftApp {
     form: Option<OpenForm>,
     /// Trace Bitmap's trace window, while its form is open.
     trace_view: Option<trace_window::TraceView>,
-    /// How the 2D view mapped the job last frame.
-    view_transform: Option<ViewTransform>,
-    /// Where the 2D view was on screen last frame.
-    view_area: Option<egui::Rect>,
-    /// Where the 3D view was last drawn, for the sculpting brush's wheel.
-    view_3d_area: Option<egui::Rect>,
+    /// Where the 2D and 3D views were drawn last frame, and how the 2D view mapped the job.
+    views_drawn: views_drawn::ViewsDrawn,
     /// View ▸ Save Shaded Image: the file the 3D view's picture goes to, until the window's
     /// picture it is cut from is asked for; then what saving it said, for the status bar.
     shaded_image: Option<std::path::PathBuf>,
     shaded_saved: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// The user's zoom and pan; `None` fits the job to the view.
     camera: Option<ViewTransform>,
-    /// Where the 2D view's top left corner was on screen last frame, to move `camera` with it.
-    view_2d_at: Option<egui::Pos2>,
     view_tool: Option<ViewTool>,
     /// The Design and Toolpaths pages: pinned open, or hidden to a side tab.
     pages: Pages,

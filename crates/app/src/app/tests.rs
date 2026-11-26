@@ -300,7 +300,8 @@ impl Harness {
     /// Screen position of a job coordinate in the 2D view.
     fn at(&self, x: f64, y: f64) -> Pos2 {
         self.app
-            .view_transform
+            .views_drawn
+            .transform()
             .expect("the 2D view has been drawn")
             .to_screen(Point::new(x, y))
     }
@@ -524,7 +525,8 @@ fn icon_set() -> std::collections::HashSet<String> {
 /// The middle of the 2D view on screen.
 fn view_middle(h: &Harness) -> Pos2 {
     h.app
-        .view_area
+        .views_drawn
+        .area_2d()
         .expect("the 2D view has been drawn")
         .center()
 }

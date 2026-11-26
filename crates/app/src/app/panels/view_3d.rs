@@ -516,7 +516,7 @@ impl CutCraftApp {
         ui.horizontal(|ui| self.view_3d_buttons(ui));
         let (area, response) =
             ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
-        self.view_3d_area = Some(area);
+        self.views_drawn.drawn_3d(area);
         // the ViewCube over the view's corner, so the view does not see its clicks
         let font = egui::TextStyle::Small.resolve(ui.style());
         let cube = view3d::ViewCube::new(area, ui.painter(), &font, ui.spacing().item_spacing.x);

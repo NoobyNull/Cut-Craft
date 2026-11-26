@@ -510,7 +510,8 @@ impl CutCraftApp {
     /// Asks for the window's picture once the 3D view has been drawn for Save Shaded Image;
     /// the 3D view's part of it is saved when it comes.
     pub(super) fn ask_for_shaded_image(&mut self, ctx: &egui::Context) {
-        let (Some(path), Some(area)) = (self.shaded_image.take(), self.view_3d_area) else {
+        let (Some(path), Some(area)) = (self.shaded_image.take(), self.views_drawn.area_3d())
+        else {
             return;
         };
         let (saved, ctx2) = (std::sync::Arc::clone(&self.shaded_saved), ctx.clone());

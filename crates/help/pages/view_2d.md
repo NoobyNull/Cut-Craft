@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-26
 see-also: view_3d, pan, zoom_box, zoom_to_job, keyboard_shortcuts, interface_layout, job_setup, settings
 icon: view/2d_view.png
 ---

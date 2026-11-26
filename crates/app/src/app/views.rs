@@ -412,7 +412,8 @@ impl CutCraftApp {
             Screen::Start => {
                 egui::Panel::left("start_page").show(ui, |ui| self.start_page(ui));
                 egui::CentralPanel::default().show(ui, Self::splash);
-                (self.view_transform, self.cursor) = (None, None);
+                self.views_drawn.forget_2d();
+                self.cursor = None;
                 return;
             }
             Screen::NewJob => {
@@ -684,7 +685,7 @@ impl CutCraftApp {
     /// Zoom to Selection: the picked shapes fill the 2D view.
     pub(super) fn zoom_selected(&mut self, ctx: &egui::Context) {
         let margin = ctx.global_style().spacing.interact_size.y;
-        match (self.doc.selection_bounds(), self.view_area) {
+        match (self.doc.selection_bounds(), self.views_drawn.area_2d()) {
             (Some(bounds), Some(area)) if bounds.size().max_element() > 0.0 => {
                 self.camera = Some(ViewTransform::fit(area, margin, bounds));
             }
