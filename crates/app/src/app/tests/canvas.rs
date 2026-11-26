@@ -262,3 +262,21 @@ fn the_palette_is_a_bar_its_grip_moves_snaps_and_turns() {
         "beside the palette, over the drawing"
     );
 }
+
+/// A left-click on a shape while the view's right-click menu is open shuts the menu
+/// (issue #783, seen in this layout).
+#[test]
+fn clicking_a_shape_while_the_right_click_menu_is_open_closes_it() {
+    let mut h = canvas();
+    h.rectangle(10.0, 10.0, 40.0, 40.0);
+    h.right_click(h.at(150.0, 150.0));
+    assert!(
+        h.text_at("Report a Bug Here…").is_some(),
+        "the menu is open"
+    );
+    h.click(h.at(10.0, 30.0), Modifiers::NONE);
+    assert!(
+        h.text_at("Report a Bug Here…").is_none(),
+        "the menu is shut"
+    );
+}
