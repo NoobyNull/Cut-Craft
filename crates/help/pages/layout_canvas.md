@@ -36,8 +36,9 @@ and type part of its name. The tools that match drop down under it: click one, o
 The palette is a bar like your [own toolbars](help:toolbars). The row of dots at its top is
 its **grip**:
 
-- **Drag the dots** to move the palette anywhere over the drawing. Dragging a group's icon
-  never moves it.
+- **Drag the dots** to move a floating palette anywhere over the drawing. A snapped palette
+  stays on its side: pick **Float** from its menu first. Dragging a group's icon never moves
+  it.
 - **Right-click the dots** to **Snap to Top**, **Bottom**, **Left** or **Right**, to
   **Float** it again, to **Lock Position** so a stray drag leaves it where it is, or to
   **Turn** it so it runs across instead of down.

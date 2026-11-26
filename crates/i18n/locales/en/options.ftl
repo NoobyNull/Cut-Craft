@@ -27,3 +27,5 @@ options-unsigned-remembered = { $count ->
 options-unsigned-forget = Forget These Answers
     .tooltip = Unsigned gadgets and add-ons ask again before they next run. This happens at once, without Apply.
 options-unsigned-forgotten = Unsigned gadgets and add-ons will ask again before they next run.
+options-customize-toolbars = Customize Toolbars...
+    .tooltip = Every tool beside your toolbars and Favourites: add, take off, move, make, rename and delete

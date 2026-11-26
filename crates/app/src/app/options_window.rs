@@ -90,6 +90,7 @@ impl CutCraftApp {
         let mut web_api_pressed = None;
         let unsigned_remembered = self.trust.remembered();
         let mut forget_unsigned = false;
+        let mut customize = false;
         let mut job_edited = false;
         let (icons, materials) = (&self.icons, &self.materials);
         let show_advanced = &mut self.options_editor.show_advanced;
@@ -139,6 +140,9 @@ impl CutCraftApp {
                     }
                 });
                 egui::ScrollArea::vertical().show(ui, |ui| {
+                    if category.key == "general" {
+                        customize = customize_section(ui);
+                    }
                     let one = std::slice::from_ref(category);
                     if crate::form::show(ui, one, &mut values, &look) {
                         changed = serde_json::from_value::<crate::options::Options>(values).ok();
@@ -220,6 +224,9 @@ impl CutCraftApp {
         if forget_unsigned {
             self.trust.forget();
             self.status.set_message(&tr!("options-unsigned-forgotten"));
+        }
+        if customize {
+            self.open_customize();
         }
         if let Some(pressed) = web_api_pressed {
             self.web_api_pressed(pressed);
@@ -373,4 +380,15 @@ fn unsigned_code_section(ui: &mut egui::Ui, remembered: usize) -> bool {
     )
     .on_hover_text(tr!("options-unsigned-forget.tooltip"))
     .clicked()
+}
+
+/// Options ▸ General, at its top: the button that opens Customize Toolbars (at once: not a
+/// setting Apply keeps). Whether it was pressed.
+fn customize_section(ui: &mut egui::Ui) -> bool {
+    let pressed = ui
+        .button(tr!("options-customize-toolbars"))
+        .on_hover_text(tr!("options-customize-toolbars.tooltip"))
+        .clicked();
+    ui.separator();
+    pressed
 }

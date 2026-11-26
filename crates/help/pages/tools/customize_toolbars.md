@@ -5,8 +5,20 @@ see-also: toolbars, favourites, interface_layout, settings
 
 **Customize Toolbars** puts every tool and every one of your bars in one window, so you can
 build a toolbar without hunting for each tool's right-click menu. Open it from **View ▸
-Customize Toolbars...**, or right-click the dots at the start of any bar and pick
-**Customize Toolbars...**.
+Customize Toolbars...**, from **Options ▸ General ▸ Customize Toolbars...**, or right-click
+the dots at the start of any bar and pick **Customize Toolbars...**.
+
+![The steps, one after another](pictures/customize_toolbars/tour.gif)
+
+1. Open **View ▸ Customize Toolbars...**. Find a tool on the left (or pick a group's name for
+   the whole group), then press **Add →**.
+
+   ![Step 1](pictures/customize_toolbars/step-1.png)
+
+2. It goes at the end of the toolbar picked on the right, here **Favourites**. Pick it there
+   to **Move Up**, **Move Down** or **← Remove** it.
+
+   ![Step 2](pictures/customize_toolbars/step-2.png)
 
 ## The window
 

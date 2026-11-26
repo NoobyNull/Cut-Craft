@@ -38,6 +38,17 @@ fn the_view_menu_and_every_bars_menu_open_it() {
 }
 
 #[test]
+fn options_general_opens_it_too() {
+    let mut h = Harness::new();
+    h.open_options_at("general");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    click_text(&mut h, "Customize Toolbars...");
+    h.frame(vec![]);
+    assert!(h.customizing());
+}
+
+#[test]
 fn add_puts_the_tool_on_favourites_and_remove_takes_it_off() {
     let mut h = customizing();
     assert!(!h.customize_can("add"), "nothing picked yet");

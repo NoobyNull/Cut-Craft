@@ -40,6 +40,16 @@ impl CutCraftApp {
         self.customize = Customize::opened();
     }
 
+    /// Picks `item` on the window's left, as a click there does (the help pictures).
+    pub(crate) fn customize_pick(&mut self, item: Item) {
+        self.customize.left = Some(item);
+    }
+
+    /// Types `text` in the window's search box (the help pictures).
+    pub(crate) fn customize_find(&mut self, text: &str) {
+        text.clone_into(&mut self.customize.search);
+    }
+
     /// The items of bar `bar` (Favourites or one of yours), in order.
     fn bar_items(&self, bar: usize) -> Vec<Item> {
         if bar == FAVOURITES_BAR {
@@ -158,7 +168,7 @@ impl CutCraftApp {
     }
 
     /// Carries out the window's button `button`, keeping what is picked in step.
-    pub(super) fn customize_press(&mut self, ctx: &egui::Context, button: &str) {
+    pub(crate) fn customize_press(&mut self, ctx: &egui::Context, button: &str) {
         let Some(action) = self.customize_action(button) else {
             return;
         };
@@ -196,6 +206,8 @@ impl CutCraftApp {
             .id(egui::Id::unique("customize_toolbars"))
             .open(&mut open)
             .collapsible(false)
+            // over the floating bars it changes
+            .order(egui::Order::Foreground)
             .default_width(36.0 * row)
             .show(ctx, |ui| {
                 cut_craft_bug_report::mark(ui, "Customize toolbars");
@@ -273,6 +285,7 @@ impl CutCraftApp {
         ] {
             let can = self.customize_action(button).is_some();
             let response = ui.add_enabled(can, egui::Button::new(tr!(key)));
+            crate::marks::note(ui, &format!("button:customize-{button}"), response.rect);
             if response.clicked() {
                 pressed = Some(button);
             }

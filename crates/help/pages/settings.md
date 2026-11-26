@@ -105,6 +105,9 @@ each and pick one, or use **View ▸ Window Layout** or **Options ▸ General �
 Every tool is in every layout; only where the buttons sit changes. **Ctrl+K** finds a tool by
 name whichever you use.
 
+**General ▸ Customize Toolbars...**, at the top of the page, opens
+[Customize Toolbars](help:customize_toolbars) at once, to build your own toolbars.
+
 **General ▸ Show a tip when Cut Craft starts** shows a [Did You Know?](help:tips) tip you have
 not seen yet each time Cut Craft opens. Which tips you have seen is kept with these settings,
 on this computer only.
