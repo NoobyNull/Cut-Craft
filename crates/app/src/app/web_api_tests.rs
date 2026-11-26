@@ -410,9 +410,9 @@ fn get_picture(h: &mut Harness, at: SocketAddr, path: &str) -> (u16, String, Vec
         h.frame(vec![]);
         if let Some(asked) = h.screenshot.take() {
             let area = if h.app.view == super::super::View::ThreeD {
-                h.app.view_3d_area
+                h.app.views_drawn.area_3d()
             } else {
-                h.app.view_area
+                h.app.views_drawn.area_2d()
             }
             .expect("the view was drawn");
             let mut picture = egui::ColorImage::filled([1280, 800], egui::Color32::BLUE);
@@ -450,7 +450,7 @@ fn a_picture_of_the_3d_view_from_one_side_comes_back_and_the_window_goes_back_as
     assert_eq!(status, 200, "{}", String::from_utf8_lossy(&png));
     assert_eq!(kind, "image/png");
     let picture = image::load_from_memory(&png).unwrap().to_rgba8();
-    let area = h.app.view_3d_area.unwrap();
+    let area = h.app.views_drawn.area_3d().unwrap();
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,

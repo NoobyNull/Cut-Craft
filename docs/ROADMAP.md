@@ -88,7 +88,7 @@ app struct is split into parts of about 40 fields or fewer.
 | 3.2 | Commands describe their own form; laser and rotary toolpaths only for machines that have them | #676, #679 done; run-context PR 1 to 5 Dec |
 | 3.3 | One check before unsigned gadgets and add-ons run | Done (#678) |
 | 3.4 | One list for built-in actions, one name everywhere | Done (#722, #723) |
-| 3.5 | Break up the app struct, with the playback player folded in | Target 15 Dec. Playback player, previewed material, 3D view meshes, Help window, Options window, Snapping Options, Relief from Photo depth, Rail list, library files, save-check answers, Orientate 3D Model rings, 3D handle drag, Draw Text spelling, what the 3D view drew and Toolpath List picks merged; 3D component settings popup PR open; more groups to follow |
+| 3.5 | Break up the app struct, with the playback player folded in | Target 15 Dec. Playback player, previewed material, 3D view meshes, Help window, Options window, Snapping Options, Relief from Photo depth, Rail list, library files, save-check answers, Orientate 3D Model rings, 3D handle drag, Draw Text spelling, what the 3D view drew, Toolpath List picks and the 3D component settings popup merged; where the views were drawn PR open; more groups to follow |
 | 3.6 | Stable toolpath ids, so cut order stops relying on a guess | Not started; 8 to 15 Dec |
 | 3.7 | Model import session and one test driver | Deferred to after 1.0 |
 

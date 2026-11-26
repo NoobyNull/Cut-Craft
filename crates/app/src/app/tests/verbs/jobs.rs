@@ -40,7 +40,7 @@ impl Harness {
 
     /// Whether there is a 2D view laid out (none before there is a job).
     pub(in super::super) fn has_2d_view(&self) -> bool {
-        self.app.view_transform.is_some()
+        self.app.views_drawn.transform().is_some()
     }
 
     /// The job the 2D view shows: the one being set up while Job Setup is open.

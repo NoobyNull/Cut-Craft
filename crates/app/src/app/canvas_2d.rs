@@ -47,10 +47,9 @@ impl CutCraftApp {
     /// move with it, so the drawing stays where it was in the view.
     fn follow_view_2d(&mut self, ui: &egui::Ui) {
         let at = ui.available_rect_before_wrap().min;
-        if let (Some(was), Some(camera)) = (self.view_2d_at, self.camera.as_mut()) {
-            camera.origin += at - was;
+        if let (Some(moved), Some(camera)) = (self.views_drawn.moved_2d(at), self.camera.as_mut()) {
+            camera.origin += moved;
         }
-        self.view_2d_at = Some(at);
     }
 
     pub(super) fn view_2d(&mut self, ui: &mut egui::Ui) {
@@ -158,8 +157,7 @@ impl CutCraftApp {
         canvas.rulers(ui, job.units);
         self.view_menu(ui, &canvas, reach);
         self.view_buttons(ui, area);
-        self.view_transform = Some(canvas.transform);
-        self.view_area = Some(area);
+        self.views_drawn.drawn_2d(canvas.transform, area);
         self.cursor = canvas.cursor();
         self.act_2d(ui, gesture, &canvas, reach, area, modes);
     }

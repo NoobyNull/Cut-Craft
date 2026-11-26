@@ -25,10 +25,9 @@ impl CutCraftApp {
                 form.params["tool"] = Value::from(tool);
             }
         }
-        let over_view = ctx.pointer_hover_pos().is_some_and(|at| {
-            self.view_area.is_some_and(|a| a.contains(at))
-                || self.view_3d_area.is_some_and(|a| a.contains(at))
-        });
+        let over_view = ctx
+            .pointer_hover_pos()
+            .is_some_and(|at| self.views_drawn.over_a_view(at));
         // the wheel's notches this frame (a line each, or a line's worth of points)
         let (modifiers, notches) = ctx.input(|i| {
             let notches: f32 = (i.raw.events.iter())
@@ -347,7 +346,7 @@ impl CutCraftApp {
             let unit = crate::form::unit_mm(self.doc.job.units);
             let toward = ctx
                 .pointer_latest_pos()
-                .zip(self.view_transform)
+                .zip(self.views_drawn.transform())
                 .map_or(cut_craft_core::geometry::Point::ZERO, |(at, t)| {
                     t.to_job(at)
                 });

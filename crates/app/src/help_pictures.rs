@@ -296,7 +296,7 @@ pub(super) fn where_is(app: &CutCraftApp, ctx: &egui::Context, mark: Mark) -> Op
         Mark::None => None,
         Mark::At(name) => crate::marks::get(ctx, name),
         Mark::Everything => {
-            let view = app.view_transform?;
+            let view = app.views_drawn.transform()?;
             let bounds = app
                 .doc
                 .vectors
@@ -312,7 +312,7 @@ pub(super) fn where_is(app: &CutCraftApp, ctx: &egui::Context, mark: Mark) -> Op
             let at = app.doc.job.area().min + Point::new(x, y);
             let id = app.doc.pick(at, 2.0)?;
             let bounds = app.doc.vectors.get(&id)?.bounds();
-            let view = app.view_transform?;
+            let view = app.views_drawn.transform()?;
             Some(egui::Rect::from_two_pos(
                 view.to_screen(bounds.min),
                 view.to_screen(bounds.max),

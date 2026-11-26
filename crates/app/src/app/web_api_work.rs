@@ -244,9 +244,9 @@ impl CutCraftApp {
             return None;
         };
         let (area, what) = if two_d {
-            (self.view_area, "the 2D view")
+            (self.views_drawn.area_2d(), "the 2D view")
         } else {
-            (self.view_3d_area, "the 3D view")
+            (self.views_drawn.area_3d(), "the 3D view")
         };
         let Some(area) = area else {
             return Some(Err(ApiError::refused(format!("{what} was not drawn"))));
