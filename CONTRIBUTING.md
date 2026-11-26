@@ -152,7 +152,8 @@ the required checks pass. The **Auto-merge** workflow (`.github/workflows/auto-m
 GitHub's auto-merge on for it; branch protection still decides when the merge happens. It leaves
 alone pull requests from anyone else, from forks, drafts (until **Ready for review**), and ones
 that don't target `main`, so a stack of pull requests based on each other's branches never
-merges into itself. To stop one merging, mark it draft or turn auto-merge off on its page.
+merges into itself. To stop one merging, mark it draft. Turning auto-merge off on its page only lasts until the
+next push or edit, which turns it back on.
 
 The workflow needs the `AUTO_MERGE_TOKEN` secret: a fine-grained token owned by NoobyNull, for
 this repository only, with Contents and Pull requests read/write. Merges then count as his, so
