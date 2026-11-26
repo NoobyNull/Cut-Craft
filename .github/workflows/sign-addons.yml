@@ -1,0 +1,90 @@
+# Signs the official add-ons' releases with Cut Craft's release key, so each add-on repository
+# needs no copy of the key (Matthew, 2026-11-26: "all Power-Whittle add-ons get signed by the
+# PowerWhittle repo"). Each add-on repository publishes its release unsigned; this finds the
+# files in its newest release (or the tag asked for) that have no FILE.minisig yet, signs them
+# (scripts/sign-release, which also checks them against the key built into Cut Craft) and adds
+# the signatures to that release. Files already signed are left alone, so running it again
+# changes nothing.
+# Runs every hour and by "Run workflow". Only the repositories in ADDONS are ever signed.
+# Needs MINISIGN_SECRET_KEY and MINISIGN_PASSWORD (the release key) and ADDON_SIGN_TOKEN: a
+# fine-grained token on Power-Whittle with Contents read and write on those repositories.
+name: Sign add-ons
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: 'One add-on repository (e.g. Power-Whittle/CutCraft-Borders); empty for all'
+        required: false
+      tag:
+        description: 'Its release tag (e.g. v0.1.0); empty for its newest release'
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sign-addons
+  cancel-in-progress: false
+
+env:
+  ADDONS: >-
+    Power-Whittle/CutCraft-Borders
+    Power-Whittle/CutCraft-Depth
+    Power-Whittle/CutCraft-Translations
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sign what is not signed yet
+        env:
+          GH_TOKEN: ${{ secrets.ADDON_SIGN_TOKEN }}
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+          REQUIRE_SIGNING: '1'
+          ONLY_REPO: ${{ inputs.repo }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "::warning::ADDON_SIGN_TOKEN is not set: add a Power-Whittle token with Contents read and write on the add-on repositories"
+            exit 0
+          fi
+          repos=$ADDONS
+          if [[ -n "$ONLY_REPO" ]]; then
+            if [[ " $ADDONS " != *" $ONLY_REPO "* ]]; then
+              echo "::error::$ONLY_REPO is not an official add-on repository ($ADDONS)"
+              exit 1
+            fi
+            repos=$ONLY_REPO
+          fi
+          for repo in $repos; do
+            tag=$TAG
+            if [[ -z "$tag" ]]; then
+              tag=$(gh release view --repo "$repo" --json tagName --jq .tagName 2>/dev/null || true)
+            fi
+            if [[ -z "$tag" ]]; then
+              echo "$repo: no release yet"
+              continue
+            fi
+            gh release view "$tag" --repo "$repo" --json assets --jq '.assets[].name' > names
+            rm -rf out && mkdir out
+            while read -r name; do
+              [[ -z $name || $name == *.minisig ]] && continue
+              grep -qxF "$name.minisig" names && continue
+              echo "$repo $tag: signing $name"
+              gh release download "$tag" --repo "$repo" --pattern "$name" --dir out
+            done < names
+            if [[ -z "$(ls -A out)" ]]; then
+              echo "$repo $tag: everything is signed"
+              continue
+            fi
+            scripts/sign-release out
+            gh release upload "$tag" out/*.minisig --repo "$repo" --clobber
+            echo "::notice::$repo $tag: signed $(ls out/*.minisig | wc -l) file(s)"
+          done
+          rm -rf out names

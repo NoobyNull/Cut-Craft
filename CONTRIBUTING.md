@@ -145,6 +145,22 @@ boxes to tick):
   (the updater's homes, add-on repositories, links shown in the app), check the matching
   Power-Whittle repository and the organisation settings still agree.
 
+## Auto-merge
+
+A pull request NoobyNull opens (by hand or from one of his Claude threads) merges by itself once
+the required checks pass. The **Auto-merge** workflow (`.github/workflows/auto-merge.yml`) turns
+GitHub's auto-merge on for it; branch protection still decides when the merge happens. It leaves
+alone pull requests from anyone else, from forks, drafts (until **Ready for review**), and ones
+that don't target `main`, so a stack of pull requests based on each other's branches never
+merges into itself. To stop one merging, mark it draft. Turning auto-merge off on its page only lasts until the
+next push or edit, which turns it back on.
+
+The workflow needs the `AUTO_MERGE_TOKEN` secret: a fine-grained token owned by NoobyNull, for
+this repository only, with Contents and Pull requests read/write. Merges then count as his, so
+the workflows that run on `main` (CI, Help coverage, Languages, Language packs) keep running.
+GitHub's built-in token can't do that: GitHub starts no workflows for its pushes. Without the
+secret the workflow warns and the pull request waits for a merge by hand.
+
 ## Pull request titles and versions
 
 Cut Craft's version is **0.MINOR.PATCH**, and it only changes when a release is cut, one step at
