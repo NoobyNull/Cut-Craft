@@ -20,7 +20,7 @@ impl CutCraftApp {
         area: egui::Rect,
         fit: egui::Rect,
     ) {
-        self.handles_3d.clear();
+        self.drawn_3d.clear_handles();
         let importing = self.form.as_ref().is_some_and(|f| f.model.is_some());
         if self.preview.material.is_some()
             || self.player.playback.is_some()
@@ -114,7 +114,7 @@ impl CutCraftApp {
             if let Some(icon) = handle.icon() {
                 self.icons.image(icon).paint_at(ui, rect);
             }
-            self.handles_3d.push((handle, centre));
+            self.drawn_3d.add_handle(handle, centre);
             if response.drag_started()
                 && let Some(origin) = ui.input(|i| i.pointer.press_origin())
             {
@@ -224,7 +224,7 @@ impl CutCraftApp {
                     &handle.hint(self.options.snapping.steps()),
                 );
             }
-            self.handles_3d.push((Handle3d::Transform(handle), at));
+            self.drawn_3d.add_handle(Handle3d::Transform(handle), at);
             if response.drag_started()
                 && let Some(from) = ui.input(|i| i.pointer.press_origin())
             {

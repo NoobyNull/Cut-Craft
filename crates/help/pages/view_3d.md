@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-26
 see-also: job_setup, check_zeroing, 3d_finishing_toolpath, 3d_roughing_toolpath, create_shape, preview_detail
 ---
 

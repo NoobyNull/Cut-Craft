@@ -602,7 +602,7 @@ impl CutCraftApp {
         }
         // a click picks the component under it (its handles shown); a double-click off it fits
         let fit = area.shrink(ui.spacing().item_spacing.x * 2.0);
-        self.fit_3d = Some(fit);
+        self.drawn_3d.fitted(fit);
         // F fits too, with the pointer over the view
         let fit_now = response.hovered() && fit_key;
         self.double_click_3d(ui, &response, fit, drawing.is_none(), fit_now);
@@ -688,14 +688,14 @@ impl CutCraftApp {
         if response.secondary_clicked()
             && let Some(at) = response.interact_pointer_pos()
         {
-            self.under_3d = self.components_at_3d(fit, at);
-            if let Some(&id) = self.under_3d.first()
+            let under = self.components_at_3d(fit, at);
+            if let Some(id) = self.drawn_3d.right_clicked(under)
                 && !self.doc.selected_components.contains(&id)
             {
                 self.doc.selected_components = [id].into();
             }
         }
-        let menu = || self.menus.view_3d_menu(&self.doc, &self.under_3d);
+        let menu = || self.menus.view_3d_menu(&self.doc, self.drawn_3d.under());
         if let Some(action) = self.popup(response, menu) {
             self.invoke(ui.ctx(), &action);
         }
