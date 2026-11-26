@@ -127,6 +127,7 @@ credits list is generated and checked by CI.
 - **Auto Toolpath** (#595).
 - **Rotary:** choose what rotary toolpaths cut (Material, Model, Vector, Level) and the true
   XYZA speed work.
+- **Rotary:** a rotary toolpath that follows an open vector wrapped round the part (drive curve).
 - **Cut list optimizer** stays a separate program.
 
 Moving add-ons to the Power-Whittle organisation can happen any time, because it changes no
