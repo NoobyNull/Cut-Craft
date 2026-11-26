@@ -45,5 +45,11 @@ jobs:
             echo "::warning::AUTO_MERGE_TOKEN isn't set, so this pull request won't merge by itself. CONTRIBUTING.md, Auto-merge, says how to add it."
             exit 0
           fi
+          # a re-run replays the old event, so check where the pull request points now
+          base=$(gh pr view "$PR" --json baseRefName --jq .baseRefName)
+          if [ "$base" != main ]; then
+            echo "::notice::This pull request now targets $base, not main, so auto-merge stays off."
+            exit 0
+          fi
           gh pr merge --auto --merge "$PR"
           echo "::notice::Auto-merge is on. GitHub merges this once the required checks pass."
