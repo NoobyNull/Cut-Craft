@@ -6,6 +6,7 @@ mod actions;
 mod app_icon;
 mod background;
 mod backups;
+mod bars;
 pub(crate) mod built_ins;
 mod calculate_again;
 mod canvas_2d;

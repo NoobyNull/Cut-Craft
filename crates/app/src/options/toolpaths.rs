@@ -1,8 +1,8 @@
 //! Toolpath settings, the questions Cut Craft asks, job defaults, General and Import.
 
 use super::{
-    CanvasFlyouts, Deserialize, Display, FileDialogDefault, JsonSchema, OtherWays, RibbonIcons,
-    Serialize, WindowLayout, egui, on,
+    CanvasFlyouts, Deserialize, Display, FileDialogDefault, JsonSchema, NewBars, OtherWays,
+    RibbonIcons, Serialize, SnappedBars, WindowLayout, egui, on,
 };
 
 /// Toolpath settings.
@@ -324,6 +324,16 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "Canvas tool lists open")]
     pub canvas_flyouts: CanvasFlyouts,
+    /// What a bar of tools snapped to a side does to the drawing: Push the Drawing Over
+    /// makes room for it, Over the Drawing lays it over the drawing's edge
+    #[serde(default)]
+    #[schemars(title = "Bars snapped to a side")]
+    pub snapped_bars: SnappedBars,
+    /// Where a toolbar you make starts: floating over the drawing, or in the layout (a
+    /// tab, a Rail list, a Classic section). Right-click its grip to move it either way
+    #[serde(default)]
+    #[schemars(title = "New toolbars start")]
+    pub new_bars: NewBars,
     /// Open a short Did You Know? tip each time Cut Craft starts, a different one each
     /// time. Help ▸ Did You Know? shows them whenever you like
     #[serde(default = "on")]

@@ -19,6 +19,7 @@ macro_rules! t {
 mod addons;
 mod app;
 mod axes;
+mod bars;
 mod borders;
 mod busy;
 mod clipart;

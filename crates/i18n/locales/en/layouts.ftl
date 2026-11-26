@@ -12,4 +12,5 @@ layouts-ribbon-pins-note = Pinned tools show on the ribbon. Each group starts wi
 
 # src/app/canvas_layout.rs
 layouts-canvas-find = Find a tool (Ctrl+K)
+layouts-canvas-palette = Tools
 layouts-canvas-chip = { $list }: opens it over the drawing. Click again to close it

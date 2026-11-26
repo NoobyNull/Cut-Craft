@@ -48,6 +48,27 @@ impl Harness {
         self.app.toolbars.group
     }
 
+    /// Where custom toolbar `n`'s bar was drawn last, while it is snapped or floating.
+    pub(in super::super) fn toolbar_bar_rect(&self, n: usize) -> Option<egui::Rect> {
+        let name = &self.app.options.toolbars.get(n)?.name;
+        let id = crate::app::custom_toolbars::toolbar_bar_id(n, name);
+        self.ctx.memory(|m| m.area_rect(id))
+    }
+
+    /// Where the 2D view was drawn last.
+    pub(in super::super) fn view_rect(&self) -> egui::Rect {
+        self.app
+            .views_drawn
+            .area_2d()
+            .expect("the 2D view has been drawn")
+    }
+
+    /// Where the Canvas palette was drawn last, while it floats or lies over the drawing.
+    pub(in super::super) fn palette_rect(&self) -> Option<egui::Rect> {
+        let id = crate::app::canvas_layout::palette_id();
+        self.ctx.memory(|m| m.area_rect(id))
+    }
+
     /// Whether a toolbar's name is being typed.
     pub(in super::super) fn renaming_toolbar(&self) -> bool {
         self.app.toolbars.rename.is_some()

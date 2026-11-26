@@ -191,6 +191,22 @@ setting-on-hover-b0e222 = On hover
 setting-as-soon-as-the-pointer-a3646c = As soon as the pointer is over the group
 setting-on-click-9d4b08 = On click
 setting-when-the-group-is-clicked-3b431a = When the group is clicked
+setting-bars-snapped-to-a-side-69fd7b = Bars snapped to a side
+setting-what-a-bar-of-tools-72005c =
+    What a bar of tools snapped to a side does to the drawing: Push the Drawing Over
+    makes room for it, Over the Drawing lays it over the drawing's edge
+setting-push-the-drawing-over-7baea2 = Push the drawing over
+setting-the-drawing-makes-room-for-87c935 = The drawing makes room for the bar, so the bar never covers your work
+setting-over-the-drawing-5bd892 = Over the drawing
+setting-the-bar-lies-over-the-761dfc = The bar lies over the edge of the drawing; nothing changes size
+setting-new-toolbars-start-6fc7ab = New toolbars start
+setting-where-a-toolbar-you-make-2fe6bc =
+    Where a toolbar you make starts: floating over the drawing, or in the layout (a
+    tab, a Rail list, a Classic section). Right-click its grip to move it either way
+setting-floating-487cdb = Floating
+setting-over-the-drawing-near-its-5f2914 = Over the drawing, near its top left; drag its grip anywhere
+setting-in-the-layout-11f391 = In the layout
+setting-in-the-layout-a-tab-cfc83a = In the layout: a tab in the header, a list in the Rail, a section in Classic
 setting-show-a-tip-when-cut-8faee5 = Show a tip when Cut Craft starts
 setting-open-a-short-did-you-06c331 =
     Open a short Did You Know? tip each time Cut Craft starts, a different one each

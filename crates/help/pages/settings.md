@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-25
-see-also: backups, view_2d, performance, setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
+reviewed: 2026-11-26
+see-also: toolbars, backups, view_2d, performance, setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
 ---
 
 # Changing settings
@@ -134,6 +134,12 @@ gives [Draw Rectangle from Center](help:draw_rectangle_from_center) and
 In the Canvas layout a palette group lists its tools as soon as you point at it. Set
 **General ▸ Canvas tool lists open** to **On Click** to open a list only when you click
 its group.
+
+Bars of tools (the Canvas palette and [your own toolbars](help:toolbars)) can be snapped to a
+side of the drawing. **General ▸ Bars snapped to a side** picks whether the drawing makes room
+for them (**Push the drawing over**, the first choice) or they lie over its edge (**Over the
+drawing**). **General ▸ New toolbars start** picks whether a toolbar you make floats over the
+drawing (the first choice) or goes in the layout.
 
 ![The Ribbon layout, light theme on the left and dark on the right](pictures/layouts/ribbon-light-and-dark.png)
 

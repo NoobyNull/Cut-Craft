@@ -352,6 +352,28 @@ pub enum OtherWays {
     AsButtons,
 }
 
+/// What a bar snapped to a side of the drawing does to the drawing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SnappedBars {
+    /// The drawing makes room for the bar, so the bar never covers your work
+    #[default]
+    PushTheDrawingOver,
+    /// The bar lies over the edge of the drawing; nothing changes size
+    OverTheDrawing,
+}
+
+/// Where a bar starts when it is made.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum NewBars {
+    /// Over the drawing, near its top left; drag its grip anywhere
+    #[default]
+    Floating,
+    /// In the layout: a tab in the header, a list in the Rail, a section in Classic
+    InTheLayout,
+}
+
 /// When a Canvas palette group lists its tools beside it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
