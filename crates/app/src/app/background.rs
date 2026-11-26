@@ -52,7 +52,7 @@ impl CutCraftApp {
     /// ([`cut_craft_core::eta`]), so the first guesses at the time left start from them.
     pub(super) fn load_words_and_job_times(&mut self) {
         let dir = super::files::config_dir();
-        self.words_path = dir.as_ref().map(|d| d.join("words.txt"));
+        (self.spelling).words_at(dir.as_ref().map(|d| d.join("words.txt")));
         self.job_times_path = dir.map(|d| d.join("job-times.json"));
         if let Some(path) = &self.job_times_path {
             cut_craft_core::eta::set_history(cut_craft_core::eta::History::load(path));

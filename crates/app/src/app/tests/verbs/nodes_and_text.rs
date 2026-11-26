@@ -110,13 +110,12 @@ impl Harness {
 
     /// Spelling is checked with `speller`.
     pub(in super::super) fn given_speller(&mut self, speller: cut_craft_core::spell::Speller) {
-        self.app.speller = Some(speller);
-        self.app.speller_looked = true;
+        self.app.spelling.given(speller);
     }
 
     /// The speller in use.
     pub(in super::super) fn speller(&self) -> &cut_craft_core::spell::Speller {
-        self.app.speller.as_ref().expect("a speller")
+        self.app.spelling.found().expect("a speller")
     }
 
     /// Picks `to` for the misspelt `from`, as the suggestion's menu does.
