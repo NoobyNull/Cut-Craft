@@ -345,6 +345,7 @@ tooltip-job-size-and-position = Job Size and Position: changes the material's si
 tooltip-show-toolpaths-tab = Show Toolpaths Page: opens the Toolpaths page, where toolpaths are made and previewed
 tooltip-design-layout = Design Layout: keeps the Design page open and puts the Toolpaths page away, for drawing
 tooltip-machining-layout = Machining Layout: keeps the Toolpaths page open and puts the Design page away, for making toolpaths
+tooltip-customize-toolbars = Customize Toolbars: every tool on one side, your toolbars and Favourites on the other; add, take off, move, make, rename and delete
 tooltip-interface-layout = Interface Layout: pick how the window is arranged: Ribbon, Rail, Canvas or Classic
 tooltip-pan = Pan: drag the 2D view to slide the drawing round, without changing how close you are
 tooltip-zoom-box = Zoom Box: drag a box round the part of the drawing you want to fill the view

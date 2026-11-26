@@ -397,6 +397,9 @@ impl CutCraftApp {
         self.clearing_window(ctx);
         self.stl_window(ctx);
         self.options_window(ctx);
+        self.customize_window(ctx);
+        // on every screen: Customize Toolbars' Rename opens it from the Start page too
+        self.toolbar_rename_window(ctx);
         self.settings_3d_window(ctx);
         self.tool_search(ctx);
         self.guide_window(ctx);
@@ -459,7 +462,6 @@ impl CutCraftApp {
             let mut room = super::bars::Room::new(ui.available_rect_before_wrap());
             self.placed_bars(ui, &mut room, 0.0);
         }
-        self.toolbar_rename_window(ui.ctx());
         self.toolbar_changes(ui.ctx());
     }
 

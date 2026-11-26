@@ -8,6 +8,31 @@ use super::{
 
 pub(super) const TOURS: &[Tour] = &[
     Tour {
+        tool: "customize_toolbars",
+        steps: &[
+            Step {
+                caption: "Open **View ▸ Customize Toolbars...**. Find a tool on the left (or pick a \
+                          group's name for the whole group), then press **Add →**.",
+                setup: |app, ctx| {
+                    fresh_job(app, ctx);
+                    app.invoke(ctx, "customize_toolbars");
+                    app.customize_find("circle");
+                    app.customize_pick(crate::custom_toolbars::Item::Tool(
+                        "draw_circle".to_owned(),
+                    ));
+                },
+                mark: Mark::At("button:customize-add"),
+            },
+            Step {
+                caption: "It goes at the end of the toolbar picked on the right, here \
+                          **Favourites**. Pick it there to **Move Up**, **Move Down** or \
+                          **← Remove** it.",
+                setup: |app, ctx| app.customize_press(ctx, "add"),
+                mark: Mark::At("button:customize-remove"),
+            },
+        ],
+    },
+    Tour {
         tool: "setup_material",
         steps: &[
             Step {

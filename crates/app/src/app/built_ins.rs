@@ -344,6 +344,8 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
         .run(|a, _| a.pages = Pages::design_layout()),
     act("machining_layout", "Machining Layout", "Machining Layout: keeps the Toolpaths page open and puts the Design page away, for making toolpaths").keys("F12")
         .run(|a, _| a.pages = Pages::machining_layout()),
+    act("customize_toolbars", "Customize Toolbars", "Customize Toolbars: every tool on one side, your toolbars and Favourites on the other; add, take off, move, make, rename and delete").window()
+        .run(|a, _| a.open_customize()),
     act("interface_layout", "Interface Layout", "Interface Layout: pick how the window is arranged: Ribbon, Rail, Canvas or Classic")
         .run(|a, _| a.open_layout_picker()),
     act("pan", "Pan", "Pan: drag the 2D view to slide the drawing round, without changing how close you are").icon("view/pan.png")

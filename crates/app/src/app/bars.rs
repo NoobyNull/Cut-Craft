@@ -149,7 +149,18 @@ impl CutCraftApp {
         let mut grip = None;
         let mut body = |ui: &mut egui::Ui| {
             grip = Some(self.grip(ui, across, movable, name, menu));
-            contents(self, ui, across);
+            // what the window has left past the grip: a long bar scrolls rather than
+            // running off the window's edge
+            let row = ui.spacing().interact_size.y;
+            let left = ui.ctx().content_rect().max - ui.cursor().min;
+            let scroll = if across {
+                egui::ScrollArea::horizontal().max_width((left.x - row).max(3.0 * row))
+            } else {
+                egui::ScrollArea::vertical().max_height((left.y - row).max(3.0 * row))
+            };
+            scroll
+                .id_salt("bar contents")
+                .show(ui, |ui| contents(self, ui, across));
         };
         if across {
             ui.horizontal_top(|ui| body(ui));
