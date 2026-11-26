@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-26
 see-also: settings, updates, contents, language
 ---
 
@@ -8,6 +8,9 @@ see-also: settings, updates, contents, language
 Something wrong? **Right-click** the part of Cut Craft where it happened and choose
 **Report a Bug Here…**. A form opens for you to say what went wrong. Cut Craft fills in the
 rest for you: which part of the window you clicked, the version, and what it was doing.
+
+Changed your mind? Click anywhere outside the menu, or press **Esc**, and it closes. Grabbing
+a shape to move it closes it too.
 
 If Cut Craft closes because of an error, it keeps a crash log. The next time it starts it
 sends that log, or offers it to you in the same form, as you chose in
