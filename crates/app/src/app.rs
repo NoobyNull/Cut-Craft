@@ -30,6 +30,7 @@ mod gcode_view;
 mod generate_border;
 mod gestures_2d;
 mod guide;
+mod handle_drag;
 mod run;
 pub use run::*;
 mod tool_sections;
@@ -826,12 +827,8 @@ pub(crate) struct CutCraftApp {
     handles_3d: Vec<(Handle3d, egui::Pos2)>,
     /// The components under the 3D view's last right-click, topmost first.
     under_3d: Vec<EntityId>,
-    /// A handle being dragged, from where the pointer pressed.
-    drag_3d: Option<(Handle3d, egui::Pos2)>,
-    /// A height handle's drag as it follows the pointer: the component's settings and its
-    /// top when the drag began, and the settings last applied (undone and applied again
-    /// each frame the pointer moves, so the whole drag is one undo).
-    drag_base: Option<(cmd_component_properties::Params, f64, Option<Value>)>,
+    /// A drag on one of the 3D view's edit handles.
+    handle_drag: handle_drag::HandleDrag,
     settings_3d: Option<Settings3d>,
     /// Orientate 3D Model's rotation handles: as drawn last frame, and the one held.
     turn_rings: turn_rings::TurnRings,
@@ -936,8 +933,6 @@ pub(crate) struct CutCraftApp {
     /// the job (`job_epoch`) and change (history revision) it made: any later change, Undo
     /// too, takes it away.
     tool_note: Option<(u64, u64, String)>,
-    /// When a height handle's drag last remade the model (the app's clock, seconds).
-    height_applied_at: Option<f64>,
     /// The level clipart imported through Orientate 3D Model goes on (Import to Level),
     /// until another command starts.
     import_level: Option<u64>,

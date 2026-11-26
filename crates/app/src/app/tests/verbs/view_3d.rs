@@ -67,7 +67,7 @@ impl Harness {
 
     /// Whether a handle in the 3D view is being dragged.
     pub(in super::super) fn dragging_in_3d(&self) -> bool {
-        self.app.drag_3d.is_some()
+        self.app.handle_drag.is_held()
     }
 
     /// Picks up `tool` (Transform, Measure, ...), as its button does.

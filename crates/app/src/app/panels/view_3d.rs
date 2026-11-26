@@ -778,7 +778,7 @@ impl CutCraftApp {
     ) -> std::sync::Arc<view3d::gpu::Geometry> {
         // while a handle drags the model about, the quick surface, kept by the change it
         // shows, so the fine one is made once the drag ends
-        let dragging = self.drag_base.is_some();
+        let dragging = self.handle_drag.is_setting_height();
         let still = self.options.performance.still_cells();
         let cells = if dragging {
             self.moving_cells()
@@ -991,8 +991,8 @@ impl CutCraftApp {
         let since = now - self.moved_3d;
         let moving = since < settle
             || (self.player.playing && self.player.playback.is_some())
-            || self.drag_base.is_some()
-            || self.drag_3d.is_some();
+            || self.handle_drag.is_setting_height()
+            || self.handle_drag.is_held();
         let level = self.pacer.frame(seconds, moving, still, fps);
         self.detail_3d = (level, moving);
         if moving && level < still {
