@@ -119,9 +119,17 @@ Install details:
 ## Signing
 
 Matthew's rule: signing is optional and nothing is blocked for lacking it. Unsigned
-add-ons install and run after a warning. Matthew chose not to sign add-ons, the official
-Depth add-on included, so in practice every add-on today takes the unsigned path below.
-A release can still carry signatures, and Cut Craft checks them when present.
+add-ons install and run after a warning. A release can carry signatures, and Cut Craft
+checks them when present.
+
+The official Power-Whittle add-ons are signed here, not in their own repositories
+(Matthew, 2026-11-26): each publishes its release unsigned, and the **Sign add-ons**
+workflow (`.github/workflows/sign-addons.yml`) signs every file that has no `.minisig` yet
+in the newest release of each repository in its `ADDONS` list, every hour or when run by
+hand (one repository and tag can be named). It uses the release key's secrets and
+`ADDON_SIGN_TOKEN`, a fine-grained Power-Whittle token with Contents read and write on those
+repositories. So no add-on repository holds a copy of the key. A new official add-on goes in
+`ADDONS` and in that token's repositories.
 
 - **Signed** means every file in the release has a `.minisig` that checks out against
   the release key built into Cut Craft (`crates/updater/release-key.pub`, the updater's
