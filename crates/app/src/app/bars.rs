@@ -269,23 +269,27 @@ impl CutCraftApp {
                 .rect
         } else {
             let gap = room.used;
-            let r = room.rect;
+            // over the drawing itself, under the view's own bar (2D / 3D, sheet, snapping)
+            let mut r = room.rect;
+            if let Some(view) = self.views_drawn.area_2d().or(self.views_drawn.area_3d())
+                && view.top() > r.top()
+                && view.top() < r.bottom()
+            {
+                r.min.y = view.top();
+            }
+            // past the bars already on the sides either side of it, so none lie over another
             let (pivot, at) = match side {
-                Side::Top => (
+                Side::Top | Side::Left => (
                     egui::Align2::LEFT_TOP,
-                    r.left_top() + egui::vec2(0.0, gap[0]),
+                    r.left_top() + egui::vec2(gap[2], gap[0]),
                 ),
                 Side::Bottom => (
                     egui::Align2::LEFT_BOTTOM,
-                    r.left_bottom() - egui::vec2(0.0, gap[1]),
-                ),
-                Side::Left => (
-                    egui::Align2::LEFT_TOP,
-                    r.left_top() + egui::vec2(gap[2], 0.0),
+                    r.left_bottom() + egui::vec2(gap[2], -gap[1]),
                 ),
                 Side::Right => (
                     egui::Align2::RIGHT_TOP,
-                    r.right_top() - egui::vec2(gap[3], 0.0),
+                    r.right_top() + egui::vec2(-gap[3], gap[0]),
                 ),
             };
             egui::Area::new(id)

@@ -73,7 +73,8 @@ impl CutCraftApp {
                 &self.canvas_list(tab),
             );
         } else if !matches!(self.options.canvas_palette, Place::Snapped { .. }) {
-            self.canvas_palette(ui, &mut bars, start);
+            // past any bar snapped to the left or top, which may have pushed the view over
+            self.canvas_palette(ui, &mut bars, egui::pos2(room.left() + margin, top));
         }
         if self.form.is_some() {
             let width = super::DESIGN_PANEL_WIDTHS * ui.spacing().interact_size.x;
@@ -385,7 +386,12 @@ impl CutCraftApp {
                     }
                     // every tool shows: down to the chips, then on to another column, with
                     // the pointed-at tool's guidance beside them
-                    let room = ui.ctx().content_rect().bottom() - ui.cursor().top() - 3.0 * row;
+                    // opening upward (from a palette at the foot) it has the room above
+                    let room = if pivot.y() == egui::Align::Max {
+                        at.y - ui.ctx().content_rect().top() - 5.0 * row
+                    } else {
+                        ui.ctx().content_rect().bottom() - ui.cursor().top() - 3.0 * row
+                    };
                     let per_column = palette_rows(room, 1.7 * row + ui.spacing().item_spacing.y);
                     let mut picked = false;
                     // more columns than the window is wide scroll sideways

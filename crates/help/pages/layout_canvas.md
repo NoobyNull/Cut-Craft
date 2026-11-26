@@ -43,8 +43,9 @@ its **grip**:
   **Float** it again, to **Lock Position** so a stray drag leaves it where it is, or to
   **Turn** it so it runs across instead of down.
 
-A floating palette keeps its distance from the window corner it is nearest, so it stays in
-place when the window changes size. See [Toolbars of Your Own](help:toolbars) for how
+A floating palette starts just past any toolbar snapped to the left, and keeps its distance
+from the window corner it is nearest, so it stays in place when the window changes size.
+Snapped to the foot, a group's list opens upward. See [Toolbars of Your Own](help:toolbars) for how
 snapped bars and the drawing share the window.
 
 ## Sheets, layers and toolpaths
