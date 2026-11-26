@@ -268,7 +268,7 @@ impl Harness {
             .as_mut()
             .expect("the 3D settings are open");
         edit(&mut s.params);
-        s.dirty = true;
+        s.changed(true);
     }
 
     /// Whether the icon set has the picture `icon`.

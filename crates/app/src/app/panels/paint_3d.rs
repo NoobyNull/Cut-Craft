@@ -183,29 +183,9 @@ impl CutCraftApp {
     /// A click placing a fade's or tilt's anchor: the first is kept until the second, which
     /// turns the fade or tilt on between them through the settings popup.
     pub(super) fn place_anchor(&mut self, which: Anchor, first: Option<Point>, p: Point) {
-        use cut_craft_core::params::Xy;
-        let Some(s) = &mut self.settings_3d else {
-            return;
-        };
-        let Some(first) = first else {
-            s.anchors = Some((which, Some(p)));
-            return;
-        };
-        let (from, to) = (Xy::new(first.x, first.y), Xy::new(p.x, p.y));
-        match which {
-            Anchor::Fade => {
-                s.params.fade.on = true;
-                s.params.fade.from = from;
-                s.params.fade.to = to;
-            }
-            Anchor::Tilt => {
-                s.params.tilt.on = true;
-                s.params.tilt.pivot = from;
-                s.params.tilt.toward = to;
-            }
+        if let Some(s) = &mut self.settings_3d {
+            s.place_anchor(which, first, p);
         }
-        s.anchors = None;
-        s.dirty = true;
     }
 
     /// Every shown component at the point of the 3D view's picture `fit` under `at`,

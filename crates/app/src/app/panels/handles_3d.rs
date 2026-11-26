@@ -122,15 +122,7 @@ impl CutCraftApp {
             }
             if response.clicked() && handle == Handle3d::Settings {
                 let params = cmd_component_properties::Params::of(id, &self.doc.components[&id]);
-                self.settings_3d = Some(Settings3d {
-                    component: id,
-                    params,
-                    dirty: false,
-                    dragged: None,
-                    at: rect.left_bottom(),
-                    radios: vec![],
-                    anchors: None,
-                });
+                self.settings_3d = Some(Settings3d::open(id, params, rect.left_bottom()));
             }
         }
     }
@@ -389,7 +381,7 @@ impl CutCraftApp {
             self.settings_3d = None;
             return;
         }
-        let mut close = false;
+        let (mut close, mut edited) = (false, false);
         egui::Window::new("component_settings_3d")
             .title_bar(false)
             .resizable(false)
@@ -399,7 +391,7 @@ impl CutCraftApp {
                 combine_radios_3d(ui, &self.icons, s);
                 egui::Grid::new("component_settings_3d").show(ui, |ui| {
                     let p = &mut s.params;
-                    s.dirty |= ui.checkbox(&mut p.fade.on, tr!("panels-fade")).changed();
+                    edited |= ui.checkbox(&mut p.fade.on, tr!("panels-fade")).changed();
                     // Set: then two clicks in the 3D view
                     let setting = s.anchors.map(|(which, _)| which);
                     let set_fade = egui::Button::new(tr!("panels-set"))
@@ -415,9 +407,9 @@ impl CutCraftApp {
                         .range(0.0..=100.0)
                         .suffix(" %")
                         .name("Fade");
-                    s.dirty |= ui.add_enabled(p.fade.on, percent).changed();
+                    edited |= ui.add_enabled(p.fade.on, percent).changed();
                     ui.end_row();
-                    s.dirty |= ui.checkbox(&mut p.tilt.on, tr!("panels-tilt")).changed();
+                    edited |= ui.checkbox(&mut p.tilt.on, tr!("panels-tilt")).changed();
                     let set_tilt = egui::Button::new(tr!("panels-set"))
                         .selected(setting == Some(Anchor::Tilt));
                     if ui
@@ -431,14 +423,14 @@ impl CutCraftApp {
                         .range(-90.0..=90.0)
                         .suffix(" °")
                         .name("Tilt");
-                    s.dirty |= ui.add_enabled(p.tilt.on, angle).changed();
+                    edited |= ui.add_enabled(p.tilt.on, angle).changed();
                     ui.end_row();
                     ui.label(tr!("panels-appearance"));
                     egui::ComboBox::from_id_salt("appearance_3d")
                         .selected_text(p.appearance.label())
                         .show_ui(ui, |ui| {
                             for a in Appearance::ALL {
-                                s.dirty |= ui
+                                edited |= ui
                                     .selectable_value(&mut p.appearance, a, a.label())
                                     .changed();
                             }
@@ -447,7 +439,7 @@ impl CutCraftApp {
                     ui.label("");
                     ui.horizontal(|ui| {
                         let solid = p.appearance == Appearance::SolidColor;
-                        s.dirty |= ui
+                        edited |= ui
                             .add_enabled_ui(solid, |ui| ui.color_edit_button_srgb(&mut p.colour))
                             .inner
                             .changed();
@@ -457,18 +449,13 @@ impl CutCraftApp {
                 });
                 close = ui.button(tr!("panels-close")).clicked();
             });
+        s.changed(edited);
         let pressed = ctx.input(|i| i.pointer.any_down());
-        if !pressed {
-            s.dragged = None;
-        }
-        let apply = s.dirty.then(|| s.params.clone());
-        let dragged = apply.as_ref().and(s.dragged.take());
+        let apply = s.take_edits(pressed);
         if close {
             self.settings_3d = None;
-        } else if apply.is_some() {
-            s.dirty = false;
         }
-        if let Some(p) = apply {
+        if let Some((p, dragged)) = apply {
             // the last frame's step of this drag taken back first, so the drag is one undo
             if dragged == Some(self.history.revision()) {
                 self.history.undo(&mut self.doc);
@@ -479,8 +466,8 @@ impl CutCraftApp {
                 self.status.set_message(&e);
             }
             let (made, revision) = (self.history.undo_depth() > before, self.history.revision());
-            if let (true, Some(s)) = (pressed && made, self.settings_3d.as_mut()) {
-                s.dragged = Some(revision);
+            if let Some(s) = self.settings_3d.as_mut() {
+                s.applied(pressed, made, revision);
             }
         }
     }
