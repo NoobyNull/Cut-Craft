@@ -53,6 +53,7 @@ use readouts::{
     hms, inspected, inspected_rows, length, measured, measured_rows, sheet_length, summary_table,
 };
 mod settings;
+mod settings_3d;
 mod shape_ways;
 pub use settings::*;
 mod bit_changes;
@@ -488,43 +489,7 @@ impl Handle3d {
     }
 }
 
-/// The popup the Settings handle opens: Component Properties' settings as being edited,
-/// applied through the command as they change (a dragged value as it goes, one undo).
-struct Settings3d {
-    component: EntityId,
-    params: cmd_component_properties::Params,
-    dirty: bool,
-    /// While a value is dragged, the history's revision after its last step: the next step
-    /// takes it back first, if nothing has changed the history since.
-    dragged: Option<u64>,
-    /// Where it opened on screen.
-    at: egui::Pos2,
-    /// Its combine-mode radios, where they were drawn last frame.
-    radios: Vec<(cut_craft_core::component::Combine, egui::Pos2)>,
-    /// Set pressed: the fade's or tilt's anchors being clicked in the 3D view, and the
-    /// first point once clicked.
-    anchors: Option<(Anchor, Option<Point>)>,
-}
-
-/// Whose anchors the 3D view's clicks place (help: in the 3D view, the fade's or
-/// tilt's direction is set there).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Anchor {
-    Fade,
-    Tilt,
-}
-
-impl Anchor {
-    /// What to click next, once `first` is placed or not.
-    fn prompt(self, first: bool) -> &'static str {
-        match (self, first) {
-            (Self::Fade, false) => "Click the point that keeps its height",
-            (Self::Fade, true) => "Click the point the component fades down toward",
-            (Self::Tilt, false) => "Click the point that does not move",
-            (Self::Tilt, true) => "Click the point tilted up",
-        }
-    }
-}
+use settings_3d::{Anchor, Settings3d};
 
 #[cfg(test)]
 use turn_rings::Drawn as Rings3d;

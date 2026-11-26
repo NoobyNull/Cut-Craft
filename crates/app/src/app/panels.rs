@@ -285,7 +285,7 @@ fn combine_radios_3d(ui: &mut egui::Ui, icons: &crate::icons::Icons, s: &mut Set
             let response = ui.add(radio).on_hover_hint(name);
             if response.clicked() {
                 s.params.combine = mode;
-                s.dirty = true;
+                s.changed(true);
             }
             s.radios.push((mode, response.rect.center()));
         }
