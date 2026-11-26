@@ -742,7 +742,7 @@ fn turned_slowly(adjust: bool, frames: usize) -> Harness {
     h.app.doc = cut_craft_core::testing::domed();
     h.app.view = View::ThreeD;
     for _ in 0..frames {
-        h.app.moved_3d = h.time + 0.1;
+        h.app.motion_3d.moved(h.time + 0.1);
         h.frame(vec![]);
     }
     h

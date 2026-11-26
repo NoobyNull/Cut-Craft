@@ -32,12 +32,12 @@ impl Harness {
 
     /// Whether Auto-rotate is spinning the 3D view.
     pub(in super::super) fn spinning_3d(&self) -> bool {
-        self.app.spinning_3d.is_some()
+        self.app.motion_3d.spinning()
     }
 
     /// The 3D view last turned, panned or zoomed at `time` (the harness's clock).
     pub(in super::super) fn given_3d_moved_at(&mut self, time: f64) {
-        self.app.moved_3d = time;
+        self.app.motion_3d.moved(time);
     }
 
     /// A 3D mouse plugged in, its movements coming from `input`.
