@@ -269,7 +269,7 @@ pub(super) fn contrasting(under: [u8; 3], toward: [u8; 3]) -> [u8; 3] {
 }
 
 /// WCAG's contrast ratio between two colours, from 1 (the same) to 21 (black on white).
-pub(super) fn contrast(a: [u8; 3], b: [u8; 3]) -> f64 {
+pub(crate) fn contrast(a: [u8; 3], b: [u8; 3]) -> f64 {
     let luminance = |c: [u8; 3]| {
         let channel = |v: u8| {
             let v = f64::from(v) / 255.0;

@@ -85,7 +85,7 @@ impl Separator {
 pub struct Layout {
     /// Space left clear along the material's top edge
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-dim" = "T", "x-diagram" = "diagrams/plate_layout.png"))]
+    #[schemars(extend("x-dim" = "T", "x-diagram" = "diagrams/plate_layout.svg"))]
     pub top_margin: f64,
     /// Space left clear along the material's bottom edge
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]

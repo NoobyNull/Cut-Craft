@@ -117,7 +117,7 @@ pub struct Params {
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend(
         "x-dim" = "H",
-        "x-diagram" = "diagrams/height_only.png",
+        "x-diagram" = "diagrams/height_only.svg",
         "x-enable-when" = {"scale_to_exact_height": "true"}
     ))]
     pub height: f64,

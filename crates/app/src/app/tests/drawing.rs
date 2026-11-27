@@ -182,8 +182,20 @@ fn every_measurement_picture_is_in_the_icon_set() {
     for p in &pictures {
         assert!(
             known.contains(p),
-            "{p} is not in assets/icons: add its PNG there"
+            "{p} is not in assets/icons: add its SVG there"
         );
+        // drawn as shapes, so they stay sharp on a scaled screen; letters as outlines,
+        // since the SVG reader is given no fonts
+        assert!(
+            crate::icons::is_svg(p),
+            "{p}: a measurement picture is an SVG"
+        );
+        let svg = crate::icons::built_in::BUILT_IN
+            .iter()
+            .find(|(key, _)| key == p)
+            .map(|(_, bytes)| String::from_utf8_lossy(bytes))
+            .expect("built in");
+        assert!(!svg.contains("<text"), "{p}: letters drawn as outlines");
     }
     assert!(
         pictures.len() >= 19,

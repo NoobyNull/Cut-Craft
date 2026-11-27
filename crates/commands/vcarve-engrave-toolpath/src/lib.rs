@@ -54,7 +54,7 @@ pub struct Params {
     #[serde(default)]
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
-    #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_vcarve.png"))]
+    #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_vcarve.svg"))]
     pub start_depth: f64,
     /// Deepest the bit goes below the start depth; wider parts are cut flat there (0: as
     /// deep as it can)

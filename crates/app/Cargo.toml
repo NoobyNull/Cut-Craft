@@ -33,6 +33,8 @@ egui_commonmark.workspace = true
 egui_extras.workspace = true
 # egui_extras decodes pictures with image; this turns on its readers (dialog pictures, clipart)
 image.workspace = true
+# draws a measurement picture (SVG) small for the help, as egui_extras draws it in forms
+resvg = { version = "0.45", default-features = false }
 # the help pictures (--help-pictures): saved as small 64-colour PNGs
 color_quant = "1.1"
 png = "0.18"

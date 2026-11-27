@@ -30,7 +30,7 @@ pub struct Params {
     /// Deepest any scallop goes
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
-    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_texture.png"))]
+    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_texture.svg"))]
     pub max_cut_depth: f64,
     /// Shallowest a scallop goes, as a percentage of the deepest
     #[schemars(range(min = 0, max = 100))]

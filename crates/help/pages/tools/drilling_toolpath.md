@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-27
 see-also: drill_bank_toolpath, profile_toolpath
 ---
 

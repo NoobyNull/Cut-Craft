@@ -113,7 +113,7 @@ pub struct Params {
     /// off in more than one pass
     #[schemars(title = "Depth to Take Off", extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
-    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_surfacing.png"))]
+    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_surfacing.svg"))]
     pub depth: f64,
     /// A surfacing bit (spoilboard bit or fly cutter) from your bits; its stepover and
     /// feeds are used

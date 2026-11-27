@@ -19,7 +19,7 @@ pub struct Params {
     pub offset: bool,
     /// How far out the boundary is grown
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-dim" = "O", "x-diagram" = "diagrams/offset_distance.png"))]
+    #[schemars(extend("x-dim" = "O", "x-diagram" = "diagrams/offset_distance.svg"))]
     pub distance: f64,
     /// Whether the grown boundary's corners are round or sharp
     #[schemars(extend("x-widget" = "row"))]

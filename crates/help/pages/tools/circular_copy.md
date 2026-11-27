@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-27
 see-also: array_copy, copy_along_vectors, rotate
 ---
 

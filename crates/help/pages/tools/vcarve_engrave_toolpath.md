@@ -33,6 +33,9 @@ see-also: draw_text, save_toolpaths
 
 V-carving needs a V-bit; pick one from the [Bit Library](help:tool_database).
 
+The picture under **Cutting Depths** marks **Start depth** (D1) and **Flat depth** (D) in
+magenta, with the same letters beside the settings.
+
 Carving lots of letters or a detailed picture can take a while to calculate. The progress
 window moves on as each shape is carved, gives each clearance bit its share, and says about
 how long is left ([Long jobs and the time left](help:progress)). Cancel stops it with

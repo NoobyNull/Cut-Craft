@@ -19,7 +19,7 @@ see-also: tabs, pocket_toolpath, save_toolpaths
 
    ![Step 3](pictures/profile_toolpath/step-3.png)
 
-4. Set the **Cut Depth** (D). To cut a part free, make it the thickness of the material.
+4. Set the **Cut Depth** (D, marked in magenta on the picture above it). To cut a part free, make it the thickness of the material.
 
    ![Step 4](pictures/profile_toolpath/step-4.png)
 

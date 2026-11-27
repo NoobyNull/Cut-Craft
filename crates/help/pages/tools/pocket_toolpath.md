@@ -23,7 +23,7 @@ see-also: profile_toolpath, vcarve_engrave_toolpath, stepover
 
    ![Step 4](pictures/pocket_toolpath/step-4.png)
 
-5. Set the **Cut Depth** (D): how far below the top of the material the floor of the pocket ends up. Here it is 10 mm.
+5. Set the **Cut Depth** (D): how far below the top of the material the floor of the pocket ends up. Here it is 10 mm. The picture above the setting marks it D, in magenta.
 
    ![Step 5](pictures/pocket_toolpath/step-5.png)
 

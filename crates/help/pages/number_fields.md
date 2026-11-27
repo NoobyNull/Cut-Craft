@@ -1,7 +1,7 @@
 ---
 reviewed: 2026-11-20
 see-also: document_variables, setup_material, getting_started, keyboard_shortcuts
-icon: diagrams/size_wh.png
+icon: diagrams/size_wh.svg
 ---
 
 # Number fields

@@ -1064,9 +1064,9 @@ fn every_picture_in_the_help_is_in_the_icon_set() {
     }
     // the clearing pictures: the light step's bite, the edge pass, a channel's loops
     for p in [
-        "diagrams/light_step.png",
-        "diagrams/edge_pass.png",
-        "diagrams/adaptive_channel.png",
+        "diagrams/light_step.svg",
+        "diagrams/edge_pass.svg",
+        "diagrams/adaptive_channel.svg",
     ] {
         assert!(pictures.iter().any(|q| q == p), "the help shows {p}");
     }

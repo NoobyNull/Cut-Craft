@@ -35,7 +35,7 @@ pub enum AngleMode {
 pub struct Params {
     /// How many in all, the original included
     #[schemars(range(min = 2))]
-    #[schemars(extend("x-diagram" = "diagrams/circular_angle.png"))]
+    #[schemars(extend("x-diagram" = "diagrams/circular_angle.svg"))]
     pub items: u32,
     /// The rotation centre
     pub around: Around,

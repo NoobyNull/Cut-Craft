@@ -1288,7 +1288,7 @@ fn lettered() -> Value {
         "type": "object",
         "properties": {
             "cut_depth": { "type": "number", "x-unit": "mm", "x-group": "Cutting Depths",
-                           "x-dim": "D", "x-diagram": "diagrams/test.png" },
+                           "x-dim": "D", "x-diagram": "diagrams/test.svg" },
             "swivel_depth": { "type": "number", "x-unit": "mm", "x-group": "Cutting Depths",
                               "x-dim": "D2" },
             "passes": { "type": "integer", "x-group": "Cutting Depths" }
@@ -1304,7 +1304,7 @@ fn a_measurements_letter_is_read_from_its_schema() {
     assert_eq!(field(&f, "passes").dim, None);
     assert_eq!(
         field(&f, "cut_depth").diagram.as_deref(),
-        Some("diagrams/test.png")
+        Some("diagrams/test.svg")
     );
 }
 
@@ -1315,7 +1315,7 @@ fn a_groups_picture_shows_once_at_its_top_and_each_letter_before_its_name() {
     let (texts, mut asked) = drawn_with_pictures(&f, &mut params);
     // egui may lay a first frame out twice
     asked.dedup();
-    assert_eq!(asked, ["diagrams/test.png"], "{texts:?}");
+    assert_eq!(asked, ["diagrams/test.svg"], "{texts:?}");
     let at = |t: &str| texts.iter().position(|x| x == t);
     let (d2, swivel) = (at("D2").unwrap(), at("Swivel depth").unwrap());
     assert_eq!(
@@ -1498,4 +1498,25 @@ fn job_setup_s_rotary_size_is_named_for_the_material_s_shape() {
     assert_eq!(named("round"), "Diameter (D)");
     assert_eq!(named("square"), "Side (D)");
     assert_eq!(named("board"), "Thickness (D)");
+}
+
+#[test]
+fn the_callout_letters_match_the_pictures_and_stand_out_in_both_themes() {
+    use crate::options::appearance::contrast;
+    let rgb = |c: egui::Color32| [c.r(), c.g(), c.b()];
+    // the pictures' magenta in the light theme; a lighter one on the dark panel
+    assert_eq!(
+        super::dim_colour(false),
+        egui::Color32::from_rgb(0xb0, 0x18, 0x7e)
+    );
+    for dark in [false, true] {
+        let panel = if dark {
+            egui::Visuals::dark()
+        } else {
+            egui::Visuals::light()
+        }
+        .panel_fill;
+        let ratio = contrast(rgb(super::dim_colour(dark)), rgb(panel));
+        assert!(ratio >= 4.5, "dark {dark}: {ratio:.2} to 1");
+    }
 }

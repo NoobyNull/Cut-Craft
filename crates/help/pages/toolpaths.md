@@ -188,7 +188,7 @@ Alternate (rows back and forth, climb then conventional, and loops turning the o
 on a pass back: quicker, with a rougher wall). Changing them is an edit you can undo, and
 marks the toolpaths they shape as needing to be calculated again.
 
-![Light Step: the bit (Dia across) bites B into the wall as it goes along; B is the Light Step's share of Dia](bytes://icons/diagrams/light_step.png)
+![Light Step: the bit (Dia across) bites B into the wall as it goes along; B is the Light Step's share of Dia](bytes://icons/diagrams/light_step.svg)
 
 A raster pocket's rows step over to the next along the wall without lifting, so the bit
 goes down into the material once per pass instead of at the start of every row.
@@ -207,7 +207,7 @@ round fronts post as arcs instead of many short lines. The rest of the pocket, i
 each channel's ends and corners, is cleared the usual adaptive way. A tip narrower than
 the bit can't be reached by it: clear it with a smaller bit or a V-bit.
 
-![A narrow channel from above: down in the middle, out in a spiral, then D-shaped loops a Light Step apart from wall to wall](bytes://icons/diagrams/adaptive_channel.png)
+![A narrow channel from above: down in the middle, out in a spiral, then D-shaped loops a Light Step apart from wall to wall](bytes://icons/diagrams/adaptive_channel.svg)
 
 Adaptive works out every step the bit takes, so a big pocket can take a little while to
 calculate. The progress window says which step it is on (finding the narrow channels,
@@ -215,7 +215,7 @@ sweeping each one, clearing the wider areas), how far it has got and about how l
 left ([Long jobs and the time left](help:progress)); big open areas take longer than the
 rest. Cancel stops it and leaves the toolpath as it was.
 
-![Leave for Edge Pass: the clearing stops A short of the wall, then the bit goes round once at the full depth D and skims A off](bytes://icons/diagrams/edge_pass.png)
+![Leave for Edge Pass: the clearing stops A short of the wall, then the bit goes round once at the full depth D and skims A off](bytes://icons/diagrams/edge_pass.svg)
 
 Pocket's Clear Pocket section has two settings for straighter walls. Leave for Edge Pass
 (A in the picture) stops the clearing that far short of the walls, so the pass round the edge takes one thin,

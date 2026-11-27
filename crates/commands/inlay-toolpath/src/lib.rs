@@ -41,7 +41,7 @@ pub struct Params {
     /// Below the material surface where cutting starts
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
-    #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_inlay.png"))]
+    #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_inlay.svg"))]
     pub start_depth: f64,
     /// Below the start depth. Right through the material, an insert or hole's waste comes
     /// loose (inlays have no tabs): leave a thin skin, or hold the piece down
@@ -52,7 +52,7 @@ pub struct Params {
     /// Stepped insert: how far down from the start depth the step is
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Steps"))]
-    #[schemars(extend("x-dim" = "H", "x-diagram" = "diagrams/inlay_steps.png"))]
+    #[schemars(extend("x-dim" = "H", "x-diagram" = "diagrams/inlay_steps.svg"))]
     pub step_depth: f64,
     /// Stepped insert: how far out from the shape the shelf reaches
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]

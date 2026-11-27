@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-27
 see-also: embellish, texture_area, vector_texture, performance
 ---
 

@@ -780,7 +780,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     icon(
         Area::Toolpaths,
-        "diagrams/depth_profile.png",
+        "diagrams/depth_profile.svg",
         "Tab sizes can come from the bit: as thick as its pass depth (at most half the cut) and \
          twice as long, so a 1/4\" bit taking 1/4\" passes leaves 1/2\" x 1/4\" tabs.",
         "profile_toolpath",
@@ -837,14 +837,14 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     icon(
         Area::Toolpaths,
-        "diagrams/adaptive_channel.png",
+        "diagrams/adaptive_channel.svg",
         "With **Adaptive** clearing the bit takes only a thin bite everywhere, so it can go a \
          full pass deep with confidence: gentler on the bit and on the machine.",
         "pocket_toolpath",
     ),
     icon(
         Area::Toolpaths,
-        "diagrams/light_step.png",
+        "diagrams/light_step.svg",
         "**Toolpaths ▸ Clearing Settings** sets adaptive clearing's **Light Step**, the bite it \
          takes. 5 to 15% of the bit suits most work.",
         "pocket_toolpath",
@@ -858,7 +858,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     icon(
         Area::Toolpaths,
-        "diagrams/edge_pass.png",
+        "diagrams/edge_pass.svg",
         "Pocket's **Leave for Edge Pass** stops the clearing just short of the wall, then one \
          thin, even skim takes it off, for a straighter, cleaner wall.",
         "pocket_toolpath",
@@ -878,7 +878,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     icon(
         Area::Toolpaths,
-        "diagrams/depth_vcarve.png",
+        "diagrams/depth_vcarve.svg",
         "Big letters V-carved deep take ages with a V-bit alone. Set a **Flat depth** and add an \
          end mill under **Clearance Bits**: it clears the flat bottom first, and the V-bit cuts \
          only what is left.",
@@ -892,7 +892,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     icon(
         Area::Toolpaths,
-        "diagrams/vcarve_inlay_fit.png",
+        "diagrams/vcarve_inlay_fit.svg",
         "In a V-Carve Inlay, the **Glue gap** is the room left between the top of the plug and \
          the bottom of the pocket once fitted.",
         "vcarve_inlay_toolpath",
@@ -911,7 +911,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     icon(
         Area::Toolpaths,
-        "diagrams/depth_drill.png",
+        "diagrams/depth_drill.svg",
         "**Use Peck Drilling** drills a pass depth at a time, rising between pecks, which suits \
          deep holes better than one long plunge.",
         "drilling_toolpath",
@@ -1360,14 +1360,14 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     icon(
         Area::Program,
-        "diagrams/size_wh.png",
+        "diagrams/size_wh.svg",
         "Number fields know units: in a millimetre job type `2*M` for two inches, and in an \
          inch job `3'` for three feet or `6*I` for 6 mm.",
         "number_fields",
     ),
     icon(
         Area::Program,
-        "diagrams/arc_radius.png",
+        "diagrams/arc_radius.svg",
         "Need a circle's distance round? Number fields know **P** is π: type 2*P*50 for a 50 mm \
          radius.",
         "number_fields",
@@ -1420,7 +1420,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     icon(
         Area::Safety,
-        "diagrams/drag_knife_pressure.png",
+        "diagrams/drag_knife_pressure.svg",
         "**Edit ▸ Options ▸ Confirmation Choices ▸ Warn when material left is over** sets \
          when the checks warn that a bit's taper or shape will leave material on the model.",
         "confirmation_choices",

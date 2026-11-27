@@ -2847,6 +2847,7 @@ dependencies = [
  "naga",
  "png 0.18.1",
  "raw-window-handle",
+ "resvg",
  "rfd",
  "schemars",
  "serde",

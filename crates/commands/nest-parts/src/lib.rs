@@ -46,7 +46,7 @@ pub enum Direction {
 pub struct Params {
     /// The cut-out bit: the least gap left between parts
     #[schemars(title = "Bit diameter", extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-dim" = "Dia", "x-diagram" = "diagrams/nest_gaps.png"))]
+    #[schemars(extend("x-dim" = "Dia", "x-diagram" = "diagrams/nest_gaps.svg"))]
     pub tool_diameter: f64,
     /// Added to the bit diameter between parts, and to the border
     #[schemars(title = "Clearance", extend("x-unit" = "mm"), range(min = 0))]

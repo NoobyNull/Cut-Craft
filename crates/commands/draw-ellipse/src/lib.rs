@@ -18,7 +18,7 @@ pub struct Params {
     pub center: Xy,
     /// How wide the ellipse is from side to side
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-dim" = "W", "x-diagram" = "diagrams/ellipse_size.png"))]
+    #[schemars(extend("x-dim" = "W", "x-diagram" = "diagrams/ellipse_size.svg"))]
     pub width: f64,
     /// How tall the ellipse is from bottom to top
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
