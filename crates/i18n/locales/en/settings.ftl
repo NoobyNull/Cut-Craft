@@ -463,6 +463,12 @@ setting-check-for-updates-when-cut-a5a721 = Check for updates when Cut Craft sta
 setting-every-time-cut-craft-starts-933f9f =
     Every time Cut Craft starts, ask GitHub whether there is a new version,
     and say so if there is. Nothing is downloaded or installed until you choose Install Now
+setting-show-announcements-when-cut-craft-f5db9f = Show announcements when Cut Craft starts
+setting-open-a-short-announcement-from-1c2ef8 =
+    Open a short announcement from the team at the first start of a day it is meant for,
+    such as news of the program or a holiday note, until you tick Don't show this again.
+    Cut Craft looks on GitHub for new ones as it starts; turning this off stops that too.
+    Help ▸ Announcements shows the current ones whenever you like
 setting-backups-ddaf64 = Backups
 setting-options-backups-the-backups-cut-f962c7 =
     Options ▸ Backups: the backups Cut Craft makes by itself. Help ▸ Back Up Settings makes one

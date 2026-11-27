@@ -30,7 +30,8 @@ mod views;
 mod window;
 
 /// The test files moved onto the verbs, each with its source: they never reach into the app.
-const THROUGH_THE_HARNESS: [(&str, &str); 33] = [
+const THROUGH_THE_HARNESS: [(&str, &str); 34] = [
+    ("announcements.rs", include_str!("announcements.rs")),
     ("layers_sheets.rs", include_str!("layers_sheets.rs")),
     (
         "accessibility_tests.rs",

@@ -321,6 +321,7 @@ tooltip-open-application-data-folder = Open Application Data Folder: opens the f
 tooltip-keyboard-shortcuts = Keyboard Shortcuts: lists the keys that run each tool, so you can work without the menus
 tooltip-help-contents = Help Contents: opens Cut Craft's help, with a page for every tool and a search box
 tooltip-did-you-know = Did You Know?: short tips for getting more out of Cut Craft, one at a time
+tooltip-announcements = Announcements: news and notes from the team, such as a new name or a holiday message
 tooltip-credits = Credits: the libraries, pictures and icons Cut Craft is built with, and their licences
 tooltip-about-cut-craft = About Cut Craft: its version, its licence and the people who made it
 tooltip-back-up-settings = Back Up Settings: saves your settings, machines, bits and own files in one backup file, to keep safe or take to another computer

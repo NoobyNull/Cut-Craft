@@ -116,6 +116,7 @@ mod tests;
 mod unapplied;
 #[cfg(test)]
 pub(crate) use tests::document_menus;
+mod announcements;
 mod tips;
 mod title_bar;
 mod toolpath_output;
@@ -797,6 +798,8 @@ pub(crate) struct CutCraftApp {
     tip: Option<usize>,
     /// The Did You Know? window's rendered tips.
     tips_cache: egui_commonmark::CommonMarkCache,
+    /// The Announcements window, and the announcements GitHub has.
+    announcements: announcements::Announcements,
     /// Help ▸ Credits: its search and rendered licence texts.
     credits: crate::credits::Window,
     /// Sketch Carving's green areas, with the form settings, revision and selection they

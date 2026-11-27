@@ -143,6 +143,55 @@ fn gather(get: &dyn Fn(&str) -> Result<String, String>) -> Result<Vec<Release>, 
     }
 }
 
+/// Where `announcements.md` (the team's hand-written notes, read by the app's
+/// `announcements`) is read from, in order: the repository the team edits first, since the
+/// release copy's `main` only moves at a release; the copy when the first does not answer.
+pub const ANNOUNCEMENT_HOMES: [&str; 2] = ["NoobyNull/Cut-Craft", "Power-Whittle/PowerWhittle"];
+
+/// Points the announcements elsewhere, such as a file served locally for a test.
+pub const ANNOUNCEMENTS_VARIABLE: &str = "CUTCRAFT_ANNOUNCEMENTS_URL";
+
+/// The address of `announcements.md` on `home`'s `main`.
+pub fn announcements_url(home: &str) -> String {
+    format!("https://raw.githubusercontent.com/{home}/main/announcements.md")
+}
+
+/// The team's `announcements.md`, from the first of [`ANNOUNCEMENT_HOMES`] that has it.
+pub fn announcements() -> Result<String, String> {
+    let urls: Vec<String> = match std::env::var(ANNOUNCEMENTS_VARIABLE) {
+        Ok(url) if !url.is_empty() => vec![url],
+        _ => ANNOUNCEMENT_HOMES
+            .iter()
+            .map(|h| announcements_url(h))
+            .collect(),
+    };
+    first_answer(&urls, &|url| {
+        agent(Some(Duration::from_secs(15)))
+            .get(url)
+            .call()
+            .map_err(|e| offline(&e))?
+            .body_mut()
+            .read_to_string()
+            .map_err(|e| offline(&e))
+    })
+}
+
+/// What the first of `urls` that answers says, asked of `get`; the last one's error when
+/// none does.
+fn first_answer(
+    urls: &[String],
+    get: &dyn Fn(&str) -> Result<String, String>,
+) -> Result<String, String> {
+    let mut error = "nowhere to ask".to_owned();
+    for url in urls {
+        match get(url) {
+            Ok(text) => return Ok(text),
+            Err(e) => error = e,
+        }
+    }
+    Err(error)
+}
+
 /// The end of the name of the build a computer running `os` is updated from, or told to
 /// download: its release counts for that computer only once this file is attached.
 pub fn platform_suffix(os: &str) -> &'static str {
@@ -550,6 +599,28 @@ mod tests {
             })
             .collect();
         serde_json::Value::Array(list).to_string()
+    }
+
+    #[test]
+    fn announcements_are_read_from_the_repository_edited_first_then_its_copy() {
+        assert_eq!(ANNOUNCEMENT_HOMES[0], "NoobyNull/Cut-Craft");
+        assert_eq!(
+            announcements_url("Power-Whittle/PowerWhittle"),
+            "https://raw.githubusercontent.com/Power-Whittle/PowerWhittle/main/announcements.md"
+        );
+        let urls = vec!["a".to_owned(), "b".to_owned()];
+        let only_b = |url: &str| {
+            if url == "b" {
+                Ok("from b".to_owned())
+            } else {
+                Err(format!("{url} is down"))
+            }
+        };
+        assert_eq!(first_answer(&urls, &only_b), Ok("from b".to_owned()));
+        let none = |url: &str| Err::<String, _>(format!("{url} is down"));
+        assert_eq!(first_answer(&urls, &none), Err("b is down".to_owned()));
+        let both = |url: &str| Ok::<_, String>(format!("from {url}"));
+        assert_eq!(first_answer(&urls, &both), Ok("from a".to_owned()));
     }
 
     #[test]

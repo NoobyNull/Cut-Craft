@@ -266,7 +266,7 @@ fn they_load_back_as_saved_and_fill_gaps_with_defaults() {
         panic!("Updates is a group of settings")
     };
     let shown: Vec<&str> = shown.iter().map(|f| f.key.as_str()).collect();
-    assert_eq!(shown, ["check_at_startup"]);
+    assert_eq!(shown, ["check_at_startup", "show_announcements"]);
 }
 
 #[test]

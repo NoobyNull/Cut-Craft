@@ -173,6 +173,7 @@ impl CutCraftApp {
             help: super::help_browser::HelpBrowser::default(),
             tip: None,
             tips_cache: egui_commonmark::CommonMarkCache::default(),
+            announcements: super::announcements::Announcements::default(),
             credits: crate::credits::Window::default(),
             sketch_areas: None,
             carve_area: None,

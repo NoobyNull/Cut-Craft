@@ -278,6 +278,9 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
         .run(|a, _| a.info = Some(Info::Help("contents"))),
     act("did_you_know", "Did You Know?", "Did You Know?: short tips for getting more out of Cut Craft, one at a time").window()
         .run(|a, _| a.open_unseen_tip()),
+    act("announcements", "Announcements", "Announcements: news and notes from the team, such as a new name or a holiday message")
+        .window()
+        .run(CutCraftApp::open_announcements),
     act("credits", "Credits", "Credits: the libraries, pictures and icons Cut Craft is built with, and their licences")
         .run(|a, _| a.info = Some(Info::Credits)),
     act("about_cut_craft", "About Cut Craft", "About Cut Craft: its version, its licence and the people who made it")
