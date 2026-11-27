@@ -1,0 +1,102 @@
+# Puts every pull request on the PowerWhittle timeline (the Power-Whittle org board,
+# https://github.com/orgs/Power-Whittle/projects/1), so nobody has to add it by hand.
+#
+#   opened, reopened, ready for review   added as In Progress; Start and Target = the day it opened
+#   merged                               Done; Target = the day it merged
+#
+# Drafts wait until they're ready for review. Pull requests from forks and ones closed without
+# merging are left alone. Dates are Pacific time. Adding an item that's already on the board
+# returns the existing one, so re-runs and missed events are safe.
+#
+# PROJECT_TOKEN is a classic token of NoobyNull's with only the "project" scope (fine-grained
+# tokens can't reach a board owned by a personal account, and the org board needs no more).
+# Without it the job warns and skips.
+#
+# pull_request_target runs this file as it is on main, never a pull request's own copy, so a
+# pull request can't edit it to get at the token. Never add a checkout or run anything from
+# the pull request's branch here.
+name: Timeline
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, closed]
+
+permissions: {}
+
+concurrency:
+  group: timeline-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  board:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.action == 'closed' && github.event.pull_request.merged ||
+       github.event.action != 'closed' && !github.event.pull_request.draft)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Put the pull request on the board
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          ORG: Power-Whittle
+          BOARD: 1
+          PR_ID: ${{ github.event.pull_request.node_id }}
+          OPENED: ${{ github.event.pull_request.created_at }}
+          MERGED: ${{ github.event.pull_request.merged_at }}
+          ACTION: ${{ github.event.action }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::PROJECT_TOKEN isn't set, so this pull request wasn't put on the timeline. CONTRIBUTING.md, Keep Power-Whittle up to date, says how to add it."
+            exit 0
+          fi
+          day() { TZ=America/Los_Angeles date -d "$1" +%F; }
+
+          board=$(gh api graphql -F org="$ORG" -F number="$BOARD" -f query='
+            query($org: String!, $number: Int!) {
+              organization(login: $org) { projectV2(number: $number) {
+                id
+                fields(first: 50) { nodes {
+                  ... on ProjectV2Field { id name }
+                  ... on ProjectV2SingleSelectField { id name options { id name } }
+                } }
+              } }
+            }' --jq .data.organization.projectV2)
+          project=$(jq -r .id <<<"$board")
+          field() { jq -r --arg n "$1" '.fields.nodes[] | select(.name == $n) | .id' <<<"$board"; }
+          start=$(field Start)
+          target=$(field Target)
+          status=$(field Status)
+          option() { jq -r --arg n "$1" '.fields.nodes[] | select(.name == "Status") | .options[]
+            | select(.name == $n) | .id' <<<"$board"; }
+          in_progress=$(option "In Progress")
+          done_=$(option Done)
+          for v in project start target status in_progress done_; do
+            if [ -z "${!v}" ]; then
+              echo "::error::The board has no '$v' (it looks for the fields Start, Target and Status, and the statuses In Progress and Done)."
+              exit 1
+            fi
+          done
+
+          item=$(gh api graphql -f project="$project" -f content="$PR_ID" -f query='
+            mutation($project: ID!, $content: ID!) {
+              addProjectV2ItemById(input: {projectId: $project, contentId: $content}) { item { id } }
+            }' --jq .data.addProjectV2ItemById.item.id)
+
+          set_field() { # field id, value object
+            gh api graphql -f project="$project" -f item="$item" -f field="$1" -f query="
+              mutation(\$project: ID!, \$item: ID!, \$field: ID!) {
+                updateProjectV2ItemFieldValue(input: {projectId: \$project, itemId: \$item,
+                  fieldId: \$field, value: $2}) { projectV2Item { id } }
+              }" --silent
+          }
+
+          set_field "$start" "{date: \"$(day "$OPENED")\"}"
+          if [ "$ACTION" = closed ]; then
+            set_field "$target" "{date: \"$(day "$MERGED")\"}"
+            set_field "$status" "{singleSelectOptionId: \"$done_\"}"
+            echo "::notice::On the timeline, ending $(day "$MERGED")."
+          else
+            set_field "$target" "{date: \"$(day "$OPENED")\"}"
+            set_field "$status" "{singleSelectOptionId: \"$in_progress\"}"
+            echo "::notice::On the timeline as In Progress, from $(day "$OPENED")."
+          fi

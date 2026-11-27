@@ -145,10 +145,18 @@ Cut Craft is moving to the [Power-Whittle](https://github.com/Power-Whittle) org
 it has moved, every pull request keeps that side current too (the pull request template has the
 boxes to tick):
 
-- **The timeline.** Put the pull request, or the issue it fixes, on the
-  [PowerWhittle timeline](https://github.com/orgs/Power-Whittle/projects/1) with a start date
-  and a target date, and keep its status right. When it merges, mark it done. The board needs
-  write access; without it, ask a maintainer in the pull request to add or update it for you.
+- **The timeline.** The **Timeline** workflow (`.github/workflows/timeline.yml`) puts every
+  pull request from a branch in this repository on the
+  [PowerWhittle timeline](https://github.com/orgs/Power-Whittle/projects/1) by itself: In
+  Progress with Start and Target set to the day it opened (a draft waits until **Ready for
+  review**), then Done with Target set to the day it merged. Dates are Pacific time. You only
+  touch the board for things the workflow can't know, such as an issue the pull request fixes
+  or a target date further out. Pull requests from forks aren't added; a maintainer adds them.
+  The workflow needs the repository secret `PROJECT_TOKEN`: a classic personal access token of
+  NoobyNull's with only the **project** scope (fine-grained tokens can't reach a board owned
+  by a personal account). Without it the workflow warns and skips. When the token expires,
+  make a new one the same way and replace the secret under Settings > Secrets and variables >
+  Actions.
 - **The release mirror.** Power-Whittle/PowerWhittle is a read-only copy for releases. Once the
   release workflow's mirror step lands (it pushes each release's tag and `main` there and adds
   the same files), never commit to the mirror's `main` by hand: the next release could no longer
