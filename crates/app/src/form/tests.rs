@@ -2,6 +2,8 @@ use super::*;
 use crate::commands::registry;
 use cut_craft_core::document::Units;
 
+mod choice_pictures;
+
 fn schema(id: &str) -> Value {
     registry().get(id).unwrap().schema()
 }

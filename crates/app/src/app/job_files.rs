@@ -223,6 +223,7 @@ impl CutCraftApp {
             params["rotary"] = Value::from(self.doc.job.rotary.is_some());
         }
         self.fill_drill_bank(cmd.id(), &mut params);
+        self.fill_carving_style(cmd.id(), &mut params);
         // the untouched default bit given the sizes a real one has, so a new form warns of
         // nothing the beginner did not set
         starter_tool(&mut params);

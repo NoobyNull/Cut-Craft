@@ -1,5 +1,9 @@
 //! Toolpath settings, the questions Cut Craft asks, job defaults, General and Import.
 
+use cmd_vcarve_engrave_toolpath::{
+    Direction as VcarveDirection, Order as VcarveOrder, Style as VcarveStyle,
+};
+
 use super::{
     AddToMenus, CanvasFlyouts, Deserialize, Display, FileDialogDefault, JsonSchema, NewBars,
     OtherWays, RibbonIcons, Serialize, SnappedBars, WindowLayout, egui, on,
@@ -83,6 +87,25 @@ pub struct ToolpathSettings {
     #[serde(default)]
     #[schemars(title = "Advanced rotary mode")]
     pub advanced_rotary: bool,
+    /// How a new V-Carve toolpath cuts its passes; each toolpath keeps its own, changed on
+    /// its form
+    #[serde(default)]
+    #[schemars(title = "V-Carve carving style", extend("x-widget" = "drop-down"))]
+    pub vcarve_style: VcarveStyle,
+    /// The order a new V-Carve toolpath that stays down carves its centre lines in
+    #[serde(default)]
+    #[schemars(
+        title = "V-Carve order",
+        extend("x-widget" = "drop-down", "x-show-when" = {"vcarve_style": "stay_down"})
+    )]
+    pub vcarve_order: VcarveOrder,
+    /// Which end of each stretch a new V-Carve toolpath that lifts between cuts starts at
+    #[serde(default)]
+    #[schemars(
+        title = "V-Carve direction",
+        extend("x-widget" = "drop-down", "x-show-when" = {"vcarve_style": "lift"})
+    )]
+    pub vcarve_direction: VcarveDirection,
 }
 
 /// Two minutes to stop, change a bit by hand and zero it again.

@@ -386,6 +386,19 @@ impl CutCraftApp {
         params["bank"] = serde_json::to_value(bank).expect("a drill bank serialises");
     }
 
+    /// A new V-Carve toolpath carves as Options ▸ Toolpath Settings says (a toolpath being
+    /// edited keeps its own).
+    pub(super) fn fill_carving_style(&self, command: &str, params: &mut Value) {
+        if command != "vcarve_engrave_toolpath" {
+            return;
+        }
+        let t = &self.options.toolpaths;
+        let text = |v: serde_json::Result<Value>| v.expect("a choice serialises");
+        params["style"] = text(serde_json::to_value(t.vcarve_style));
+        params["order"] = text(serde_json::to_value(t.vcarve_order));
+        params["direction"] = text(serde_json::to_value(t.vcarve_direction));
+    }
+
     /// A form's Apply: its command, or for an edited toolpath that toolpath made again with
     /// the form's settings, in its place.
     pub(super) fn apply_form(&mut self, id: &str, params: &Value) -> Result<(), String> {
