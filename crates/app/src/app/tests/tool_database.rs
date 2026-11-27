@@ -823,7 +823,7 @@ fn a_new_jobs_default_bit_has_its_flute_length_so_the_form_warns_of_nothing() {
 /// A job keeps each toolpath's own copy of its bit; the form says when the Bit Library's
 /// bit of that name has another shape, and Use the Bit Library's puts it in.
 #[test]
-fn a_toolpaths_bit_unlike_the_bit_librarys_is_said_and_can_be_swapped() {
+fn a_toolpaths_bit_unlike_the_bit_library_one_is_said_and_can_be_swapped() {
     let mut h = Harness::new();
     h.invoke("profile_toolpath");
     h.choose_tool("3 mm End Mill");

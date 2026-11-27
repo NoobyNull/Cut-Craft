@@ -1230,7 +1230,7 @@ fn quarter_inch_bit() -> Tool {
 }
 
 #[test]
-fn a_bit_shaped_unlike_the_bit_librarys_one_of_its_name_is_called_out() {
+fn a_bit_shaped_unlike_the_bit_library_one_of_its_name_is_called_out() {
     let slot = slot("Slot", 50.0, 20.0, 180.0, 3.0);
     let found = check(&job(), &[&slot], &with_library(vec![quarter_inch_bit()]));
     let shapes: Vec<&Finding> = found

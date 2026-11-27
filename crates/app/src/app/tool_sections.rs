@@ -20,7 +20,7 @@ pub(super) enum ToolAsk {
 /// What a form says when its bit, as the job keeps it, is not the Bit Library's bit of the
 /// same name (edited since, or another computer's): how they differ, and a button to use
 /// the library's. Whether it was pressed.
-fn not_the_librarys(
+fn not_the_library_bit(
     ui: &mut egui::Ui,
     tool: &Tool,
     listed: &Tool,
@@ -39,7 +39,7 @@ fn not_the_librarys(
         .collect();
     ui.colored_label(
         ui.visuals().warn_fg_color,
-        tr!("tool-not-the-librarys", differences = said.join("; ")),
+        tr!("tool-not-the-library-bit", differences = said.join("; ")),
     );
     ui.button(tr!("tool-use-library"))
         .on_hover_hint(tr!("tool-use-library.tooltip"))
@@ -108,7 +108,7 @@ pub(super) fn tool_picker(
                         t!("Not in the Bit Library: Select… one, or add it there"),
                     );
                 }
-                Some(listed) => use_library = not_the_librarys(ui, tool, listed, units),
+                Some(listed) => use_library = not_the_library_bit(ui, tool, listed, units),
             }
         }
         None => {
