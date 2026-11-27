@@ -266,8 +266,17 @@ fn a_machining_limit_with_nothing_selected_says_what_to_do() {
         machining_boundary: cut_craft_core::component::MachiningBoundary::SelectedVectors,
         ..coarse()
     };
-    let why = made(&beaded(), &p).unwrap_err().to_string();
-    assert!(why.contains("closed vectors"), "{why}");
+    // never refused: an empty toolpath, and in red what to select
+    let change = RotaryFinishingToolpath::run(&beaded(), &p).unwrap();
+    let mut doc = beaded();
+    doc.apply(&change).unwrap();
+    let toolpath = doc.toolpaths.values().next().unwrap();
+    assert_eq!(toolpath.moves, vec![]);
+    assert!(
+        change.notes.iter().any(|n| n.contains("closed vectors")),
+        "{:?}",
+        change.notes
+    );
 }
 
 /// How far a square bar's flats are from the axis: its corners just touch the material's

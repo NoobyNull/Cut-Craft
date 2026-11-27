@@ -475,3 +475,51 @@ fn a_copy_recalculated_while_its_source_is_out_of_date_is_not_left_with_old_move
         history.undo(&mut doc);
     }
 }
+
+#[test]
+fn renaming_a_level_keeps_the_toolpaths_limited_to_it() {
+    use cut_craft_core::component::Level;
+    let mut doc = with_toolpath();
+    let flat = EntityId(1);
+    let mut c = Change::builder(&doc);
+    c.set_level(
+        7,
+        Some(Level {
+            name: "Leaves".into(),
+            ..Level::default()
+        }),
+    );
+    let mut limited = doc.toolpaths[&flat].clone();
+    limited.strategy = "rotary_finishing_toolpath".into();
+    limited.params = serde_json::json!({
+        "machining_boundary": "selected_level",
+        "boundary_level": "Leaves",
+    });
+    let limited = c.add_toolpath(limited);
+    let mut other = doc.toolpaths[&flat].clone();
+    other.params = serde_json::json!({ "boundary_level": "Stems" });
+    let other = c.add_toolpath(other);
+    doc.apply(&c.finish()).unwrap();
+    let mut history = History::default();
+    let mut c = Change::builder(&doc);
+    c.set_level(
+        7,
+        Some(Level {
+            name: "Oak leaves".into(),
+            ..doc.levels[&7].clone()
+        }),
+    );
+    let change = c.finish();
+    history.apply(&mut doc, change).unwrap();
+    assert_eq!(
+        doc.toolpaths[&limited].params["boundary_level"], "Oak leaves",
+        "the toolpath follows its level to the new name"
+    );
+    assert!(
+        doc.toolpaths[&limited].stale,
+        "it cuts the model, so is out of date as before"
+    );
+    assert_eq!(doc.toolpaths[&other].params["boundary_level"], "Stems");
+    assert!(history.undo(&mut doc));
+    assert_eq!(doc.toolpaths[&limited].params["boundary_level"], "Leaves");
+}

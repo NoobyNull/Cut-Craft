@@ -115,7 +115,26 @@ impl Command for RotaryDetailsToolpath {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        let (toolpath, notes) = made(doc, p)?;
+        // a limit with nothing in it makes an empty toolpath and says why, never refuses
+        let empty = cut_craft_rotary_carving::nothing_in(
+            doc,
+            p.machining_boundary,
+            p.machining_boundary_offset,
+            &p.boundary_level,
+        );
+        let (toolpath, notes) = match empty {
+            Some(why) => (
+                cut_craft_core::toolpath::made_by::<Self>(
+                    p,
+                    p.name.clone(),
+                    p.tool.clone(),
+                    cut_craft_rotary_carving::limit_vectors(doc, p.machining_boundary),
+                    vec![],
+                ),
+                vec![why],
+            ),
+            None => made(doc, p)?,
+        };
         let mut c = Change::builder(doc);
         c.add_toolpath(toolpath);
         for note in notes {

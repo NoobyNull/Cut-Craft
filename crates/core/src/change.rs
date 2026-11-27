@@ -830,7 +830,8 @@ impl Change {
     /// it changes or removes, those copying (Merged, Array Copy) a toolpath it removes, cuts
     /// differently or leaves out of date, those carving a picture it moves or alters, when it changes the model those that cut the model, and when
     /// it changes the material's thickness, where the model sits, or the rotary or
-    /// double-sided set-up, every toolpath (they bake those in when calculated). The marks
+    /// double-sided set-up, every toolpath (they bake those in when calculated). A toolpath
+    /// limited to a level it renames is kept limited to it under its new name. The marks
     /// are edits of the change, so undoing it undoes them.
     #[must_use]
     pub fn marking_stale(mut self, doc: &Document) -> Self {
@@ -920,13 +921,33 @@ impl Change {
             outdated.extend(more);
         }
         self.keep_copies_behind_stale(doc, &outdated, &recut);
-        for id in outdated {
-            let toolpath = &doc.toolpaths[&id];
-            if !toolpath.stale && !made.contains(&id) {
-                let after = Toolpath {
-                    stale: true,
-                    ..toolpath.clone()
-                };
+        self.mark_and_follow(doc, &outdated, &made);
+        self
+    }
+
+    /// Marks each of `outdated` stale and keeps each toolpath limited to a level this change
+    /// renames on it, leaving alone those the change makes itself (`made`).
+    fn mark_and_follow(
+        &mut self,
+        doc: &Document,
+        outdated: &std::collections::BTreeSet<EntityId>,
+        made: &std::collections::BTreeSet<EntityId>,
+    ) {
+        let renamed = self.renamed_levels();
+        for (&id, toolpath) in &doc.toolpaths {
+            if made.contains(&id) {
+                continue;
+            }
+            let goes_stale = !toolpath.stale && outdated.contains(&id);
+            let level = toolpath
+                .params
+                .get("boundary_level")
+                .and_then(|l| l.as_str());
+            let follows = renamed.iter().any(|(old, _)| level == Some(old.as_str()));
+            if goes_stale || follows {
+                let mut after = toolpath.clone();
+                after.stale |= goes_stale;
+                follow_renamed_levels(&mut after, &renamed);
                 self.edits.push(Edit::ReplaceToolpath {
                     id,
                     before: Box::new(toolpath.clone()),
@@ -934,7 +955,21 @@ impl Change {
                 });
             }
         }
-        self
+    }
+
+    /// The levels this change renames, old name and new, in the order it renames them.
+    fn renamed_levels(&self) -> Vec<(String, String)> {
+        self.edits
+            .iter()
+            .filter_map(|edit| match edit {
+                Edit::SetLevel {
+                    before: Some(before),
+                    after: Some(after),
+                    ..
+                } if before.name != after.name => Some((before.name.clone(), after.name.clone())),
+                _ => None,
+            })
+            .collect()
     }
 
     /// Marks out of date each Merged or Array Copy toolpath this change makes again while a
@@ -1062,6 +1097,21 @@ pub struct ChangeBuilder<'a> {
     job: Job,
     edits: Vec<Edit>,
     notes: Vec<String>,
+}
+
+/// `toolpath` kept limited to the level it was limited to (a machining limit names its level)
+/// through each of `renamed` (old name, new name), in turn.
+fn follow_renamed_levels(toolpath: &mut Toolpath, renamed: &[(String, String)]) {
+    for (old, new) in renamed {
+        if toolpath
+            .params
+            .get("boundary_level")
+            .and_then(|l| l.as_str())
+            == Some(old.as_str())
+        {
+            toolpath.params["boundary_level"] = new.clone().into();
+        }
+    }
 }
 
 /// The toolpaths `toolpath` copies its moves from: a Merged or Array Copy toolpath's

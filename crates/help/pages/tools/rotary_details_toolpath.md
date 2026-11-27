@@ -45,10 +45,13 @@ the bit across the axis: the **Rotary A** posts do. Set Most angles to 0 for rin
 - **Allowance**: material left on the model for a later pass. 0 for the finish.
 - **Start** and **End**: where along the axis it cuts, from the job's start (the chuck end).
   End 0 runs to the job's end.
-- **Machining limit**: where on the material it may cut. **Material** (the usual) is all of
-  it; **Model**, a **Selected Level** or **Selected Vector(s)** keep it within their outline,
-  grown by **Boundary Offset**. Vectors drawn on the job wrap round the part, just as the job
-  does. Selected vectors are kept with the toolpath, so it recalculates the same.
+- **Machining limit**: where on the material it may cut. **Material** (the usual) is all of it;
+  **Model**, a **Selected Level** or **Selected Vector(s)** keep it within their outline, grown
+  by **Boundary Offset**. Vectors drawn on the job wrap round the part, just as the job does.
+  Selected vectors are kept with the toolpath, so it recalculates the same. Changing, moving or
+  deleting those vectors marks the toolpath out of date, and renaming the level keeps it on the
+  renamed level. With nothing to cut in the limit (no closed vectors selected, or no level of
+  that name) it is made empty and says in red what to pick: put it right and press Calculate.
 
 ## What it says in red
 

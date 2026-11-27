@@ -132,7 +132,26 @@ impl Command for RotaryLatheToolpath {
     }
 
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
-        let (toolpath, notes) = turned(doc, p)?;
+        // a limit with nothing in it makes an empty toolpath and says why, never refuses
+        let empty = cut_craft_rotary_carving::nothing_in(
+            doc,
+            p.machining_boundary,
+            p.machining_boundary_offset,
+            &p.boundary_level,
+        );
+        let (toolpath, notes) = match empty {
+            Some(why) => (
+                cut_craft_core::toolpath::made_by::<Self>(
+                    p,
+                    p.name.clone(),
+                    p.tool.clone(),
+                    cut_craft_rotary_carving::limit_vectors(doc, p.machining_boundary),
+                    vec![],
+                ),
+                vec![why],
+            ),
+            None => turned(doc, p)?,
+        };
         let mut c = Change::builder(doc);
         c.add_toolpath(toolpath);
         for note in notes {
@@ -1076,6 +1095,25 @@ mod tests {
         assert!(
             err.to_string().contains("outside the machining limit"),
             "{err}"
+        );
+    }
+
+    #[test]
+    fn a_level_limit_with_no_such_level_makes_an_empty_toolpath_and_says_why() {
+        let doc = round_job(100.0, 40.0);
+        let p = Params {
+            machining_boundary: MachiningBoundary::SelectedLevel,
+            boundary_level: "Gone".into(),
+            ..Params::default()
+        };
+        let change = RotaryLatheToolpath::run(&doc, &p).unwrap();
+        let mut after = doc.clone();
+        after.apply(&change).unwrap();
+        assert!(after.toolpaths.values().all(|t| t.moves.is_empty()));
+        assert!(
+            change.notes.iter().any(|n| n.contains("no level called")),
+            "{:?}",
+            change.notes
         );
     }
 
