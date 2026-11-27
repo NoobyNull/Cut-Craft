@@ -176,9 +176,9 @@ impl CutCraftApp {
     }
 
     /// Help ▸ Announcements: every current announcement, asking GitHub again when it has not
-    /// answered yet.
+    /// answered yet (not while announcements are turned off: then only the bundled ones).
     pub(super) fn open_announcements(&mut self, ctx: &egui::Context) {
-        if self.announcements.fetched.is_none() {
+        if self.options.updates.show_announcements && self.announcements.fetched.is_none() {
             self.announcements.start_fetch(ctx);
         }
         self.announcements.open = Some(self.announcements.current());
@@ -191,7 +191,7 @@ impl CutCraftApp {
             let at_startup = std::mem::take(&mut self.announcements.at_startup);
             if self.announcements.from_menu && self.announcements.open.is_some() {
                 self.announcements.open = Some(self.announcements.current());
-            } else if at_startup && self.tip.is_none() && self.open_due_announcements() {
+            } else if at_startup && self.tip.is_none() && self.announcements_at_startup() {
                 // shown instead of the tip
                 self.announcements.waiting_tip = None;
             }
@@ -200,6 +200,8 @@ impl CutCraftApp {
             let now = Instant::now();
             if self.announcements.rx.is_none() || now >= until {
                 self.announcements.waiting_tip = None;
+                // the tip is this start's window: GitHub answering later opens nothing
+                self.announcements.at_startup = false;
                 if self.announcements.open.is_none() && self.tip.is_none() {
                     self.tip = Some(tip);
                 }

@@ -131,6 +131,11 @@ impl Harness {
         self.frame(vec![]);
     }
 
+    /// Whether Cut Craft is asking GitHub for announcements.
+    pub(in super::super) fn asking_github(&self) -> bool {
+        self.app.announcements.asking()
+    }
+
     /// The titles the Announcements window shows, if it is open.
     pub(in super::super) fn announcements_shown(&self) -> Option<Vec<String>> {
         let open = self.app.announcements.open.as_ref()?;

@@ -95,6 +95,10 @@ fn offline_or_turned_off_shows_only_what_came_with_the_version_or_nothing() {
     h.start_cut_craft();
     assert_eq!(h.announcements_shown(), None);
     assert!(h.tip().is_some(), "the tip as before");
+    // Help ▸ Announcements then shows the bundled ones without asking GitHub
+    h.choose_on_menu_bar("Help", &["Announcements..."]);
+    assert!(!h.asking_github(), "turned off: GitHub is not asked");
+    assert_eq!(h.announcements_shown(), Some(vec![HEADS_UP.to_owned()]));
 }
 
 #[test]
