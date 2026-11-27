@@ -24,6 +24,9 @@ Your favourites are a bar of their own, the first of your
 [window layout](help:interface_layout), with your Create and Edit tools first and your
 toolpath tools after them. Click a tool to use it; a group opens its list of tools.
 
+Until you add your first favourite there is no bar to see: it appears, where you last had
+it, as soon as you pick **Add to Favourites**, and goes again if you take the last one off.
+
 The dots at the bar's start are its **grip**. Drag them to move the bar, or right-click them
 to **Snap to Top**, **Bottom**, **Left** or **Right**, **Lock Position**, **Turn** it, or
 **Rename Toolbar** (say, to "Shop"; menus then say **Add to Shop**). Favourites can never

@@ -132,13 +132,17 @@ impl CutCraftApp {
     }
 
     /// The Favourites bar when it is snapped (no `start`) or floating (from `start`). How
-    /// many floating bars it drew (so the next starts under it).
+    /// many floating bars it drew (so the next starts under it). With no favourites it is
+    /// not shown at all, and takes no room, until the first is added.
     pub(super) fn placed_favourites(
         &mut self,
         ui: &mut egui::Ui,
         room: &mut Room,
         start: Option<egui::Pos2>,
     ) -> usize {
+        if self.favourite_items().is_empty() {
+            return 0;
+        }
         let place = self.options.favourites.bar;
         let name = self.favourites_name();
         let menu = self.favourites_menu();
