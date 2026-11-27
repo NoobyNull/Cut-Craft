@@ -131,13 +131,14 @@ impl CutCraftApp {
         if self.form.is_some() {
             let width = super::DESIGN_PANEL_WIDTHS * ui.spacing().interact_size.x;
             let height = FORM_SHARE * (room.bottom() - top);
-            // beside the toolpaths bar on the right, not over it
+            // beside the toolpaths bar on the right, not over it, following it as it moves
+            // and as the window changes size
             let right = toolpaths
                 .filter(|r| r.center().x > room.center().x)
                 .map_or(room.right(), |r| r.left());
             egui::Area::new(egui::Id::unique("canvas_form"))
                 .pivot(egui::Align2::RIGHT_TOP)
-                .default_pos(egui::pos2(right - margin, top))
+                .fixed_pos(egui::pos2(right - margin, top))
                 .show(ui.ctx(), |ui| {
                     floating(ui).show(ui, |ui| {
                         cut_craft_bug_report::mark(ui, "Canvas form");
