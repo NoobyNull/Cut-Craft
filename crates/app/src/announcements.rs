@@ -397,7 +397,7 @@ mod tests {
     }
 
     #[test]
-    fn the_repositorys_announcements_file_reads_without_a_problem() {
+    fn the_announcements_file_in_the_repository_reads_cleanly() {
         let file = include_str!("../../../announcements.md");
         let (_, problems) = parse(file);
         assert!(problems.is_empty(), "announcements.md: {problems:?}");
