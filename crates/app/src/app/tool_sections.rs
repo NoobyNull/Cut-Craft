@@ -45,8 +45,15 @@ pub(super) fn tool_picker(
             let passes = passes::cut_depth(top)
                 .filter(|_| tool.pass_depth > 0.0)
                 .map(|depth| tool.pass_depths(depth).len() as f64);
-            ui.strong(held_name(current, slots));
-            if id == cut_craft_core::drag_knife::STRATEGY {
+            // the bit's own shape beside its name; a drag knife's blade has none to draw
+            let knife = id == cut_craft_core::drag_knife::STRATEGY;
+            ui.horizontal(|ui| {
+                if !knife {
+                    bit_picture(ui, tool, PICTURE_HEIGHT, units);
+                }
+                ui.strong(held_name(current, slots));
+            });
+            if knife {
                 ui.label(KNIFE_LINE);
             } else if laser && tool.is_laser() {
                 // a laser from before lasers were a tool type reads as the laser it is
@@ -96,6 +103,43 @@ pub(super) fn tool_picker(
         }
     })
     .inner
+}
+
+/// How tall the picture of a form's bit is, beside its name.
+const PICTURE_HEIGHT: f32 = 48.0;
+/// How tall a listed bit's picture is (clearing bits, 3D Finishing's bits).
+const LISTED_PICTURE_HEIGHT: f32 = 32.0;
+/// How tall a bit's picture is while the pointer is on it.
+const HOVERED_PICTURE_HEIGHT: f32 = 200.0;
+
+/// `tool` drawn `height` tall, to scale, as the Bit Library's Tool Shape card draws it: so a
+/// beginner sees an end mill, a ball nose or a V-bit, not only its name. Pointing at it
+/// shows it bigger, with its sizes. Nothing for a laser.
+pub(super) fn bit_picture(
+    ui: &mut egui::Ui,
+    tool: &Tool,
+    height: f32,
+    units: cut_craft_core::document::Units,
+) {
+    let Some(shown) = cut_craft_tool_database::profile::picture(ui, tool, height) else {
+        return;
+    };
+    crate::marks::note(ui, "bit-picture", shown.rect);
+    shown.on_hover_ui(|ui| {
+        cut_craft_tool_database::profile::picture(ui, tool, HOVERED_PICTURE_HEIGHT);
+        ui.label(tool_line(tool, None, units));
+        let length = |mm: f64| format!("{} {}", trimmed(mm / units.per()), units.suffix());
+        if let Some(flutes) = tool.known_flute_length() {
+            ui.label(tr!("tool-picture-flutes", length = length(flutes)));
+        }
+        if tool.shank_diameter > 0.0 {
+            ui.label(tr!(
+                "tool-picture-shank",
+                diameter = length(tool.shank_diameter)
+            ));
+        }
+        ui.weak(tr!("tool-picture-key"));
+    });
 }
 
 /// Which tool of a list a pick is for.
@@ -283,7 +327,10 @@ pub(super) fn clearing_bit(
     depth: Option<f64>,
     units: cut_craft_core::document::Units,
 ) -> Option<BitAsk> {
-    ui.strong(held_name(&tool.name, slots));
+    ui.horizontal(|ui| {
+        bit_picture(ui, tool, LISTED_PICTURE_HEIGHT, units);
+        ui.strong(held_name(&tool.name, slots));
+    });
     ui.label(tool_line(tool, None, units));
     // can this bit reach the depth? the same line the form's own Tool has
     if let Some(line) = cut_craft_core::reach::form_line(tool, depth, None, units) {
@@ -414,7 +461,10 @@ pub(super) fn tool_list(
     }
     for (i, tool) in items.iter().enumerate() {
         ui.push_id((key, i), |ui| {
-            ui.strong(held_name(&tool.name, slots));
+            ui.horizontal(|ui| {
+                bit_picture(ui, tool, LISTED_PICTURE_HEIGHT, units);
+                ui.strong(held_name(&tool.name, slots));
+            });
             ui.label(tool_line(tool, None, units));
             if tools.get(&tool.name).is_none() {
                 ui.colored_label(

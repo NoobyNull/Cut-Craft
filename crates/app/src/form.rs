@@ -209,6 +209,12 @@ pub type GroupEnd<'a> = dyn Fn(&mut egui::Ui, &str, &mut Value) -> bool + 'a;
 /// own tool is.
 pub const TOOL_LISTS: [&str; 3] = ["tools", "clearance_tools", "bits_before"];
 
+/// Whether [`Look::tool`] draws the field keyed `key`: the bit, a list of bits
+/// ([`TOOL_LISTS`]), or what follows the bit under the depths ([`AFTER_TOOL`]).
+pub fn drawn_by_tool(key: &str) -> bool {
+    key == "tool" || key == AFTER_TOOL || TOOL_LISTS.contains(&key)
+}
+
 /// How a form looks: the units lengths are shown in, and the pictures sections show.
 pub struct Look<'a> {
     pub units: Units,
@@ -217,8 +223,9 @@ pub struct Look<'a> {
     /// The material's size in the units shown, for sums typed into number fields (W, H, T).
     pub material: cut_craft_core::calc::Values,
     /// Draws a `tool` field, or a list of tools ([`TOOL_LISTS`]), in its place (the Bit
-    /// Library's tools, which the form does not edit), given the field's key and the
-    /// parameters holding it; `None` leaves them out.
+    /// Library's tools, which the form does not edit), and what follows the bit
+    /// ([`AFTER_TOOL`]), given the field's key and the parameters holding it; `None` leaves
+    /// them out.
     pub tool: Option<&'a DrawTool<'a>>,
     /// Draws more at the foot of an `x-group` block, given its name (Profile's Edit Tabs…
     /// under Tabs, Edit Loops… under a trochoidal toolpath's cut settings); `None` for
@@ -714,22 +721,47 @@ pub const WHICH_SIDE: &str = cmd_profile_toolpath::SIDE_GROUP;
 /// come right under its depths, as Profile's side does, not at the foot of the form.
 pub const KNIFE: &str = "Knife";
 
-/// A toolpath form's fields in the standard order: the cutting depths, the tool, then the rest
-/// as declared with each group's (and the tab strip's) fields gathered where the first of
-/// them is, and Project onto 3D Model and the name last.
+/// Not a setting: where a toolpath form's Rest Machining, vector selector and locked faces
+/// go, under the depths and the side to cut, as [`arrange`] puts it. [`Look::tool`] draws
+/// them, given this key.
+pub const AFTER_TOOL: &str = "after_tool";
+
+/// The bits the form's toolpath cuts with: the clearing bits before its own and 3D
+/// Finishing's list, which [`arrange`] puts right under its Bit block.
+const CUTTING_BITS: [&str; 2] = ["clearance_tools", "tools"];
+
+/// Whether a form picks a bit in the Bit Library: a toolpath's, put in the standard order
+/// by [`arrange`].
+pub fn picks_bits(fields: &[Field]) -> bool {
+    fields
+        .iter()
+        .any(|f| f.key == "tool" || CUTTING_BITS.contains(&f.key.as_str()))
+}
+
+/// A toolpath form's fields in the standard order: the bit first (what cuts sets how deep a
+/// pass goes and how far a V reaches), the bits that clear before it, the cutting depths and
+/// the side to cut, then [`AFTER_TOOL`], then the rest as declared with each group's (and the
+/// tab strip's) fields gathered where the first of them is, and Project onto 3D Model and
+/// the name last.
 pub fn arrange(fields: Vec<Field>) -> Vec<Field> {
     let rank = |f: &Field| match f.key.as_str() {
+        "tool" => 0,
+        key if CUTTING_BITS.contains(&key) => 1,
         // Surfacing's What to Flatten, then its depth: what is cut comes before how deep
-        _ if f.group.as_deref() == Some(cmd_surfacing_toolpath::AREA_GROUP) => 0,
-        _ if f.group.as_deref() == Some(CUTTING_DEPTHS) => 0,
-        // Profile's Outside / Inside / On, right under the depth where a beginner looks first
-        _ if f.group.as_deref() == Some(WHICH_SIDE) => 1,
-        _ if f.group.as_deref() == Some(KNIFE) => 1,
-        "tool" => 2,
-        "project_onto_model" => 4,
-        "name" => 5,
-        _ => 3,
+        _ if f.group.as_deref() == Some(cmd_surfacing_toolpath::AREA_GROUP) => 2,
+        _ if f.group.as_deref() == Some(CUTTING_DEPTHS) => 2,
+        // Profile's Outside / Inside / On, right under the depth where a beginner looks
+        _ if f.group.as_deref() == Some(WHICH_SIDE) => 3,
+        _ if f.group.as_deref() == Some(KNIFE) => 3,
+        AFTER_TOOL => 4,
+        "project_onto_model" => 6,
+        "name" => 7,
+        _ => 5,
     };
+    let mut fields = fields;
+    if fields.iter().any(|f| f.key == "tool") {
+        fields.push(after_tool());
+    }
     // where each field's company first appears: its group's or the tab strip's first field,
     // else its own place
     let mut firsts: Vec<((Option<String>, bool), usize)> = vec![];
@@ -751,6 +783,26 @@ pub fn arrange(fields: Vec<Field>) -> Vec<Field> {
         .collect();
     keyed.sort_by_key(|&(rank, at, i, _)| (rank, at, i));
     keyed.into_iter().map(|(.., f)| f).collect()
+}
+
+/// The [`AFTER_TOOL`] place.
+fn after_tool() -> Field {
+    Field {
+        key: AFTER_TOOL.into(),
+        label: String::new(),
+        help: None,
+        kind: Kind::Group(vec![]),
+        section: false,
+        icon: None,
+        when: None,
+        enabled: None,
+        group: None,
+        tab: None,
+        dim: None,
+        diagram: None,
+        axis: None,
+        titles: None,
+    }
 }
 
 /// The fields of a params schema, in declaration order, their words in the language in use.
@@ -987,7 +1039,7 @@ fn print_form_blocks() {
     let mut out = String::new();
     for c in registry.iter() {
         let fields = fields(&c.schema());
-        let fields = if fields.iter().any(|f| f.key == "tool") {
+        let fields = if picks_bits(&fields) {
             arrange(fields)
         } else {
             fields
@@ -1020,6 +1072,8 @@ fn print_form_blocks() {
                 row("tab", t, None);
             } else if f.key == "tool" {
                 row("tool", "Bit", None);
+            } else if f.key == AFTER_TOOL {
+                continue;
             } else {
                 row("loose", "(fields outside a block)", None);
             }

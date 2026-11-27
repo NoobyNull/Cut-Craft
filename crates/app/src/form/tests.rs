@@ -680,6 +680,7 @@ fn toolpath_fields_are_arranged_in_the_standard_order() {
             "start_depth": { "type": "number", "x-group": "Cutting Depths" },
             "cut": { "type": "string", "x-group": WHICH_SIDE },
             "width": { "type": "number", "x-group": "Chamfer" },
+            "clearance_tools": { "type": "array" },
             "ramp": { "type": "boolean", "x-tab": "Ramp" },
             "project_onto_model": { "type": "boolean" },
             "order": { "type": "boolean", "x-tab": "Order" },
@@ -689,9 +690,11 @@ fn toolpath_fields_are_arranged_in_the_standard_order() {
     assert_eq!(
         keys(&arrange(fields(&schema))),
         [
+            "tool",
+            "clearance_tools",
             "start_depth",
             "cut",
-            "tool",
+            AFTER_TOOL,
             "side",
             "width",
             "seed",
@@ -703,9 +706,11 @@ fn toolpath_fields_are_arranged_in_the_standard_order() {
     );
 }
 
-/// Surfacing's What to Flatten comes before its depth: what is cut, then how deep.
+/// The bit is picked first: what cuts decides how deep a pass goes and how far a V reaches,
+/// so every toolpath form opens with its Bit block, then the bits that clear before it, then
+/// the depths. Rest Machining and the vector selector stay under the depths.
 #[test]
-fn every_toolpath_form_opens_with_its_depths_and_tool_and_ends_with_its_name() {
+fn every_toolpath_form_opens_with_its_bit_and_ends_with_its_name() {
     let chamfer = fields(&schema("chamfer_toolpath"));
     let width = field(&chamfer, "width");
     assert_eq!(width.group.as_deref(), Some("Chamfer"));
@@ -713,16 +718,23 @@ fn every_toolpath_form_opens_with_its_depths_and_tool_and_ends_with_its_name() {
         matches!(&width.kind, Kind::Number { unit: Some(u), .. } if u == "mm"),
         "a group mark keeps the field's other marks"
     );
+    let mut checked = 0;
     for command in registry().iter() {
         let f = fields(&command.schema());
-        if f.iter().all(|f| f.key != "tool") {
+        if !picks_bits(&f) {
             continue;
         }
+        checked += 1;
         let f = arrange(f);
         let k = keys(&f);
-        let depths = f
-            .iter()
-            .take_while(|f| {
+        let first = if k.contains(&"tool") { "tool" } else { "tools" };
+        assert_eq!(k.first(), Some(&first), "{}: {k:?}", command.id());
+        if k.contains(&"clearance_tools") {
+            assert_eq!(k.get(1), Some(&"clearance_tools"), "{}", command.id());
+        }
+        if k.contains(&"tool") {
+            let after = k.iter().position(|x| *x == AFTER_TOOL);
+            let depths = f.iter().rposition(|f| {
                 [
                     Some(cmd_surfacing_toolpath::AREA_GROUP),
                     Some(CUTTING_DEPTHS),
@@ -730,15 +742,31 @@ fn every_toolpath_form_opens_with_its_depths_and_tool_and_ends_with_its_name() {
                     Some(KNIFE),
                 ]
                 .contains(&f.group.as_deref())
-            })
-            .count();
-        assert_eq!(k.get(depths), Some(&"tool"), "{}: {k:?}", command.id());
+            });
+            assert!(after.is_some(), "{}", command.id());
+            assert!(depths < after, "{}: {k:?}", command.id());
+        }
         if k.contains(&"name") {
             assert_eq!(k.last(), Some(&"name"), "{}", command.id());
         }
     }
+    assert!(checked > 20, "only {checked} toolpath forms");
     let surfacing = arrange(fields(&schema("surfacing_toolpath")));
-    assert_eq!(keys(&surfacing).first(), Some(&"area"));
+    assert_eq!(keys(&surfacing)[..2], ["tool", "area"]);
+    let finishing = arrange(fields(&schema("3d_finishing_toolpath")));
+    assert_eq!(keys(&finishing).first(), Some(&"tools"));
+}
+
+/// A form without a bit (a drawing tool's) keeps its fields as declared, with no place kept
+/// for the bit's Rest Machining.
+#[test]
+fn forms_without_a_bit_have_no_place_kept_after_it() {
+    let circle = fields(&schema("draw_circle"));
+    assert!(!picks_bits(&circle));
+    let pencil = arrange(fields(&schema("3d_pencil_toolpath")));
+    let k = keys(&pencil);
+    let at = |key| k.iter().position(|x| *x == key).unwrap();
+    assert!(at("tool") < at("bits_before"), "{k:?}");
 }
 
 #[test]
@@ -747,7 +775,8 @@ fn the_drag_knifes_own_settings_come_right_after_its_depths() {
     let k = keys(&knife);
     let at = |key| k.iter().position(|x| *x == key).unwrap();
     assert!(at("passes") < at("blade_offset"), "{k:?}");
-    assert!(at("tolerance_angle") < at("tool"), "{k:?}");
+    assert!(at("tool") < at("passes"), "the knife first, as every bit: {k:?}");
+    assert!(at("tolerance_angle") < at(AFTER_TOOL), "{k:?}");
 }
 
 #[test]

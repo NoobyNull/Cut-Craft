@@ -152,6 +152,11 @@ impl View {
             rect.min + egui::vec2(LEFT, ABOVE),
             rect.max - egui::vec2(RIGHT, BELOW),
         );
+        Self::within(rect, draw, shape)
+    }
+
+    /// The tool as big as fits `draw`, inside `rect`, standing on `draw`'s foot.
+    fn within(rect: egui::Rect, draw: egui::Rect, shape: &Outline) -> Self {
         let widest = shape.radius.max(shape.shank_radius);
         #[expect(clippy::cast_possible_truncation, reason = "a scale in points")]
         let scale = (f64::from(draw.height()) / shape.top)
@@ -194,6 +199,27 @@ pub fn editor(ui: &mut egui::Ui, tool: &mut Tool) -> bool {
     changed |= widths(ui, &view, &shape, tool);
     changed |= left_sizes(ui, &view, &shape, tool);
     changed
+}
+
+/// How wide a [`picture`] is for its height: room for most bits' shank and flutes side by
+/// side.
+pub const PICTURE_ASPECT: f32 = 0.6;
+
+/// The tool `height` points tall, to scale and with no sizes, as a toolpath form shows the
+/// bit it picked: the cutting part shaded, the shank grey, guessed sizes dashed. `None` for
+/// a tool with no diameter, or a laser, which has no shape to draw.
+pub fn picture(ui: &mut egui::Ui, tool: &Tool, height: f32) -> Option<egui::Response> {
+    if tool.shape == ToolShape::Laser {
+        return None;
+    }
+    let shape = outline(tool)?;
+    let (rect, response) = ui.allocate_exact_size(
+        egui::vec2(height * PICTURE_ASPECT, height),
+        egui::Sense::hover(),
+    );
+    let view = View::within(rect, rect.shrink(2.0), &shape);
+    paint(ui, &view, &shape);
+    Some(response)
 }
 
 /// The tool itself: flutes shaded, set sizes outlined solid and guessed ones dashed.
@@ -696,5 +722,38 @@ mod tests {
     fn a_tool_with_no_diameter_is_not_drawn() {
         assert_eq!(outline(&end_mill(0.0)), None);
         assert_eq!(outline(&end_mill(f64::NAN)), None);
+    }
+
+    /// What a toolpath form shows beside its bit's name: the bit `height` tall, as wide as
+    /// [`PICTURE_ASPECT`] makes it, or nothing for a bit with no shape to draw.
+    fn picture_size(tool: &Tool, height: f32) -> Option<egui::Vec2> {
+        let ctx = egui::Context::default();
+        let mut size = None;
+        let _ = ctx.run_pass(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                size = picture(ui, tool, height).map(|r| r.rect.size());
+            });
+        });
+        size
+    }
+
+    #[test]
+    fn a_bit_is_pictured_small_beside_its_name_and_a_laser_is_not() {
+        let size = picture_size(&end_mill(6.0), 50.0).expect("an end mill is drawn");
+        assert_eq!(size, egui::vec2(50.0 * PICTURE_ASPECT, 50.0));
+        for shape in [ToolShape::BallNose, ToolShape::VBit, ToolShape::RadiusedEndMill] {
+            let t = Tool {
+                shape,
+                tip_radius: 1.0,
+                ..end_mill(6.0)
+            };
+            assert!(picture_size(&t, 50.0).is_some(), "{shape:?}");
+        }
+        let laser = Tool {
+            shape: ToolShape::Laser,
+            ..end_mill(0.2)
+        };
+        assert_eq!(picture_size(&laser, 50.0), None);
+        assert_eq!(picture_size(&end_mill(0.0), 50.0), None);
     }
 }

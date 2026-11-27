@@ -48,6 +48,9 @@ tool-edit = Edit…
 tool-list-add = Add a bit…
     .tooltip = Pick one more in the Bit Library
 tool-list-remove = Remove
+tool-picture-flutes = Flutes { $length } long
+tool-picture-shank = Shank { $diameter } across
+tool-picture-key = Orange is the part that cuts; the shank is grey. Dashed lines are sizes not set yet: Edit… sets them in the Bit Library
 
 # Pocket's clearing bits.
 clearing-suggest = Suggest clearing bits

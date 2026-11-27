@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-27
 see-also: profile_toolpath, vcarve_engrave_toolpath, stepover
 ---
 
@@ -19,11 +19,11 @@ see-also: profile_toolpath, vcarve_engrave_toolpath, stepover
 
    ![Step 3](pictures/pocket_toolpath/step-3.png)
 
-4. Set the **Cut Depth** (D): how far below the top of the material the floor of the pocket ends up. Here it is 10 mm.
+4. Check the bit, first in the form, drawn beside its name. **Select…** picks another one from your Bit Library; its feeds, speeds and depth per pass come with it.
 
    ![Step 4](pictures/pocket_toolpath/step-4.png)
 
-5. Check the bit. **Select…** picks another one from your Bit Library; its feeds, speeds and depth per pass come with it.
+5. Set the **Cut Depth** (D): how far below the top of the material the floor of the pocket ends up. Here it is 10 mm.
 
    ![Step 5](pictures/pocket_toolpath/step-5.png)
 

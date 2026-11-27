@@ -249,10 +249,16 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:profile_toolpath"),
             },
             Step {
+                caption: "Check the **Bit**, first in the form. The drawing beside its name \
+                          shows its shape: orange is the part that cuts. **Select…** picks \
+                          another one from your Bit Library.",
+                setup: |app, ctx| app.invoke(ctx, "profile_toolpath"),
+                mark: Mark::At("field:tool"),
+            },
+            Step {
                 caption: "Set the **Cut Depth** (D). To cut a part free, make it the thickness \
                           of the material.",
-                setup: |app, ctx| {
-                    app.invoke(ctx, "profile_toolpath");
+                setup: |app, _| {
                     let thickness = app.doc.job.thickness;
                     if let Some(open) = app.form.as_mut() {
                         open.params["depth"] = thickness.into();
@@ -311,16 +317,17 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:vcarve_engrave_toolpath"),
             },
             Step {
-                caption: "Choose how to carve. **Fill** carves the whole shape, as deep as each \
-                          part's width needs, so the sides meet in a sharp crease.",
+                caption: "Check the bit is a **V-bit**: first in the form, drawn with its point \
+                          beside its name. **Select…** picks one from your Bit Library; its \
+                          angle sets how deep each part is carved.",
                 setup: |app, ctx| app.invoke(ctx, "vcarve_engrave_toolpath"),
-                mark: Mark::At("field:place"),
+                mark: Mark::At("field:tool"),
             },
             Step {
-                caption: "Check the bit is a **V-bit**. **Select…** picks one from your Bit \
-                          Library; its angle sets how deep each part is carved.",
+                caption: "Choose how to carve. **Fill** carves the whole shape, as deep as each \
+                          part's width needs, so the sides meet in a sharp crease.",
                 setup: |_, _| {},
-                mark: Mark::At("button:Select…"),
+                mark: Mark::At("field:place"),
             },
             Step {
                 caption: "Press **Calculate**. Wide parts are carved deeper, narrow points \
