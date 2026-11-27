@@ -160,6 +160,13 @@ pub struct Options {
     )]
     #[schemars(skip)]
     pub canvas_palette: crate::bars::Place,
+    /// Where the Canvas layout's toolpaths bar sits (right-click its grip).
+    #[serde(
+        default = "crate::bars::Place::column",
+        skip_serializing_if = "crate::bars::Place::is_column"
+    )]
+    #[schemars(skip)]
+    pub canvas_toolpaths: crate::bars::Place,
 }
 
 /// Each tool page's favourite tools (and whole groups, as `group:<name>`), in the order
@@ -255,6 +262,8 @@ impl Default for Options {
                 ribbon_icons: RibbonIcons::Compact,
                 other_ways: OtherWays::InTheForm,
                 canvas_flyouts: CanvasFlyouts::OnHover,
+                canvas_modeling_bar: true,
+                canvas_toolpaths_bar: true,
                 snapped_bars: SnappedBars::PushTheDrawingOver,
                 new_bars: NewBars::Floating,
                 add_to_menus: AddToMenus::EachToolbar,
@@ -289,6 +298,7 @@ impl Default for Options {
             shape_ways: std::collections::BTreeMap::new(),
             toolbars: Vec::new(),
             canvas_palette: crate::bars::Place::column(),
+            canvas_toolpaths: crate::bars::Place::column(),
         }
     }
 }

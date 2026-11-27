@@ -420,7 +420,7 @@ impl CutCraftApp {
         egui::Panel::top("ribbon").show(ui, |ui| {
             cut_craft_bug_report::mark(ui, "Ribbon");
             let gadgets = self.gadget_tools();
-            ui.horizontal(|ui| self.tab_row(ui));
+            ui.horizontal(|ui| self.tab_row(ui, false));
             ui.separator();
             if let Some(n) = self.toolbars.ribbon {
                 self.toolbar_strip(ui, n, super::custom_toolbars::Strip::Across);

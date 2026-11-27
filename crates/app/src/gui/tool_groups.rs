@@ -298,7 +298,10 @@ pub(super) fn toolpath_groups() -> Vec<ToolGroup> {
         // Analyse
         group("Reports", &["toolpath_summary"]),
         // Output: the Output tab draws this one as its big button
-        group("Save for the Machine", &["save_toolpaths"]),
+        group(
+            "Save for the Machine",
+            &["save_toolpaths", "view_gcode", "machine_files"],
+        ),
         group(
             "Paperwork for the Job",
             &[

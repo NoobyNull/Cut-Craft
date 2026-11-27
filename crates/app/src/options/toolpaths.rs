@@ -263,6 +263,10 @@ pub const JOB_DEFAULTS: &str = "job_defaults";
 
 /// General settings.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the dialog's own check boxes"
+)]
 pub struct General {
     /// How many files File ▸ Recent Files and the start page list. Up to 20 are always
     /// remembered, so a smaller number only hides the rest until it is raised again
@@ -324,6 +328,16 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "Canvas tool lists open")]
     pub canvas_flyouts: CanvasFlyouts,
+    /// Show the Canvas layout's modeling bar: the drawing and modeling tools' groups,
+    /// floating on the left. Off leaves Find a Tool, your favourites and your own toolbars
+    #[serde(default = "on")]
+    #[schemars(title = "Canvas modeling bar")]
+    pub canvas_modeling_bar: bool,
+    /// Show the Canvas layout's toolpaths bar: every kind of toolpath and saving for the
+    /// machine, floating on the right. Off suits a job that is only being drawn
+    #[serde(default = "on")]
+    #[schemars(title = "Canvas toolpaths bar")]
+    pub canvas_toolpaths_bar: bool,
     /// What a bar of tools snapped to a side does to the drawing: Push the Drawing Over
     /// makes room for it, Over the Drawing lays it over the drawing's edge
     #[serde(default)]

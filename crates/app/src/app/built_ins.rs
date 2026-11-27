@@ -330,6 +330,9 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
     act("save_toolpaths", "Save Toolpaths", "Save Toolpaths: writes the toolpaths as a G-code file for your machine to run")
         .when(|a| !a.doc.toolpaths.is_empty(), "actions-why-no-toolpaths")
         .run(|a, _| a.save_form = Some(a.default_save_form())),
+    act("view_gcode", "View G-code", "View G-code: reads the G-code saving would write, through the machine's post-processor, without saving a file. Copy it from there if you need it").window()
+        .when(|a| !a.doc.toolpaths.is_empty(), "actions-why-no-toolpaths")
+        .run(|a, _| a.view_gcode(a.default_save_form())),
     act("install_post_processor", "Install Post-Processor", "Install Post Processor: adds a post processor file for a machine Cut Craft does not list yet. One with a name already listed is kept beside it as a copy, named with a copy number and the date and time").window()
         .run(|a, _| a.install_post_picked()),
     act("close", "Close", "Close: closes the job you have open, offering to save it first")

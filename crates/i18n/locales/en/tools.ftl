@@ -168,6 +168,7 @@ tools-save-selected-toolpath-as-template = Save Toolpath as Template
 tools-save-all-visible-toolpaths-as-template = Save All Shown Toolpaths as Template
 tools-toolpath-summary = Toolpath Summary
 tools-save-toolpaths = Save Toolpaths
+tools-view-gcode = View G-code
 tools-create-job-sheet = Save Job Sheet
 tools-print-job-sheet = Print Job Sheet
 tools-part-labels = Print Part Labels

@@ -145,6 +145,9 @@ fn the_toolpaths_page_keeps_every_tool_it_had() {
         "print_job_sheet",
         "part_labels",
         "cut_list",
+        // Save for the Machine's other buttons, from the Output tab (2026-11-27)
+        "view_gcode",
+        "machine_files",
     ];
     let mut now: Vec<&str> = super::toolpath_groups()
         .iter()

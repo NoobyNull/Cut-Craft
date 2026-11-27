@@ -119,7 +119,9 @@ fn classic_shows_a_toolbar_as_a_section_of_the_design_tab() {
 fn the_canvas_header_has_its_tab_too() {
     let mut h = with_toolbar(WindowLayout::Canvas);
     assert!(h.text_at("My Tools").is_some(), "in the header");
-    click_tab(&mut h, "Design");
+    assert_eq!(h.ribbon_toolbar(), Some(0), "a new toolbar shows at once");
+    // the Canvas has no Design tab to go back to: the toolbar's own tab closes its list
+    click_tab(&mut h, "My Tools");
     assert_eq!(h.ribbon_toolbar(), None);
     click_tab(&mut h, "My Tools");
     assert_eq!(h.ribbon_toolbar(), Some(0));

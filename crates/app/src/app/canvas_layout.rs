@@ -3,7 +3,7 @@
 //! over the view (`docs/superpowers/specs/2026-11-24-shared-tool-model-design.md`).
 
 use super::bars::{Bar, Room};
-use super::custom_toolbars::PALETTE;
+use super::custom_toolbars::{FAVOURITES_TAB, PALETTE, TOOLPATHS_BAR};
 use super::installed::GADGETS;
 use super::{CutCraftApp, INSPECTOR_TABS, RIBBON_TABS, TOOL_ICON_ROWS, egui, gui};
 use crate::bars::Place;
@@ -26,9 +26,47 @@ pub(super) struct CanvasState {
     pub chip: Option<usize>,
 }
 
-/// The id of the Canvas palette's bar.
+/// The id of the Canvas modeling bar.
+#[cfg(test)]
 pub(super) fn palette_id() -> egui::Id {
-    egui::Id::unique("canvas_palette")
+    CanvasBar::Modeling.id()
+}
+
+/// The Canvas layout's two bars of tool groups, both shown at once: the drawing and
+/// modeling tools, and the toolpaths (Matthew, 2026-11-27: "the modeling tool bar, and then
+/// the tooling toolbar").
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum CanvasBar {
+    Modeling,
+    Toolpaths,
+}
+
+impl CanvasBar {
+    pub const ALL: [Self; 2] = [Self::Modeling, Self::Toolpaths];
+
+    /// Its bar's id.
+    pub fn id(self) -> egui::Id {
+        match self {
+            Self::Modeling => egui::Id::unique("canvas_palette"),
+            Self::Toolpaths => egui::Id::unique("canvas_toolpaths"),
+        }
+    }
+
+    /// Its grip menu's actions, after the toolbars' prefix.
+    fn action(self) -> &'static str {
+        match self {
+            Self::Modeling => PALETTE,
+            Self::Toolpaths => TOOLPATHS_BAR,
+        }
+    }
+
+    /// Its name, said when its grip is pointed at.
+    fn name(self) -> String {
+        match self {
+            Self::Modeling => tr!("layouts-canvas-palette"),
+            Self::Toolpaths => tr!("layouts-canvas-toolpaths-bar"),
+        }
+    }
 }
 
 /// A floating box's frame: a window's look, without its title bar.
@@ -37,34 +75,51 @@ fn floating(ui: &egui::Ui) -> egui::Frame {
 }
 
 impl CutCraftApp {
-    /// Canvas: a thin header (tabs and Find a Tool), then floating boxes over the view: the
-    /// palette of tool groups on the left with its flyout, the open form on the right, and
-    /// chips along the foot that open Sheets, Layers, Toolpaths and the rest.
+    /// Canvas: a thin header (Find a Tool, and Favourites, Gadgets and your own toolbars'
+    /// lists), then floating boxes over the view: the modeling bar of tool groups on the
+    /// left and the toolpaths bar on the right, each with its flyout, the open form beside
+    /// the toolpaths bar, and chips along the foot that open Sheets, Layers, Toolpaths and
+    /// the rest. Nothing swaps one bar for another (Matthew, 2026-11-27).
     pub(super) fn canvas_layout(&mut self, ui: &mut egui::Ui) {
         egui::Panel::top("canvas_header").show(ui, |ui| self.canvas_header(ui));
         let row = ui.spacing().interact_size.y;
         let margin = ui.spacing().item_spacing.y;
-        // the bars snapped to a side, the palette first, then the rest; the palette where
-        // it starts, under the view's own bar (2D / 3D, the split, sheet and layer, snapping)
+        // the bars snapped to a side, the modeling and toolpaths bars first, then the rest;
+        // where they start, under the view's own bar (2D / 3D, the split, sheet and layer,
+        // snapping)
         let mut bars = Room::new(ui.available_rect_before_wrap());
         let first = ui.available_rect_before_wrap();
-        let start = first.left_top() + egui::vec2(margin, 2.0 * row + 3.0 * margin);
-        let tab = RIBBON_TABS[self.ribbon_tab];
-        let palette = self.toolbars.ribbon.is_none() && tab != "Favourites" && tab != GADGETS;
-        if palette && matches!(self.options.canvas_palette, Place::Snapped { .. }) {
-            self.canvas_palette(ui, &mut bars, start);
+        let shown = self.canvas_bars();
+        let mut rects = [None; 2];
+        for (n, &bar) in CanvasBar::ALL.iter().enumerate() {
+            if shown.contains(&bar) && matches!(self.canvas_place(bar), Place::Snapped { .. }) {
+                let start = Self::canvas_bar_start(ui, bar, first);
+                rects[n] = self.canvas_bar(ui, &mut bars, bar, start);
+            }
         }
         self.placed_bars(ui, &mut bars, 4.0 * TOOL_ICON_ROWS * row);
         // the room the view has, under the header and the snapped bars, over the status bar
         let room = ui.available_rect_before_wrap();
         let top = room.top() + 2.0 * row + 3.0 * margin;
+        for (n, &bar) in CanvasBar::ALL.iter().enumerate() {
+            if shown.contains(&bar) && !matches!(self.canvas_place(bar), Place::Snapped { .. }) {
+                // past any bar snapped to a side, which may have pushed the view over
+                let start = Self::canvas_bar_start(ui, bar, room);
+                rects[n] = self.canvas_bar(ui, &mut bars, bar, start);
+            }
+        }
+        let [modeling, toolpaths] = rects;
+        // a header list (Favourites, Gadgets, a toolbar of your own) floats beside the
+        // modeling bar on the left, never over it
+        let beside = modeling
+            .filter(|r| r.center().x < room.center().x)
+            .map_or(room.left(), |r| r.right());
+        let left = egui::pos2(beside + margin, top);
+        let tab = RIBBON_TABS[self.ribbon_tab];
         if self.toolbars.ribbon.is_some() {
-            self.canvas.group = None;
             let frame = floating(ui);
-            self.canvas_toolbar(ui, egui::pos2(room.left() + margin, top), frame);
-        } else if !palette {
-            self.canvas.group = None;
-            let left = egui::pos2(room.left() + margin, top);
+            self.canvas_toolbar(ui, left, frame);
+        } else if tab == FAVOURITES_TAB || tab == GADGETS {
             let _ = self.canvas_flyout(
                 ui,
                 left,
@@ -72,16 +127,18 @@ impl CutCraftApp {
                 tab,
                 &self.canvas_list(tab),
             );
-        } else if !matches!(self.options.canvas_palette, Place::Snapped { .. }) {
-            // past any bar snapped to the left or top, which may have pushed the view over
-            self.canvas_palette(ui, &mut bars, egui::pos2(room.left() + margin, top));
         }
         if self.form.is_some() {
             let width = super::DESIGN_PANEL_WIDTHS * ui.spacing().interact_size.x;
             let height = FORM_SHARE * (room.bottom() - top);
+            // beside the toolpaths bar on the right, not over it, following it as it moves
+            // and as the window changes size
+            let right = toolpaths
+                .filter(|r| r.center().x > room.center().x)
+                .map_or(room.right(), |r| r.left());
             egui::Area::new(egui::Id::unique("canvas_form"))
                 .pivot(egui::Align2::RIGHT_TOP)
-                .default_pos(egui::pos2(room.right() - margin, top))
+                .fixed_pos(egui::pos2(right - margin, top))
                 .show(ui.ctx(), |ui| {
                     floating(ui).show(ui, |ui| {
                         cut_craft_bug_report::mark(ui, "Canvas form");
@@ -94,11 +151,57 @@ impl CutCraftApp {
         self.canvas_chips(ui, room);
     }
 
+    /// The Canvas bars shown: Options ▸ General can hide either.
+    fn canvas_bars(&self) -> Vec<CanvasBar> {
+        let general = &self.options.general;
+        CanvasBar::ALL
+            .into_iter()
+            .filter(|bar| match bar {
+                CanvasBar::Modeling => general.canvas_modeling_bar,
+                CanvasBar::Toolpaths => general.canvas_toolpaths_bar,
+            })
+            .collect()
+    }
+
+    /// Where Canvas bar `bar` sits (right-click its grip to move it).
+    pub(super) fn canvas_place(&self, bar: CanvasBar) -> Place {
+        match bar {
+            CanvasBar::Modeling => self.options.canvas_palette,
+            CanvasBar::Toolpaths => self.options.canvas_toolpaths,
+        }
+    }
+
+    /// Where Canvas bar `bar` is kept, to move it.
+    pub(super) fn canvas_place_mut(&mut self, bar: CanvasBar) -> &mut Place {
+        match bar {
+            CanvasBar::Modeling => &mut self.options.canvas_palette,
+            CanvasBar::Toolpaths => &mut self.options.canvas_toolpaths,
+        }
+    }
+
+    /// Where Canvas bar `bar` starts in `room` until it is moved: the modeling bar at the top
+    /// left, the toolpaths bar at the top right, each under the view's own bar.
+    fn canvas_bar_start(ui: &egui::Ui, bar: CanvasBar, room: egui::Rect) -> egui::Pos2 {
+        let row = ui.spacing().interact_size.y;
+        let margin = ui.spacing().item_spacing.y;
+        let top = room.top() + 2.0 * row + 3.0 * margin;
+        match bar {
+            CanvasBar::Modeling => egui::pos2(room.left() + margin, top),
+            CanvasBar::Toolpaths => {
+                let width = ui
+                    .ctx()
+                    .memory(|m| m.area_rect(bar.id()))
+                    .map_or(0.0, |r| r.width());
+                egui::pos2(room.right() - margin - width, top)
+            }
+        }
+    }
+
     /// The header: the tabs, then on the right the Find a Tool box.
     fn canvas_header(&mut self, ui: &mut egui::Ui) {
         cut_craft_bug_report::mark(ui, "Canvas header");
         ui.horizontal(|ui| {
-            if self.tab_row(ui) {
+            if self.tab_row(ui, true) {
                 self.canvas.group = None;
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -173,10 +276,20 @@ impl CutCraftApp {
         }
     }
 
-    /// The groups of the header's tab with a tool for this machine.
+    /// The modeling bar's groups with a tool for this machine: the drawing then the
+    /// modeling tools.
+    #[cfg(test)]
     pub(super) fn canvas_groups(&self) -> Vec<gui::ToolGroup> {
-        self.ribbon_groups()
-            .0
+        self.canvas_groups_of(CanvasBar::Modeling)
+    }
+
+    /// Canvas bar `bar`'s groups with a tool for this machine.
+    pub(super) fn canvas_groups_of(&self, bar: CanvasBar) -> Vec<gui::ToolGroup> {
+        let groups = match bar {
+            CanvasBar::Modeling => self.toolbar.all_design_groups(),
+            CanvasBar::Toolpaths => self.toolbar.toolpath_groups.clone(),
+        };
+        groups
             .into_iter()
             .filter(|group| group.tools.iter().any(|id| self.has_button(id)))
             .collect()
@@ -193,12 +306,18 @@ impl CutCraftApp {
         tools.into_iter().filter(|id| self.offered(id)).collect()
     }
 
-    /// The palette: one icon for each group, down its column (or across, snapped to the
-    /// top or the foot, or turned); a click lists that group's tools beside it, another
+    /// Canvas bar `bar`: one icon for each group, down its column (or across, snapped to
+    /// the top or the foot, or turned); a click lists that group's tools beside it, another
     /// click closes the list. A bar like any other: its grip moves it, snaps it, locks it
-    /// or turns it (Options keep where).
-    fn canvas_palette(&mut self, ui: &mut egui::Ui, bars: &mut Room, start: egui::Pos2) {
-        let groups = self.canvas_groups();
+    /// or turns it (Options keep where). Where it was drawn.
+    fn canvas_bar(
+        &mut self,
+        ui: &mut egui::Ui,
+        bars: &mut Room,
+        which: CanvasBar,
+        start: egui::Pos2,
+    ) -> Option<egui::Rect> {
+        let groups = self.canvas_groups_of(which);
         let row = ui.spacing().interact_size.y;
         let edge = TOOL_ICON_ROWS * row;
         let hover = self.options.general.canvas_flyouts == CanvasFlyouts::OnHover;
@@ -206,14 +325,14 @@ impl CutCraftApp {
         // goes on to more columns
         let room = (ui.ctx().content_rect().bottom() - start.y - 3.0 * row).max(edge);
         let per_column = palette_rows(room, edge + ui.spacing().item_spacing.y);
-        let place = self.options.canvas_palette;
+        let place = self.canvas_place(which);
         let menu = crate::bars::menu(
             &place,
-            &format!("{}{PALETTE}", crate::custom_toolbars::ACTION),
+            &format!("{}{}", crate::custom_toolbars::ACTION, which.action()),
             None,
         );
-        let name = tr!("layouts-canvas-palette");
-        let id = palette_id();
+        let name = which.name();
+        let id = which.id();
         let mut contents = |app: &mut Self, ui: &mut egui::Ui, across: bool| {
             app.palette_icons(ui, &groups, across, per_column, edge, hover);
         };
@@ -227,28 +346,26 @@ impl CutCraftApp {
             Place::Floating(floating) => {
                 self.floating_bar(ui.ctx(), &bar, floating, start, &mut contents)
             }
-            // the palette has no tab of its own; one put there floats
+            // these bars have no tab of their own; one put there floats
             Place::Layout => {
-                self.options.canvas_palette = Place::column();
-                return;
+                *self.canvas_place_mut(which) = Place::column();
+                return None;
             }
         };
         if let Some(action) = shown.action {
             self.toolbars.pending = Some(action);
         }
         if let Some(moved) = shown.moved {
-            self.options.canvas_palette = Place::Floating(moved);
+            *self.canvas_place_mut(which) = Place::Floating(moved);
             self.save_options();
         }
-        let Some(bar) = shown.rect else {
-            return;
-        };
+        let bar = shown.rect?;
         let Some(group) = self
             .canvas
             .group
             .and_then(|name| groups.iter().find(|g| g.name == name))
         else {
-            return;
+            return Some(bar);
         };
         let tools: Vec<&'static str> = group
             .tools
@@ -294,6 +411,7 @@ impl CutCraftApp {
         {
             self.canvas.group = None;
         }
+        Some(bar)
     }
 
     /// The palette's group icons, in columns `per_column` long running down, or in one row
@@ -347,6 +465,10 @@ impl CutCraftApp {
                 } else if response.clicked() {
                     app.canvas.group =
                         (hover || app.canvas.group != Some(group.name)).then_some(group.name);
+                }
+                // one list open at a time: a group's closes the header's
+                if app.canvas.group.is_some() {
+                    app.close_header_list();
                 }
             }
         };

@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-26
+reviewed: 2026-11-27
 see-also: toolbars, interface_layout, settings, find_tool
 ---
 
@@ -13,7 +13,7 @@ hunting through every group for them.
 ## Adding a tool or a group
 
 1. **Right-click** the tool's button (or its row in the Rail). To add a **whole group**,
-   right-click its icon in the Rail or the Canvas palette, its name in the Ribbon or its
+   right-click its icon in the Rail or on a Canvas bar, its name in the Ribbon or its
    heading in Classic.
 2. Pick **Add to Favourites**.
 

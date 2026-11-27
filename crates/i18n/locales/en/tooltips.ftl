@@ -338,6 +338,7 @@ tooltip-recalculate-toolpath = Recalculate Toolpath: works the selected toolpath
 tooltip-recalculate-visible-toolpaths = Recalculate Visible Toolpaths: works out again every toolpath ticked in the Toolpath List
 tooltip-recalculate-all-toolpaths = Recalculate All Toolpaths: works out every toolpath again, after you changed the vectors or the material. A merged or copied toolpath is worked out after the toolpaths it copies
 tooltip-save-toolpaths = Save Toolpaths: writes the toolpaths as a G-code file for your machine to run
+tooltip-view-gcode = View G-code: reads the G-code saving would write, through the machine's post-processor, without saving a file. Copy it from there if you need it
 tooltip-install-post-processor = Install Post Processor: adds a post processor file for a machine Cut Craft does not list yet. One with a name already listed is kept beside it as a copy, named with a copy number and the date and time
 tooltip-close = Close: closes the job you have open, offering to save it first
 tooltip-select = Select: puts away the tool in hand, so clicking picks objects, Shift-click adds to the pick, dragging draws a box round them (a slip of a pixel or two is still a click, not a move), and right-clicking an object picks it and opens its menu
