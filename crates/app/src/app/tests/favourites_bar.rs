@@ -113,3 +113,34 @@ fn favourites_snap_to_a_side_like_any_bar() {
         "the drawing made room"
     );
 }
+
+#[test]
+fn an_empty_favourites_bar_is_not_shown_until_it_has_a_tool() {
+    for layout in WindowLayout::ALL {
+        let mut h = floating_favourites(layout);
+        let hint = "No favourites yet: right-click a tool or a group ▸ Add to Favourites.";
+        assert!(h.text_at(hint).is_none(), "{layout:?}: no empty bar");
+        h.choose(|app| app.row_menu("draw_circle"), &["Add to Favourites"]);
+        h.frame(vec![]);
+        h.frame(vec![]);
+        assert!(h.text_at("Favourites").is_none(), "{layout:?}: still a bar");
+        h.choose(
+            |app| app.row_menu("draw_circle"),
+            &["Remove from Favourites"],
+        );
+        h.frame(vec![]);
+        h.frame(vec![]);
+        assert_eq!(h.favourite_items(), [] as [Item; 0]);
+        assert!(h.text_at(hint).is_none(), "{layout:?}: gone again");
+    }
+}
+
+#[test]
+fn an_empty_snapped_favourites_bar_takes_no_room_from_the_drawing() {
+    let mut h = floating_favourites(WindowLayout::Canvas);
+    let before = h.view_rect();
+    h.choose(CutCraftApp::favourites_menu, &["Snap to Bottom"]);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert_eq!(h.view_rect(), before, "nothing to show, no room taken");
+}
