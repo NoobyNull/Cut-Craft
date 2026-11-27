@@ -24,8 +24,9 @@ impl CutCraftApp {
     }
 
     /// A turning drag of `turn` across a view `size`, as `rotation` takes it. A turntable keeps
-    /// the job's up up, so a view the cube turned on its side turns back upright first
-    /// (smoothly, the drag carrying on from there); a free drag stops a smooth turn where it
+    /// the job's up up, so a view the cube turned (or is turning) on its side turns back
+    /// upright first, smoothly from where it is on screen, the drag carrying on from there; a
+    /// free drag stops a smooth turn where it
     /// is and turns on from there.
     pub(in super::super) fn drag_view_3d(
         &mut self,
@@ -35,9 +36,11 @@ impl CutCraftApp {
         now: f64,
     ) {
         let turntable = rotation == view3d::Rotation::Turntable;
-        if turntable && self.motion_3d.turning().is_none() && self.orbit.roll.abs() > 1e-9 {
-            let upright = self.orbit.upright(rotation);
-            self.look_3d(upright, now);
+        // a turn under way to a view on its side starts again from what is on screen now,
+        // heading upright, so the picture doesn't jump; once upright it isn't restarted
+        let goal = self.orbit_goal();
+        if turntable && goal.roll.abs() > 1e-9 {
+            self.look_3d(goal.upright(rotation), now);
         }
         match self.motion_3d.turning() {
             Some(turning) if turntable => turning.to = turning.to.dragged_by(turn, size, rotation),

@@ -1234,6 +1234,31 @@ fn a_nudge_brings_round_the_face_beyond_that_side_of_the_screen() {
 }
 
 #[test]
+fn a_nudge_brings_round_the_face_its_tooltip_names_however_the_picture_is_turned() {
+    // looking straight at the front with the picture turned partway (a drag's roll)
+    for roll in [0.3_f64, 0.7, -0.6, 2.0, -2.5] {
+        let rolled = Orbit {
+            roll,
+            ..Orbit::FRONT
+        };
+        for side in [Nudge::Up, Nudge::Down, Nudge::Left, Nudge::Right] {
+            let named = rolled.face_beyond(side);
+            let out = crate::view3d::FACES
+                .iter()
+                .find(|f| f.3 == named)
+                .unwrap()
+                .0;
+            let to = rolled.nudged(side);
+            assert!(
+                to.towards_viewer().abs_diff_eq(out, 1e-9),
+                "roll {roll}, {side:?}: nudge shows {:?}, tooltip names {named}",
+                to.towards_viewer()
+            );
+        }
+    }
+}
+
+#[test]
 fn a_smooth_turn_eases_from_one_view_to_the_next() {
     let turning = Turning::new(Orbit::FRONT, Orbit::TOP, 10.0);
     let (start, done) = turning.at(10.0);

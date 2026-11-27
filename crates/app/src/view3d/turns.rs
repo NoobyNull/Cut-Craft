@@ -27,26 +27,29 @@ impl Orbit {
             .squared()
     }
 
-    /// Turned a quarter turn so the face beyond `side` of the screen faces the viewer.
+    /// Turned the short way so the face beyond `side` of the screen (the one
+    /// [`Orbit::face_beyond`] names) faces the viewer: a quarter turn from a face straight on.
     #[must_use]
     pub fn nudged(self, side: Nudge) -> Self {
-        let quarter = std::f64::consts::FRAC_PI_2;
-        let by = match side {
-            Nudge::Up => DVec3::X * quarter,
-            Nudge::Down => DVec3::X * -quarter,
-            Nudge::Left => DVec3::Y * quarter,
-            Nudge::Right => DVec3::Y * -quarter,
+        let Some(face) = self.face_toward(side) else {
+            return self;
         };
-        self.turned(by).squared()
+        let m = self.matrix();
+        let arc = DQuat::from_rotation_arc((m * face.0).normalize(), DVec3::Z);
+        Self::from_matrix(DMat3::from_quat(arc) * m).squared()
     }
 
     /// The name key of the face beyond `side` of the screen, the one its nudge brings round.
     pub fn face_beyond(self, side: Nudge) -> &'static str {
+        self.face_toward(side).map_or("", |f| f.3)
+    }
+
+    /// The face whose outward direction is nearest the screen's `side`.
+    fn face_toward(self, side: Nudge) -> Option<&'static (DVec3, DVec3, DVec3, &'static str)> {
         let out = self.to_world(side.screen());
         FACES
             .iter()
             .max_by(|a, b| a.0.dot(out).total_cmp(&b.0.dot(out)))
-            .map_or("", |f| f.3)
     }
 
     /// Near a view square to the job (within a hair), exactly square: a step from the view

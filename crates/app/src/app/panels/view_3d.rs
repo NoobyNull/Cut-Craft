@@ -329,6 +329,7 @@ impl CutCraftApp {
                         moved(view, (translate, rotate), seconds, settings, rotation);
                     self.motion_3d.moved(ctx.input(|i| i.time));
                     self.motion_3d.stop_spin();
+                    self.motion_3d.stop_turning();
                 }
                 Input::Button {
                     number,

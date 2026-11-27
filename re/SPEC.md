@@ -964,8 +964,8 @@ instead of half-cell steps.
 - `re/extracted/help-12.5/3d-view-controls.txt`, "View Controller": drag it to rotate
   smoothly; highlight a face and click to move smoothly to face it; double-click a
   highlighted face to rotate to the opposite side. Also "Orthographic or Perspective view:
-  toggle between Orthographic and Perspective camera projection". Both are implemented,
-  except that the turns are instant, not animated.
+  toggle between Orthographic and Perspective camera projection". Both are implemented;
+  turns ease over 0.25 s (Options ▸ 3D View Settings ▸ Turn smoothly to new views).
 - `re/SPEC.md` lines 58–59: the 3D view overlay (`View_Overlay/*.png`) has an
   ortho/perspective toggle, and there is a ViewCube.
 - Guessed (not in the help): edge and corner clicks (Aspire's help only mentions faces, but
@@ -982,7 +982,6 @@ instead of half-cell steps.
 - `app.rs`: `TOOL_HEIGHT_DIAMETERS` 4, `SETTLE_SECONDS`, `MESH_CELLS` / `FINE_MESH_CELLS`.
 
 #### What's left
-- Smooth (animated) turns for cube clicks, as in Aspire.
 - The playing tool's cylinder is still drawn whole over the surface (ponytail-marked).
 - Overlays are still left off the auto-wrapped rotary view (as before).
 - Toolpaths aren't drawn as lines in the 3D view at all (only the preview's cut material),
