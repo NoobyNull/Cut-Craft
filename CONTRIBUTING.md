@@ -149,7 +149,9 @@ boxes to tick):
   pull request from a branch in this repository on the
   [PowerWhittle timeline](https://github.com/orgs/Power-Whittle/projects/1) by itself: In
   Progress with Start and Target set to the day it opened (a draft waits until **Ready for
-  review**), then Done with Target set to the day it merged. Dates are Pacific time. You only
+  review**), then Done with Target set to the day it merged. Each release gets its own entry
+  too, "Released vX.Y.Z", marked Done on the day its tag was made (to add a missed one, use
+  Actions > Timeline > Run workflow with the tag). Dates are Pacific time. You only
   touch the board for things the workflow can't know, such as an issue the pull request fixes
   or a target date further out. Pull requests from forks aren't added; a maintainer adds them.
   The workflow needs the repository secret `PROJECT_TOKEN`: a classic personal access token of

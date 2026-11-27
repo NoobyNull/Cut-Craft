@@ -1,0 +1,114 @@
+#!/bin/bash
+# Puts work on the PowerWhittle timeline (the Power-Whittle org board). The Timeline workflow runs it.
+#   scripts/timeline pr NODE_ID ACTION OPENED [MERGED]
+#       A pull request (its GraphQL node id). ACTION "closed" means it merged: Done, Start = OPENED's
+#       day, Target = MERGED's day. Anything else: In Progress, Start = Target = OPENED's day.
+#   scripts/timeline release TAG WHEN URL
+#       A "Released TAG" entry, Done, Start = Target = WHEN's day, linking to URL. Skipped when the
+#       board already has an entry with that title, so a re-run adds nothing.
+# Times are ISO 8601 and become Pacific days. Needs GH_TOKEN (a token with the "project" scope;
+# without one it warns and changes nothing);
+# ORG and BOARD_NUMBER default to Power-Whittle and 1. The board must have the fields Start,
+# Target and Status, and the statuses In Progress and Done; they're looked up by name.
+set -euo pipefail
+ORG=${ORG:-Power-Whittle}
+BOARD_NUMBER=${BOARD_NUMBER:-1}
+
+if [[ -z ${GH_TOKEN:-} ]]; then
+  echo "::warning::PROJECT_TOKEN isn't set, so nothing was put on the timeline. CONTRIBUTING.md, Keep Power-Whittle up to date, says how to add it."
+  exit 0
+fi
+
+day() { TZ=America/Los_Angeles date -d "$1" +%F; }
+
+# shellcheck disable=SC2016 # $org, $number are GraphQL variables
+board=$(gh api graphql -F org="$ORG" -F number="$BOARD_NUMBER" -f query='
+  query($org: String!, $number: Int!) {
+    organization(login: $org) { projectV2(number: $number) {
+      id
+      fields(first: 50) { nodes {
+        ... on ProjectV2Field { id name }
+        ... on ProjectV2SingleSelectField { id name options { id name } }
+      } }
+    } }
+  }' --jq .data.organization.projectV2)
+project=$(jq -r '.id // empty' <<<"$board")
+field() { jq -r --arg n "$1" '.fields.nodes[] | select(.name == $n) | .id' <<<"$board"; }
+option() {
+  jq -r --arg n "$1" '.fields.nodes[] | select(.name == "Status") | .options[] | select(.name == $n) | .id' <<<"$board"
+}
+start=$(field Start)
+target=$(field Target)
+status=$(field Status)
+in_progress=$(option "In Progress")
+done_=$(option Done)
+for v in project start target status in_progress done_; do
+  if [[ -z ${!v} ]]; then
+    echo "::error::The $ORG board $BOARD_NUMBER has no '$v' (it looks for the fields Start, Target and Status, and the statuses In Progress and Done)."
+    exit 1
+  fi
+done
+
+set_field() { # item id, field id, GraphQL value object
+  gh api graphql -f project="$project" -f item="$1" -f field="$2" -f query="
+    mutation(\$project: ID!, \$item: ID!, \$field: ID!) {
+      updateProjectV2ItemFieldValue(input: {projectId: \$project, itemId: \$item,
+        fieldId: \$field, value: $3}) { projectV2Item { id } }
+    }" --silent
+}
+dates() { # item id, start time, target time
+  set_field "$1" "$start" "{date: \"$(day "$2")\"}"
+  set_field "$1" "$target" "{date: \"$(day "$3")\"}"
+}
+status_is() { set_field "$1" "$status" "{singleSelectOptionId: \"$2\"}"; }
+
+case ${1:-} in
+pr)
+  node=$2 action=$3 opened=$4 merged=${5:-}
+  # adding an item that's already on the board returns the existing one
+  # shellcheck disable=SC2016 # GraphQL variables
+  item=$(gh api graphql -f project="$project" -f content="$node" -f query='
+    mutation($project: ID!, $content: ID!) {
+      addProjectV2ItemById(input: {projectId: $project, contentId: $content}) { item { id } }
+    }' --jq .data.addProjectV2ItemById.item.id)
+  if [[ $action == closed ]]; then
+    dates "$item" "$opened" "$merged"
+    status_is "$item" "$done_"
+    echo "::notice::On the timeline as Done, $(day "$opened") to $(day "$merged")."
+  else
+    dates "$item" "$opened" "$opened"
+    status_is "$item" "$in_progress"
+    echo "::notice::On the timeline as In Progress, from $(day "$opened")."
+  fi
+  ;;
+release)
+  tag=$2 when=$3 url=$4
+  title="Released $tag"
+  # shellcheck disable=SC2016 # GraphQL variables
+  titles=$(gh api graphql --paginate -F org="$ORG" -F number="$BOARD_NUMBER" -f query='
+    query($org: String!, $number: Int!, $endCursor: String) {
+      organization(login: $org) { projectV2(number: $number) {
+        items(first: 100, after: $endCursor) {
+          pageInfo { hasNextPage endCursor }
+          nodes { content { ... on DraftIssue { title } } }
+        }
+      } }
+    }' --jq '.data.organization.projectV2.items.nodes[].content.title // empty')
+  if grep -qxF "$title" <<<"$titles"; then
+    echo "::notice::The timeline already has \"$title\"."
+    exit 0
+  fi
+  # shellcheck disable=SC2016 # GraphQL variables
+  item=$(gh api graphql -f project="$project" -f title="$title" -f body="$url" -f query='
+    mutation($project: ID!, $title: String!, $body: String!) {
+      addProjectV2DraftIssue(input: {projectId: $project, title: $title, body: $body}) { projectItem { id } }
+    }' --jq .data.addProjectV2DraftIssue.projectItem.id)
+  dates "$item" "$when" "$when"
+  status_is "$item" "$done_"
+  echo "::notice::\"$title\" is on the timeline as Done, $(day "$when")."
+  ;;
+*)
+  echo "usage: scripts/timeline pr NODE_ID ACTION OPENED [MERGED] | release TAG WHEN URL" >&2
+  exit 2
+  ;;
+esac

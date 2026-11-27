@@ -1,0 +1,92 @@
+#!/bin/bash
+# Tests for scripts/timeline: scripts/test-timeline (CI runs it on each pull request).
+# A stand-in gh answers the board queries and records each field the script sets.
+set -uo pipefail
+here=$(cd "$(dirname "$0")" && pwd)
+fake=$(mktemp -d)
+trap 'rm -rf "$fake"' EXIT
+failed=0
+
+cat >"$fake/gh" <<'EOF'
+#!/bin/bash
+args="$*"
+case $args in
+*'fields(first'*) cat "$FAKE/board.json" ;;
+*'items(first'*) cat "$FAKE/titles" ;;
+*addProjectV2ItemById*) echo "pr-item"; echo "add pr" >>"$FAKE/log" ;;
+*addProjectV2DraftIssue*)
+  for a in "$@"; do [[ $a == title=* ]] && echo "add draft ${a#title=}" >>"$FAKE/log"; done
+  echo "draft-item" ;;
+*updateProjectV2ItemFieldValue*)
+  item= field=
+  for a in "$@"; do
+    case $a in item=*) item=${a#item=} ;; field=*) field=${a#field=} ;; esac
+  done
+  value=$(grep -o 'value: {[^}]*}' <<<"$args")
+  echo "set $item $field ${value#value: }" >>"$FAKE/log" ;;
+*) echo "unexpected gh call: $args" >&2; exit 1 ;;
+esac
+EOF
+chmod +x "$fake/gh"
+board='{"id":"P","fields":{"nodes":[{"id":"S","name":"Start"},{"id":"T","name":"Target"},
+  {"id":"St","name":"Status","options":[{"id":"todo","name":"Todo"},{"id":"ip","name":"In Progress"},
+  {"id":"done","name":"Done"}]},{}]}}'
+
+run() { # what, want (the log), then timeline's arguments
+  local what=$1 want=$2 got
+  shift 2
+  : >"$fake/log"
+  printf '%s\n' "${TITLES:-}" >"$fake/titles"
+  echo "${BOARD:-$board}" >"$fake/board.json"
+  out=$(PATH="$fake:$PATH" FAKE=$fake GH_TOKEN=x "$here/timeline" "$@" 2>&1)
+  status=$?
+  got=$(cat "$fake/log")
+  if [[ $got != "$want" ]]; then
+    printf 'FAIL: %s\n--- got\n%s\n--- want\n%s\n--- output\n%s\n' "$what" "$got" "$want" "$out"
+    failed=1
+  fi
+}
+
+# 03:00 UTC on the 27th is still the 26th in Pacific time
+run "an opened pull request is In Progress from the day it opened" \
+'add pr
+set pr-item S {date: "2026-11-26"}
+set pr-item T {date: "2026-11-26"}
+set pr-item St {singleSelectOptionId: "ip"}' \
+  pr PR_1 opened 2026-11-27T03:00:00Z
+
+run "a merged pull request is Done, ending the day it merged" \
+'add pr
+set pr-item S {date: "2026-11-26"}
+set pr-item T {date: "2026-11-28"}
+set pr-item St {singleSelectOptionId: "done"}' \
+  pr PR_1 closed 2026-11-27T03:00:00Z 2026-11-28T20:00:00Z
+
+run "a new release gets a Done entry on its day" \
+'add draft Released v0.7.10
+set draft-item S {date: "2026-11-27"}
+set draft-item T {date: "2026-11-27"}
+set draft-item St {singleSelectOptionId: "done"}' \
+  release v0.7.10 2026-11-27T19:00:00Z https://example.invalid/v0.7.10
+
+TITLES=$'Something else\nReleased v0.7.10' run "a release already on the board isn't added twice" '' \
+  release v0.7.10 2026-11-27T19:00:00Z https://example.invalid/v0.7.10
+[[ $status == 0 ]] || { echo "FAIL: a release already on the board should exit 0, got $status"; failed=1; }
+
+TITLES='Released v0.7.1' run "a similar title doesn't count as the same release" \
+'add draft Released v0.7.10
+set draft-item S {date: "2026-11-27"}
+set draft-item T {date: "2026-11-27"}
+set draft-item St {singleSelectOptionId: "done"}' \
+  release v0.7.10 2026-11-27T19:00:00Z https://example.invalid/v0.7.10
+
+BOARD='{"id":"P","fields":{"nodes":[{"id":"S","name":"Start"}]}}' run "a board missing its fields changes nothing" '' \
+  pr PR_1 opened 2026-11-27T03:00:00Z
+[[ $status != 0 && $out == *"has no 'target'"* ]] || { echo "FAIL: a missing field should fail and name it, got $status: $out"; failed=1; }
+
+out=$(PATH="$fake:$PATH" FAKE=$fake GH_TOKEN='' "$here/timeline" pr PR_1 opened 2026-11-27T03:00:00Z 2>&1)
+status=$?
+[[ $status == 0 && $out == *"PROJECT_TOKEN isn't set"* ]] || { echo "FAIL: without a token it should warn and pass, got $status: $out"; failed=1; }
+
+if (( failed )); then exit 1; fi
+echo "scripts/timeline: all tests pass"
