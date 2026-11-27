@@ -142,7 +142,7 @@ use crate::view2d::{self, Canvas, Gesture, Overlay, ViewTransform};
 use crate::{commands, shortcut, view3d};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::{Document, EntityId, LayerId, Units};
-use cut_craft_core::file::{JOB_EXTENSION, OLD_JOB_EXTENSION};
+use cut_craft_core::file::JOB_EXTENSION;
 use cut_craft_core::geometry::{Path, Point, Rect};
 use cut_craft_core::glam::DAffine2;
 use cut_craft_core::handles::{self, Handle};

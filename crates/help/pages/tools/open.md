@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-27
 see-also: new, save, open_folder
 ---
 
@@ -7,7 +7,7 @@ see-also: new, save, open_folder
 
 ![The steps, one after another](pictures/open/tour.gif)
 
-1. Open a job you saved before (a .ccjob file).
+1. Open a job you saved before (a .ccjob file, or a .pwjob file saved by PowerWhittle).
 
    ![Step 1](pictures/open/step-1.png)
 

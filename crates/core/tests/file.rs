@@ -1,5 +1,9 @@
-use cut_craft_core::file::{JOB_EXTENSION, LoadError, OLD_JOB_EXTENSION, load_job, save_job};
+use cut_craft_core::file::{
+    JOB_EXTENSION, JOB_EXTENSIONS, LoadError, OLD_JOB_EXTENSION, TEMPLATE_EXTENSIONS, is_template,
+    load_job, save_job,
+};
 use cut_craft_core::testing::sample_document;
+use std::path::Path;
 
 #[test]
 fn a_saved_job_loads_back_identically() {
@@ -104,4 +108,15 @@ fn settings_a_newer_version_added_are_named_rather_than_dropped_silently() {
         unknown.is_empty(),
         "its own files know every setting: {unknown:?}"
     );
+}
+
+#[test]
+fn jobs_named_for_powerwhittle_open_as_the_very_same_file() {
+    // release 1 saves .pwjob and .pwjobt; the format inside does not change
+    assert_eq!(JOB_EXTENSIONS, ["ccjob", "pwjob", "ajob"]);
+    assert_eq!(TEMPLATE_EXTENSIONS, ["ccjobt", "pwjobt"]);
+    assert!(is_template(Path::new("/jobs/Plate.pwjobt")));
+    assert!(is_template(Path::new("/jobs/Plate.CCJOBT")));
+    assert!(!is_template(Path::new("/jobs/Plate.pwjob")));
+    assert!(!is_template(Path::new("/jobs/pwjobt")));
 }
