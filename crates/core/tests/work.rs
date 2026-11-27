@@ -363,13 +363,17 @@ fn the_gauge_says_the_pace_once_a_second_while_calculating() {
 /// Code allowed to start its own threads, and why: each waits on the network, a disk or a
 /// device rather than working the processor, so it neither needs a core limit nor counts as
 /// a calculation.
-const OWN_THREADS: [(&str, &str); 11] = [
+const OWN_THREADS: [(&str, &str); 12] = [
     (
         "core/src/work.rs",
         "the one place calculations' threads start",
     ),
     ("app/src/addons.rs", "downloads add-ons"),
     ("app/src/update.rs", "checks for and downloads updates"),
+    (
+        "app/src/app/announcements.rs",
+        "reads announcements.md from GitHub",
+    ),
     (
         "app/src/depth.rs",
         "downloads the depth add-on's detail (its estimate is a calculation)",
