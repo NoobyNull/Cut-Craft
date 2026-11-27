@@ -39,7 +39,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
           ORG: Power-Whittle
-          BOARD: 1
+          BOARD_NUMBER: 1
           PR_ID: ${{ github.event.pull_request.node_id }}
           OPENED: ${{ github.event.pull_request.created_at }}
           MERGED: ${{ github.event.pull_request.merged_at }}
@@ -51,7 +51,8 @@ jobs:
           fi
           day() { TZ=America/Los_Angeles date -d "$1" +%F; }
 
-          board=$(gh api graphql -F org="$ORG" -F number="$BOARD" -f query='
+          # shellcheck disable=SC2016 # $org, $number... are GraphQL variables
+          board=$(gh api graphql -F org="$ORG" -F number="$BOARD_NUMBER" -f query='
             query($org: String!, $number: Int!) {
               organization(login: $org) { projectV2(number: $number) {
                 id
@@ -77,6 +78,7 @@ jobs:
             fi
           done
 
+          # shellcheck disable=SC2016 # GraphQL variables
           item=$(gh api graphql -f project="$project" -f content="$PR_ID" -f query='
             mutation($project: ID!, $content: ID!) {
               addProjectV2ItemById(input: {projectId: $project, contentId: $content}) { item { id } }
