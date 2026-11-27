@@ -1,4 +1,3 @@
-- Toolpath forms ask for the bit first, with its picture
-- A bit name that fits two shapes is caught
-- Canvas has a Toolpaths bar beside the Modeling bar
-- View G-code and Machine Files in Save for the Machine
+- The 3D view cube is a bevelled dice you can click
+- Home, turn and nudge buttons beside the view cube
+- An empty Favourites bar stays hidden until its first tool
