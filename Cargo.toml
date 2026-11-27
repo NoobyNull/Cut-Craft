@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/app", "crates/help", "crates/i18n", "crates/core", "crates/scripting", "crates/post", "crates/vtdb", "crates/tool-database", "crates/bug-report", "crates/window-owner", "crates/priority", "crates/updater", "crates/machines", "crates/rotary", "crates/rotary-carving", "crates/depth-addon", "crates/border-tile", "crates/web-api", "crates/content-pack", "crates/backup", "crates/packs/*", "crates/commands/*", "crates/formats/*"]
 
 [workspace.package]
-version = "0.7.7"
+version = "0.7.8"
 edition = "2024"
 license-file = "LICENSE"
 # Nothing here goes to crates.io; it also tells cargo-deny these are our own crates

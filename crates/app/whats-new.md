@@ -1,4 +1,4 @@
-- Toolbars you can move, and a Favourites bar
-- Rotary finishing all the way round
-- One button per shape, and a Bit Library
-- Back Up Settings, and announcements
+- Toolpath forms ask for the bit first, with its picture
+- A bit name that fits two shapes is caught
+- Canvas has a Toolpaths bar beside the Modeling bar
+- View G-code and Machine Files in Save for the Machine
