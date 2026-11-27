@@ -48,7 +48,7 @@ pub struct Params {
     /// Below the material surface where carving starts
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
-    #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_sketch.png"))]
+    #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_sketch.svg"))]
     pub start_depth: f64,
     /// Below the start depth, cut in passes no deeper than the bit's pass depth
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]

@@ -166,19 +166,18 @@ fn reshaping_a_made_shape_by_hand_stops_it_being_remade_from_its_settings() {
 
 #[test]
 fn every_measurement_picture_is_in_the_icon_set() {
-    // a picture of what is picked: one for each choice
-    fn walk(fields: &[form::Field], out: &mut Vec<String>) {
+    // a picture of what is picked: one for each choice; `true` for a measurement picture
+    fn walk(fields: &[form::Field], out: &mut Vec<(String, bool)>) {
         for f in fields {
             if let Some(template) = &f.diagram {
                 match &f.kind {
                     form::Kind::Choice(options, _) if template.contains("{}") => {
-                        out.extend(
-                            options
-                                .iter()
-                                .map(|o| form::icon_path(template, &Value::from(o.value.clone()))),
-                        );
+                        out.extend(options.iter().map(|o| {
+                            let path = form::icon_path(template, &Value::from(o.value.clone()));
+                            (path, false)
+                        }));
                     }
-                    _ => out.push(template.clone()),
+                    _ => out.push((template.clone(), true)),
                 }
             }
             if let form::Kind::Group(inner) = &f.kind {
@@ -191,11 +190,26 @@ fn every_measurement_picture_is_in_the_icon_set() {
     for c in commands::registry().commands() {
         walk(&form::fields(&c.schema()), &mut pictures);
     }
-    for p in &pictures {
+    for (p, measured) in &pictures {
         assert!(
             known.contains(p),
-            "{p} is not in assets/icons: add its PNG there"
+            "{p} is not in assets/icons: add it there"
         );
+        if !measured {
+            continue;
+        }
+        // drawn as shapes, so they stay sharp on a scaled screen; letters as outlines,
+        // since the SVG reader is given no fonts
+        assert!(
+            crate::icons::is_svg(p),
+            "{p}: a measurement picture is an SVG"
+        );
+        let svg = crate::icons::built_in::BUILT_IN
+            .iter()
+            .find(|(key, _)| key == p)
+            .map(|(_, bytes)| String::from_utf8_lossy(bytes))
+            .expect("built in");
+        assert!(!svg.contains("<text"), "{p}: letters drawn as outlines");
     }
     assert!(
         pictures.len() >= 19,

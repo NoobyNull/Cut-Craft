@@ -55,7 +55,7 @@ pub struct Params {
     pub smoothness: u32,
     /// How high the nearest point stands
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-dim" = "H", "x-diagram" = "diagrams/height_base.png"))]
+    #[schemars(extend("x-dim" = "H", "x-diagram" = "diagrams/height_base.svg"))]
     pub max_height: f64,
     /// Height of the subject's lowest point, so it stands clear of the background
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]

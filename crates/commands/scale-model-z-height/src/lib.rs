@@ -14,7 +14,7 @@ pub struct ScaleModelZHeight;
 pub struct Params {
     /// The model's new height, from its lowest to its highest point
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-dim" = "H", "x-diagram" = "diagrams/height_only.png"))]
+    #[schemars(extend("x-dim" = "H", "x-diagram" = "diagrams/height_only.svg"))]
     pub height: f64,
 }
 

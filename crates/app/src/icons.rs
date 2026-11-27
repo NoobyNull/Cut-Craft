@@ -157,8 +157,31 @@ impl Icons {
             Source::BuiltIn(bytes) => (*bytes).into(),
             Source::File(path) => fs::read(path).ok()?.into(),
         };
-        let image = image::load_from_memory(&bytes).ok()?;
-        let small = image.resize(edge, edge, image::imageops::FilterType::Lanczos3);
+        let small = if is_svg(key) {
+            // drawn straight at the small size: the SVG reader is given no fonts (pictures
+            // draw their letters as outlines)
+            let hint = egui::SizeHint::Size {
+                width: edge,
+                height: edge,
+                maintain_aspect_ratio: true,
+            };
+            let drawn = egui_extras::image::load_svg_bytes_with_size(
+                &bytes,
+                hint,
+                &resvg::usvg::Options::default(),
+            )
+            .ok()?;
+            let [w, h] = drawn.size.map(|v| u32::try_from(v).unwrap_or(0));
+            let rgba: Vec<u8> = drawn
+                .pixels
+                .iter()
+                .flat_map(egui::Color32::to_srgba_unmultiplied)
+                .collect();
+            image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(w, h, rgba)?)
+        } else {
+            let image = image::load_from_memory(&bytes).ok()?;
+            image.resize(edge, edge, image::imageops::FilterType::Lanczos3)
+        };
         let mut png = std::io::Cursor::new(vec![]);
         small.write_to(&mut png, image::ImageFormat::Png).ok()?;
         Some(png.into_inner())
@@ -190,6 +213,13 @@ fn stands_in(key: &str) -> Option<&str> {
 /// Where an icon's bytes are kept in egui; the extension tells the loaders what it is.
 fn uri(key: &str) -> String {
     format!("bytes://icons/{key}")
+}
+
+/// Whether an icon is drawn from shapes (an SVG), at whatever size it is shown.
+pub(crate) fn is_svg(key: &str) -> bool {
+    Path::new(key)
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("svg"))
 }
 
 fn is_bitmap(key: &str) -> bool {
@@ -319,6 +349,40 @@ mod tests {
         let image = image::load_from_memory(&png).expect("a picture");
         assert_eq!((image.width(), image.height()), (24, 24));
         assert_eq!(icons.small_png("no/such/icon.png", 24), None);
+    }
+
+    #[test]
+    fn a_measurement_picture_draws_sharp_at_the_size_it_is_shown() {
+        let mut icons = Icons::built_in();
+        let ctx = egui::Context::default();
+        egui_extras::install_image_loaders(&ctx);
+        icons.preload(&ctx, false);
+        let uri = icons
+            .image("diagrams/depth_vcarve.svg")
+            .source(&ctx)
+            .uri()
+            .unwrap()
+            .to_owned();
+        // drawn for a 2x screen at the form's width: made at that size, not stretched
+        let hint = egui::SizeHint::Size {
+            width: 896,
+            height: 448,
+            maintain_aspect_ratio: true,
+        };
+        let image = loop {
+            match ctx.try_load_image(&uri, hint) {
+                Ok(egui::load::ImagePoll::Ready { image }) => break image,
+                Ok(egui::load::ImagePoll::Pending { .. }) => {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+                Err(e) => panic!("{e}"),
+            }
+        };
+        assert_eq!(image.size, [896, 448]);
+        // and the help can show one small, as it does a button's icon
+        let png = icons.small_png("diagrams/size_wh.svg", 48).expect("made");
+        let image = image::load_from_memory(&png).expect("a picture");
+        assert_eq!((image.width(), image.height()), (48, 24));
     }
 
     #[test]

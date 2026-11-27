@@ -50,13 +50,13 @@ pub struct Params {
     /// Below the material surface where the top of the chamfer is
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
-    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_chamfer.png"))]
+    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_chamfer.svg"))]
     pub start_depth: f64,
     /// Across the chamfer. With a V-bit the chamfer must stay within its V: start depth plus
     /// chamfer depth (from the top surface) no deeper than the V is tall
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Chamfer"))]
-    #[schemars(extend("x-dim" = "W", "x-diagram" = "diagrams/chamfer_shape.png"))]
+    #[schemars(extend("x-dim" = "W", "x-diagram" = "diagrams/chamfer_shape.svg"))]
     pub width: f64,
     /// Slope from vertical for a ball nose. Hidden with a V-bit, whose slope is half its
     /// angle (a 90° V-bit cuts a 45° chamfer)

@@ -13,7 +13,7 @@ pub struct OffsetVectors;
 pub struct Params {
     /// Outwards when positive, inwards when negative
     #[schemars(extend("x-unit" = "mm"))]
-    #[schemars(extend("x-dim" = "O", "x-diagram" = "diagrams/offset_distance.png"))]
+    #[schemars(extend("x-dim" = "O", "x-diagram" = "diagrams/offset_distance.svg"))]
     pub distance: f64,
     /// Whether the offset's outside corners are round or sharp
     pub corners: Corners,

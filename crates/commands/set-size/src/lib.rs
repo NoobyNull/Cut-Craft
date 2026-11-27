@@ -34,7 +34,7 @@ pub struct Params {
         range(min = 0),
         extend("x-unit" = "mm", "x-percent-when" = {"percent": "true"})
     )]
-    #[schemars(extend("x-dim" = "W", "x-diagram" = "diagrams/size_wh.png"))]
+    #[schemars(extend("x-dim" = "W", "x-diagram" = "diagrams/size_wh.svg"))]
     pub width: f64,
     /// The height, or with Percent, the share of the present height. With Link XY, typing
     /// it works out the width to match; items one by one each take this height

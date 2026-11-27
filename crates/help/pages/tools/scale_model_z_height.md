@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-27
 see-also: component_properties, offset_model, material_setup, view_3d
 ---
 

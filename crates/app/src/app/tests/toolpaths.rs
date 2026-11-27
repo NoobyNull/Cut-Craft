@@ -1085,7 +1085,7 @@ fn the_pockets_clearing_settings_have_their_picture() {
         .schema();
     let fields = form::fields(&pocket);
     let edge = find(&fields, "edge_allowance").expect("Leave for Edge Pass");
-    assert_eq!(edge.diagram.as_deref(), Some("diagrams/edge_pass.png"));
+    assert_eq!(edge.diagram.as_deref(), Some("diagrams/edge_pass.svg"));
     assert_eq!(edge.dim.as_deref(), Some("A"));
 }
 

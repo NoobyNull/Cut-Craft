@@ -86,7 +86,7 @@ pub struct Params {
     /// Below the material surface
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(title = "Cut Depth", extend("x-group" = "Cutting Depths"))]
-    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_pocket.png"))]
+    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_pocket.svg"))]
     pub depth: f64,
     /// The bit that cuts the walls and finishes the pocket; Select… picks one from your bits
     pub tool: Tool,
@@ -127,7 +127,7 @@ pub struct Params {
     /// one thin, even skim, for a straighter, cleaner wall; 0 clears right up to it
     #[serde(default)]
     #[schemars(title = "Leave for Edge Pass", extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-dim" = "A", "x-diagram" = "diagrams/edge_pass.png"))]
+    #[schemars(extend("x-dim" = "A", "x-diagram" = "diagrams/edge_pass.svg"))]
     #[schemars(extend("x-group" = "Clear Pocket"))]
     pub edge_allowance: f64,
     /// Go round the edge once, at the full depth, after all the clearing passes: one clean

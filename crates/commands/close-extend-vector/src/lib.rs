@@ -30,7 +30,7 @@ pub struct Params {
     pub method: Method,
     /// Only close vectors whose ends are at most this far apart; 0 closes any
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
-    #[schemars(extend("x-dim" = "G", "x-diagram" = "diagrams/close_gap.png"))]
+    #[schemars(extend("x-dim" = "G", "x-diagram" = "diagrams/close_gap.svg"))]
     pub max_gap: f64,
 }
 

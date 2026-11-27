@@ -41,7 +41,7 @@ pub struct Params {
     /// Below the material surface where the flute begins (the floor of an earlier pocket)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
-    #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_fluting.png"))]
+    #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_fluting.svg"))]
     pub start_depth: f64,
     /// Below the start depth at the deepest point; cut in passes of the bit's pass depth
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
@@ -61,7 +61,7 @@ pub struct Params {
     /// percent unticked
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Ramp", "x-enable-when" = {"use_ramp_percent": "false"}))]
-    #[schemars(extend("x-dim" = "L", "x-diagram" = "diagrams/fluting_ramp.png"))]
+    #[schemars(extend("x-dim" = "L", "x-diagram" = "diagrams/fluting_ramp.svg"))]
     pub ramp_length: f64,
     /// Percentage of the longest ramp: the whole vector at the start only, half of it at both
     /// ends, with Use ramp percent ticked

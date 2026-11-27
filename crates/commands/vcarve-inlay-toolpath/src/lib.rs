@@ -37,12 +37,12 @@ pub struct Params {
     /// Deepest the pocket goes (narrow parts stop short of it)
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
-    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_vcarve_inlay.png"))]
+    #[schemars(extend("x-dim" = "D", "x-diagram" = "diagrams/depth_vcarve_inlay.svg"))]
     pub pocket_depth: f64,
     /// Between the top of the plug and the bottom of the pocket once fitted
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Inlay"))]
-    #[schemars(extend("x-dim" = "G", "x-diagram" = "diagrams/vcarve_inlay_fit.png"))]
+    #[schemars(extend("x-dim" = "G", "x-diagram" = "diagrams/vcarve_inlay_fit.svg"))]
     pub glue_gap: f64,
     /// Between the plug's material and the pocket's surface once fitted
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]

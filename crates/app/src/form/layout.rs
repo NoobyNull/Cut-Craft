@@ -1,8 +1,8 @@
 //! Laying a form out: its tabs, plain rows, grids, diagram and hover help.
 
 use super::{
-    DIAGRAM_ASPECT, DIAGRAM_ROWS, DIM_COLOUR, FIELD_PICTURE_ROWS, Field, HoverHint, Kind, Look,
-    Number, Units, Value, Widget, edit, egui, round, tr,
+    DIAGRAM_ASPECT, DIAGRAM_ROWS, FIELD_PICTURE_ROWS, Field, HoverHint, Kind, Look, Number, Units,
+    Value, Widget, edit, egui, round, tr,
 };
 
 /// [`show`] for `params` somewhere inside the form, whose top-level parameters are `top`.
@@ -80,7 +80,8 @@ pub(super) fn diagram(ui: &mut egui::Ui, fields: &[&Field], params: &Value, look
 
 /// A measurement's callout letter, as the picture above it marks it.
 pub(super) fn dim_letter(ui: &mut egui::Ui, dim: &str) {
-    ui.label(egui::RichText::new(dim).strong().color(DIM_COLOUR))
+    let colour = super::dim_colour(ui.visuals().dark_mode);
+    ui.label(egui::RichText::new(dim).strong().color(colour))
         .on_hover_hint(tr!("form-marked-on-picture", dim = dim));
 }
 

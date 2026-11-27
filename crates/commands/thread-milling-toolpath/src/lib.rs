@@ -210,7 +210,7 @@ pub struct Params {
     /// Below the material surface where the thread starts
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Cutting Depths"))]
-    #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_thread.png"))]
+    #[schemars(extend("x-dim" = "D1", "x-diagram" = "diagrams/depth_thread.svg"))]
     pub start_depth: f64,
     /// Deepest the bottom of the bit goes below the start depth
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
@@ -226,7 +226,7 @@ pub struct Params {
     /// Between the ridges of the thread
     #[schemars(extend("x-unit" = "mm"), range(min = 0))]
     #[schemars(extend("x-group" = "Thread"), extend("x-show-when" = {"pitch_preset": "custom"}))]
-    #[schemars(extend("x-dim" = "P", "x-diagram" = "diagrams/thread_shape.png"))]
+    #[schemars(extend("x-dim" = "P", "x-diagram" = "diagrams/thread_shape.svg"))]
     pub pitch: f64,
     /// The thread's major (largest) diameter, about the size of the bolt; it should be
     /// close to the size of the circles selected, or the form warns in red

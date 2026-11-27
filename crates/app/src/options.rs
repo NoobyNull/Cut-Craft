@@ -6,7 +6,7 @@ use eframe::egui;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-mod appearance;
+pub(crate) mod appearance;
 pub use appearance::*;
 mod services;
 pub use services::*;

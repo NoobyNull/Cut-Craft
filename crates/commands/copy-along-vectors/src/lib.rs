@@ -31,7 +31,7 @@ pub struct Params {
     /// Copy Circles: their diameter
     #[serde(default = "default_diameter")]
     #[schemars(extend("x-unit" = "mm"), range(min = 0), extend("x-show-when" = {"copy": "circles"}))]
-    #[schemars(extend("x-dim" = "Dia", "x-diagram" = "diagrams/copy_circles.png"))]
+    #[schemars(extend("x-dim" = "Dia", "x-diagram" = "diagrams/copy_circles.svg"))]
     pub circle_diameter: f64,
     /// Space the copies by how many there are, or by the distance between them
     pub spacing: Spacing,
