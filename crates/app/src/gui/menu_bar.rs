@@ -360,6 +360,7 @@ impl MenuSystem {
                     vec![
                         b("help_contents"),
                         b("did_you_know"),
+                        b("announcements"),
                         b("keyboard_shortcuts"),
                         b("credits"),
                         sub(

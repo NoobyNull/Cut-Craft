@@ -93,6 +93,50 @@ impl Harness {
             .collect()
     }
 
+    // ---- Announcements ----
+
+    /// Announcements on, today being `today` (`YYYY-MM-DD`), and GitHub's `announcements.md`
+    /// answering with what `github` gives.
+    pub(in super::super) fn given_announcements(
+        &mut self,
+        today: &str,
+        github: fn() -> Result<String, String>,
+    ) {
+        self.app.options.updates.show_announcements = true;
+        self.app.announcements.today =
+            Some(chrono::NaiveDate::parse_from_str(today, "%Y-%m-%d").unwrap());
+        self.app.announcements.fetch = github;
+    }
+
+    /// Cut Craft starting: the tip or announcements it opens, then GitHub's answer.
+    pub(in super::super) fn start_cut_craft(&mut self) {
+        self.app.tip = None;
+        self.app.announcements.open = None;
+        self.app.tip_at_startup();
+        let ctx = self.ctx.clone();
+        self.app.fetch_announcements_at_startup(&ctx);
+        self.until_github_answers();
+    }
+
+    /// Frames until the look on GitHub for announcements is over.
+    pub(in super::super) fn until_github_answers(&mut self) {
+        for _ in 0..200 {
+            self.frame(vec![]);
+            if !self.app.announcements.asking() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        self.frame(vec![]);
+        self.frame(vec![]);
+    }
+
+    /// The titles the Announcements window shows, if it is open.
+    pub(in super::super) fn announcements_shown(&self) -> Option<Vec<String>> {
+        let open = self.app.announcements.open.as_ref()?;
+        Some(open.iter().map(|n| n.title.clone()).collect())
+    }
+
     // ---- Did You Know? ----
 
     /// The tip the Did You Know? window shows, if it is open.

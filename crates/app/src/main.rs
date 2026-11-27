@@ -17,6 +17,7 @@ macro_rules! t {
 }
 
 mod addons;
+mod announcements;
 mod app;
 mod axes;
 mod bars;

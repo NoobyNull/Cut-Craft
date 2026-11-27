@@ -23,6 +23,8 @@ a CNC machine cuts them with.
   keep or throw away your changes.
 - [Did You Know?](help:tips): short tips by subject, from drawing to cutting safely, one
   shown each time Cut Craft starts. Each links to the page that says more.
+- [Announcements](help:announcements): news and notes from the team at start, and how to
+  turn them off.
 - [Updates](help:updates): install a new version in one click; Cut Craft reopens on
   your job.
 - [Backing up your settings](help:backups): Help ▸ Back Up Settings, what goes in, and the

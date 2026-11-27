@@ -114,6 +114,11 @@ pub struct Options {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[schemars(skip)]
     pub seen_tips: Vec<u64>,
+    /// The announcements shown on this computer, and those turned off with Don't show this
+    /// again.
+    #[serde(default, skip_serializing_if = "crate::announcements::Seen::is_empty")]
+    #[schemars(skip)]
+    pub announcements: crate::announcements::Seen,
     /// The favourite tools of the Design and Toolpaths tabs, and whether each shows only
     /// them (right-click the tab).
     #[serde(default)]
@@ -275,6 +280,7 @@ impl Default for Options {
             layout_asked: false,
             next_tip: 0,
             seen_tips: Vec::new(),
+            announcements: crate::announcements::Seen::default(),
             favourites: Favourites::default(),
             design_sections: vec![],
             toolpath_sections: vec![],

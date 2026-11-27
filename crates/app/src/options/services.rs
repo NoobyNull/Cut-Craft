@@ -10,6 +10,13 @@ pub struct Updates {
     #[serde(default = "on")]
     #[schemars(title = "Check for updates when Cut Craft starts")]
     pub check_at_startup: bool,
+    /// Open a short announcement from the team at the first start of a day it is meant for,
+    /// such as news of the program or a holiday note, until you tick Don't show this again.
+    /// Cut Craft looks on GitHub for new ones as it starts; turning this off stops that too.
+    /// Help ▸ Announcements shows the current ones whenever you like
+    #[serde(default = "on")]
+    #[schemars(title = "Show announcements when Cut Craft starts")]
+    pub show_announcements: bool,
     /// When GitHub was last asked, in seconds since 1970: a record only (every start asks),
     /// kept to tell when an update was last looked for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -25,6 +32,7 @@ impl Default for Updates {
     fn default() -> Self {
         Self {
             check_at_startup: on(),
+            show_announcements: on(),
             last_check: None,
             skipped_version: None,
         }

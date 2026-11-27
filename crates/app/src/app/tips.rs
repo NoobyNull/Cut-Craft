@@ -245,9 +245,13 @@ impl CutCraftApp {
         self.tip = Some(n % TIPS.len());
     }
 
-    /// At startup, unless turned off: a tip not seen yet, picked by weight.
+    /// At startup, unless turned off: the announcements due today, else a tip not seen yet,
+    /// picked by weight.
     pub(super) fn tip_at_startup(&mut self) {
-        if !self.options.general.show_tips_at_startup || self.first_run.is_some() {
+        if self.announcements_at_startup()
+            || !self.options.general.show_tips_at_startup
+            || self.first_run.is_some()
+        {
             return;
         }
         self.open_unseen_tip();
@@ -281,10 +285,11 @@ impl CutCraftApp {
         }
     }
 
-    /// First-time setup, the layout question, then the tip, while open.
+    /// First-time setup, the layout question, the announcements, then the tip, while open.
     pub(super) fn welcome_windows(&mut self, ctx: &egui::Context) {
         self.first_run_window(ctx);
         self.layout_window(ctx);
+        self.announcements_window(ctx);
         self.tips_window(ctx);
     }
 

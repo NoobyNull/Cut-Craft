@@ -283,6 +283,7 @@ tools-open-application-data-folder = Open Application Data Folder
 tools-keyboard-shortcuts = Keyboard Shortcuts
 tools-help-contents = Help Contents
 tools-did-you-know = Did You Know?
+tools-announcements = Announcements
 tools-credits = Credits
 tools-about-cut-craft = About Cut Craft
 tools-back-up-settings = Back Up Settings

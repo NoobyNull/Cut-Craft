@@ -5,6 +5,7 @@ use eframe::egui::{Event, PointerButton, Pos2, RawInput, Rect, vec2};
 
 #[path = "accessibility_tests.rs"]
 mod accessibility;
+mod announcements;
 mod backups;
 #[path = "web_api_tests.rs"]
 mod web_api;
@@ -110,6 +111,9 @@ impl Harness {
         h.app.reporter.browser = false;
         // nor Material Setup on the first click on the Toolpaths page, unless a test asks
         h.app.ask_material = false;
+        // nor an announcement at start, nor a look on GitHub for one, unless a test asks
+        h.app.options.updates.show_announcements = false;
+        h.app.announcements.fetch = || Err("tests do not go online".into());
         // nor a question about crossing vectors: the controls are clicked with whatever is
         // selected
         let checks = &mut h.app.options.confirmations;

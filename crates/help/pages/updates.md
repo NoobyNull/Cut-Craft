@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-27
 see-also: web_api, contents, settings, backups
 ---
 
@@ -128,5 +128,9 @@ the new one.
 
 Turn off **Edit ▸ Options ▸ Updates ▸ Check for updates when Cut Craft starts** to stop the
 startup check. **Help ▸ Check for Updates** still works.
+
+**Edit ▸ Options ▸ Updates ▸ Show announcements when Cut Craft starts** opens the team's
+[Announcements](help:announcements) at the first start of a day they are meant for. Turning it
+off also stops Cut Craft reading them from GitHub.
 
 See also: [Help Contents](help:contents)
