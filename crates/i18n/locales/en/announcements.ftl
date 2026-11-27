@@ -9,18 +9,15 @@ announcements-close = Close
 announcements-support-text = Like it? Star it on GitHub, watch it for new releases, and tell us about any problem you find.
 announcements-support-button = Support us on GitHub
 
-# src/announcements.rs: the announcements this version ships with (draft wording, awaiting
-# the team's own)
+# src/announcements.rs: the announcements this version ships with
 announcement-powerwhittle-title = Cut Craft is becoming PowerWhittle
 announcement-powerwhittle-body =
-    Cut Craft is getting a new name: **PowerWhittle**. The new name arrives with an update
-    in December. It is the same program, made by the same people, and it keeps updating
-    the way it does now.
+    Thank you all for your support of this project.
 
-    What it does today:
+    Cut Craft's name is officially changing to **PowerWhittle**. It is the same program, and
+    the change should not interrupt anything: your files, settings and updates carry on as
+    they are.
 
-    - Draws and edits shapes and text, and places 3D models
-    - Makes profile, pocket, V-carve, 3D carving and rotary toolpaths
-    - Shows the cut before you make it, and saves G-code for your machine's controller
+    Found a problem? Right-click where it happens and choose **Report a Bug Here…**.
 
-    Thank you for using it, and for every bug report and idea so far.
+    Have an idea? Send it the same way. I would like to hear it.
