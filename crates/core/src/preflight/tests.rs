@@ -1233,9 +1233,16 @@ fn quarter_inch_bit() -> Tool {
 fn a_bit_shaped_unlike_the_bit_librarys_one_of_its_name_is_called_out() {
     let slot = slot("Slot", 50.0, 20.0, 180.0, 3.0);
     let found = check(&job(), &[&slot], &with_library(vec![quarter_inch_bit()]));
-    let shapes: Vec<&Finding> = found.iter().filter(|f| f.check == Check::BitShapes).collect();
+    let shapes: Vec<&Finding> = found
+        .iter()
+        .filter(|f| f.check == Check::BitShapes)
+        .collect();
     assert_eq!(shapes.len(), 1, "{found:?}");
-    assert_eq!(shapes[0].severity, Severity::Warning, "no tool changer picks it");
+    assert_eq!(
+        shapes[0].severity,
+        Severity::Warning,
+        "no tool changer picks it"
+    );
     let message = &shapes[0].message;
     assert!(message.contains("Slot"), "{message}");
     assert!(
@@ -1270,7 +1277,10 @@ fn a_tool_changer_holding_a_different_bit_of_the_same_name_must_be_decided() {
         ..with_library(vec![quarter_inch_bit()])
     };
     let found = check(&job(), &[&slot], &limits);
-    let shapes: Vec<&Finding> = found.iter().filter(|f| f.check == Check::BitShapes).collect();
+    let shapes: Vec<&Finding> = found
+        .iter()
+        .filter(|f| f.check == Check::BitShapes)
+        .collect();
     assert_eq!(shapes.len(), 1, "{found:?}");
     assert_eq!(shapes[0].severity, Severity::Error, "{found:?}");
     assert!(shapes[0].message.contains("T3"), "{}", shapes[0].message);
@@ -1284,11 +1294,21 @@ fn two_toolpaths_with_different_bits_of_one_name_are_called_out() {
         ..slot("Finish", 80.0, 20.0, 180.0, 3.0)
     };
     let found = check(&job(), &[&first, &second], &Limits::default());
-    let shapes: Vec<&Finding> = found.iter().filter(|f| f.check == Check::BitShapes).collect();
+    let shapes: Vec<&Finding> = found
+        .iter()
+        .filter(|f| f.check == Check::BitShapes)
+        .collect();
     assert_eq!(shapes.len(), 1, "{found:?}");
-    assert_eq!(shapes[0].severity, Severity::Error, "no bit change is written");
+    assert_eq!(
+        shapes[0].severity,
+        Severity::Error,
+        "no bit change is written"
+    );
     let message = &shapes[0].message;
-    assert!(message.contains("Rough") && message.contains("Finish"), "{message}");
+    assert!(
+        message.contains("Rough") && message.contains("Finish"),
+        "{message}"
+    );
     assert!(message.contains("6 mm End Mill"), "{message}");
     assert!(
         message.contains("diameter 6 mm in Rough, 6.35 mm in Finish"),
@@ -1319,7 +1339,10 @@ fn bits_differ_by_shape_not_by_name_feeds_or_number() {
     };
     let said = tool().shape_differences(&v, units);
     assert_eq!(said.len(), 1, "{said:?}");
-    assert!(said[0].contains("End Mill") && said[0].contains("V-Bit"), "{said:?}");
+    assert!(
+        said[0].contains("End Mill") && said[0].contains("V-Bit"),
+        "{said:?}"
+    );
     let wider = Tool {
         angle: 90.0,
         ..v.clone()
