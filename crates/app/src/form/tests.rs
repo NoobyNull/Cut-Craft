@@ -775,7 +775,10 @@ fn the_drag_knifes_own_settings_come_right_after_its_depths() {
     let k = keys(&knife);
     let at = |key| k.iter().position(|x| *x == key).unwrap();
     assert!(at("passes") < at("blade_offset"), "{k:?}");
-    assert!(at("tool") < at("passes"), "the knife first, as every bit: {k:?}");
+    assert!(
+        at("tool") < at("passes"),
+        "the knife first, as every bit: {k:?}"
+    );
     assert!(at("tolerance_angle") < at(AFTER_TOOL), "{k:?}");
 }
 

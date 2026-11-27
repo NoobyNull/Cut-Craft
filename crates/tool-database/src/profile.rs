@@ -729,19 +729,27 @@ mod tests {
     fn picture_size(tool: &Tool, height: f32) -> Option<egui::Vec2> {
         let ctx = egui::Context::default();
         let mut size = None;
-        let _ = ctx.run_pass(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                size = picture(ui, tool, height).map(|r| r.rect.size());
-            });
-        });
+        // no renderer takes a headless frame's texture changes
+        ctx.run_ui(egui::RawInput::default(), |ui| {
+            size = picture(ui, tool, height).map(|r| r.rect.size());
+        })
+        .textures_delta
+        .clear();
         size
     }
 
     #[test]
     fn a_bit_is_pictured_small_beside_its_name_and_a_laser_is_not() {
         let size = picture_size(&end_mill(6.0), 50.0).expect("an end mill is drawn");
-        assert_eq!(size, egui::vec2(50.0 * PICTURE_ASPECT, 50.0));
-        for shape in [ToolShape::BallNose, ToolShape::VBit, ToolShape::RadiusedEndMill] {
+        assert!(
+            (size - egui::vec2(50.0 * PICTURE_ASPECT, 50.0)).length() < 0.01,
+            "{size:?}"
+        );
+        for shape in [
+            ToolShape::BallNose,
+            ToolShape::VBit,
+            ToolShape::RadiusedEndMill,
+        ] {
             let t = Tool {
                 shape,
                 tip_radius: 1.0,

@@ -1072,9 +1072,7 @@ fn print_form_blocks() {
                 row("tab", t, None);
             } else if f.key == "tool" {
                 row("tool", "Bit", None);
-            } else if f.key == AFTER_TOOL {
-                continue;
-            } else {
+            } else if f.key != AFTER_TOOL {
                 row("loose", "(fields outside a block)", None);
             }
         }

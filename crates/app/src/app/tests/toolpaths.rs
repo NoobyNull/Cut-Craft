@@ -680,8 +680,10 @@ fn the_profile_form_shows_which_side_it_cuts_just_under_the_depth() {
     let y = |h: &Harness, text: &str| h.text_at(text).unwrap_or_else(|| panic!("{text}")).y;
     let side = y(&h, crate::form::WHICH_SIDE);
     assert!(y(&h, "Cut Depth") < side, "under the depth");
+    assert!(y(&h, "Bit") < y(&h, "Cut Depth"), "the bit first");
+    // the cutting details further down, scrolled out of sight in a short window
     assert!(
-        side < y(&h, "Machine Vectors…"),
+        h.text_at("Machine Vectors…").is_none_or(|p| side < p.y),
         "before the cutting details"
     );
     for choice in ["Outside", "Inside", "On the Line"] {
