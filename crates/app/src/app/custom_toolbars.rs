@@ -14,9 +14,12 @@ use crate::tool_names::{group_name, page_tab_name};
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
 
-/// The Canvas palette's actions, after [`toolbars::ACTION`]: then what to do to where it
-/// sits ([`bars::apply`]).
+/// The Canvas modeling bar's actions, after [`toolbars::ACTION`]: then what to do to where
+/// it sits ([`bars::apply`]).
 pub(super) const PALETTE: &str = "palette:";
+
+/// The Canvas toolpaths bar's actions, after [`toolbars::ACTION`], as [`PALETTE`]'s.
+pub(super) const TOOLPATHS_BAR: &str = "toolpaths_bar:";
 
 /// The Favourites bar's actions, after [`toolbars::ACTION`]: then what to do to where it
 /// sits ([`bars::apply`]).
@@ -27,7 +30,11 @@ pub(super) const FAVOURITES: &str = "favourites:";
 pub(super) const FAVOURITES_BAR: usize = usize::MAX;
 
 /// The built-in tab Favourites has while attached to the layout.
-const FAVOURITES_TAB: &str = "Favourites";
+pub(super) const FAVOURITES_TAB: &str = "Favourites";
+
+/// The header tabs that swap the Ribbon's tool groups; the Canvas has a bar for each kind
+/// of tool instead, so its header leaves them out.
+const PAGE_TABS: [&str; 3] = ["Design", "Model", "Toolpaths"];
 
 /// The id of toolbar `n`'s bar while it is snapped or floating.
 pub(super) fn toolbar_bar_id(n: usize, name: &str) -> egui::Id {
@@ -124,8 +131,10 @@ impl CutCraftApp {
 
     /// The tab row the Ribbon and Canvas share: the built-in tabs (Gadgets once something
     /// is installed), then one tab per toolbar of your own, its name right-clicked for its
-    /// menu. Whether a tab was clicked.
-    pub(super) fn tab_row(&mut self, ui: &mut egui::Ui) -> bool {
+    /// menu. Whether a tab was clicked. The Canvas (`canvas`) leaves out Design, Model and
+    /// Toolpaths, which have bars of their own there, and a click on its open tab closes
+    /// that tab's list.
+    pub(super) fn tab_row(&mut self, ui: &mut egui::Ui, canvas: bool) -> bool {
         let gadgets = !self.gadget_tools().is_empty();
         if !gadgets && RIBBON_TABS[self.ribbon_tab] == GADGETS {
             self.ribbon_tab = 0;
@@ -142,7 +151,10 @@ impl CutCraftApp {
         }
         let mut clicked = false;
         for (i, tab) in RIBBON_TABS.iter().enumerate() {
-            if (*tab == GADGETS && !gadgets) || (*tab == FAVOURITES_TAB && !favourites) {
+            if (*tab == GADGETS && !gadgets)
+                || (*tab == FAVOURITES_TAB && !favourites)
+                || (canvas && PAGE_TABS.contains(tab))
+            {
                 continue;
             }
             let on = self.toolbars.ribbon.is_none() && self.ribbon_tab == i;
@@ -153,7 +165,11 @@ impl CutCraftApp {
             };
             let response = ui.selectable_label(on, name);
             if response.clicked() {
-                (self.ribbon_tab, self.toolbars.ribbon) = (i, None);
+                if canvas && on {
+                    self.close_header_list();
+                } else {
+                    (self.ribbon_tab, self.toolbars.ribbon) = (i, None);
+                }
                 clicked = true;
             }
             if *tab == FAVOURITES_TAB {
@@ -164,13 +180,19 @@ impl CutCraftApp {
             let on = self.toolbars.ribbon == Some(n);
             let response = ui.selectable_label(on, self.options.toolbars[n].name.as_str());
             if response.clicked() {
-                self.toolbars.ribbon = Some(n);
+                self.toolbars.ribbon = (!(canvas && on)).then_some(n);
                 self.toolbars.group = None;
                 clicked = true;
             }
             self.toolbar_name_menu(&response, n);
         }
         clicked
+    }
+
+    /// Closes the list a Canvas header tab opened (Favourites, Gadgets, a toolbar of your
+    /// own): the first tab, Design, opens none there.
+    pub(super) fn close_header_list(&mut self) {
+        (self.ribbon_tab, self.toolbars.ribbon) = (0, None);
     }
 
     /// The Rail's buttons for the toolbars of your own, one each after Favourites: its
@@ -283,6 +305,12 @@ impl CutCraftApp {
         }
         if let Some(what) = action.strip_prefix(PALETTE) {
             if bars::apply(&mut self.options.canvas_palette, what, false) {
+                self.save_options();
+            }
+            return;
+        }
+        if let Some(what) = action.strip_prefix(TOOLPATHS_BAR) {
+            if bars::apply(&mut self.options.canvas_toolpaths, what, false) {
                 self.save_options();
             }
             return;

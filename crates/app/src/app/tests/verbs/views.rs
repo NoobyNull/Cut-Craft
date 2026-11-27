@@ -79,9 +79,15 @@ impl Harness {
             .unwrap_or_else(|| panic!("no tab {name}"));
     }
 
-    /// The Canvas palette's groups, in order.
+    /// The Canvas modeling bar's groups, in order.
     pub(in super::super) fn canvas_groups(&self) -> Vec<gui::ToolGroup> {
         self.app.canvas_groups()
+    }
+
+    /// The Canvas toolpaths bar's groups, in order.
+    pub(in super::super) fn canvas_toolpath_groups(&self) -> Vec<gui::ToolGroup> {
+        self.app
+            .canvas_groups_of(crate::app::canvas_layout::CanvasBar::Toolpaths)
     }
 
     /// The Canvas palette group whose list is open, if one is.

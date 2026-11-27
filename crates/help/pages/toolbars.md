@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-26
+reviewed: 2026-11-27
 see-also: favourites, customize_toolbars, interface_layout, settings
 ---
 
@@ -23,7 +23,7 @@ than six toolbars they are listed under **Add to Toolbar ▸** instead, or alway
 **Options ▸ General ▸ Add to menus** says so.
 
 To put a **whole group** on a toolbar, right-click the group instead: its icon in the Rail
-or the Canvas palette, its name under its icons in the Ribbon, or its heading in Classic.
+or on a Canvas bar, its name under its icons in the Ribbon, or its heading in Classic.
 On the toolbar the group is one button that opens its list of tools. It opens when you
 point at it, or when you click it if **Options ▸ General ▸ Canvas tool lists open** is set
 to On Click.

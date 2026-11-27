@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-26
+reviewed: 2026-11-27
 see-also: preview_detail, rotary_machining_toolpath, rotary_locked_angles_toolpath, rotary_firmware, job_setup
 ---
 
@@ -287,7 +287,8 @@ the machine changes, so going back to the tab is instant. See also
 
 Sometimes you only want to read the G-code, not save it: to check a feed rate, see where the
 bit changes are, or copy a few lines into a forum post. **View G-code…** on the Output tab
-(beside Machine Files), and in the Save Toolpaths window, shows the G-code saving would
+(beside Machine Files), in **Save for the Machine** on the Canvas, Rail and Ribbon layouts'
+tool groups, and in the Save Toolpaths window, shows the G-code saving would
 write, in a window of its own, without saving a file.
 
 ![The View G-code window over the Output tab: the post-processor, what the checks before cutting found, the file, its lines numbered, and Copy All, Save Toolpaths… and Refresh](pictures/view-gcode.png)

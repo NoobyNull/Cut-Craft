@@ -133,6 +133,13 @@ impl Harness {
         self.ctx.memory(|m| m.area_rect(id))
     }
 
+    /// Where the Canvas toolpaths bar was drawn last, while it floats or lies over the
+    /// drawing.
+    pub(in super::super) fn toolpaths_bar_rect(&self) -> Option<egui::Rect> {
+        let id = crate::app::canvas_layout::CanvasBar::Toolpaths.id();
+        self.ctx.memory(|m| m.area_rect(id))
+    }
+
     /// Whether a toolbar's name is being typed.
     pub(in super::super) fn renaming_toolbar(&self) -> bool {
         self.app.toolbars.rename.is_some()

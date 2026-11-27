@@ -124,7 +124,6 @@ fn the_library_components_and_toolpaths_actions_open_their_chips() {
 #[test]
 fn every_palette_group_can_be_reached_in_a_short_window() {
     let mut h = canvas();
-    h.show_ribbon_tab("Toolpaths");
     h.window = egui::vec2(h.window.x, 420.0);
     h.frame(vec![]);
     h.frame(vec![]);
@@ -184,7 +183,6 @@ fn on_click_a_palette_group_waits_for_its_click() {
 #[test]
 fn a_tall_enough_window_shows_the_palette_in_one_column() {
     let mut h = canvas();
-    h.show_ribbon_tab("Toolpaths");
     h.frame(vec![]);
     h.frame(vec![]);
     let tall = palette(&h);
@@ -207,7 +205,10 @@ fn a_long_favourites_list_in_a_short_window_stays_inside_it() {
         .flat_map(|group| group.tools.iter().map(|id| (*id).to_string()))
         .collect();
     assert!(every.len() > 20, "{}", every.len());
-    h.given_options(|o| o.favourites.design = every);
+    h.given_options(|o| {
+        o.favourites.design = every;
+        o.favourites.bar = crate::bars::Place::Layout;
+    });
     h.show_ribbon_tab("Favourites");
     h.window = egui::vec2(900.0, 420.0);
     h.frame(vec![]);
@@ -279,4 +280,136 @@ fn clicking_a_shape_while_the_right_click_menu_is_open_closes_it() {
         h.text_at("Report a Bug Here…").is_none(),
         "the menu is shut"
     );
+}
+
+/// A bar that comes to hold more grows to show it, rather than scrolling in the size it had:
+/// the palette, squeezed into a short window, is one long column again in a tall one (it
+/// stayed squeezed, a scrollbar on its first group, Matthew 2026-11-27).
+#[test]
+fn a_bar_grows_back_when_the_window_does() {
+    let mut h = canvas();
+    h.frame(vec![]);
+    let tall = palette(&h);
+    h.window = egui::vec2(h.window.x, 420.0);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let window = h.window;
+    h.window = egui::vec2(window.x, 1000.0);
+    for _ in 0..3 {
+        h.frame(vec![]);
+    }
+    let again = palette(&h);
+    assert!(
+        (again.height() - tall.height()).abs() < 2.0 && (again.width() - tall.width()).abs() < 2.0,
+        "{tall:?} then {again:?}"
+    );
+}
+
+/// The modeling and toolpath tools each have a bar of their own, both shown at once: no
+/// header tab swaps one for the other.
+#[test]
+fn the_toolpaths_have_a_bar_of_their_own_beside_the_modeling_bar() {
+    let mut h = canvas();
+    let modeling = palette(&h);
+    let toolpaths = h.toolpaths_bar_rect().expect("the toolpaths bar is drawn");
+    assert!(modeling.center().x < 0.5 * h.window.x, "{modeling:?}");
+    assert!(toolpaths.center().x > 0.5 * h.window.x, "{toolpaths:?}");
+    let names =
+        |groups: Vec<gui::ToolGroup>| -> Vec<&str> { groups.iter().map(|g| g.name).collect() };
+    let modeling_groups = names(h.canvas_groups());
+    assert!(modeling_groups.contains(&"Create Vectors"));
+    assert!(
+        modeling_groups.contains(&"Export Model"),
+        "Model's groups too"
+    );
+    let toolpath_groups = names(h.canvas_toolpath_groups());
+    assert!(toolpath_groups.contains(&"Cut Out and Clear"));
+    assert!(toolpath_groups.contains(&"Save for the Machine"));
+    // a toolpath group lists its tools beside its bar, on the drawing's side
+    h.open_canvas_group_list("Holes");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let drilling = h.text_at("Drilling Toolpath").expect("Holes is listed");
+    assert!(
+        drilling.x < toolpaths.left(),
+        "{drilling:?} left of {toolpaths:?}"
+    );
+    assert!(
+        palette(&h).width() < modeling.width() + 1.0,
+        "the modeling bar stays as it was"
+    );
+}
+
+#[test]
+fn the_header_has_no_design_model_or_toolpaths_tab() {
+    let mut h = canvas();
+    // the header's row is the Find a Tool box's; the chip along the foot is the one
+    // Toolpaths left, and the menus over the header keep theirs
+    let find = h
+        .text_at(&cut_craft_i18n::tr!("layouts-canvas-find"))
+        .expect("the header");
+    for name in ["Design", "Model", "Toolpaths"] {
+        let row: Vec<_> = h
+            .texts_at(name)
+            .into_iter()
+            .filter(|p| (p.y - find.y).abs() < 4.0)
+            .collect();
+        assert!(row.is_empty(), "{name}: {row:?}");
+    }
+    // nor does an old Toolpaths tab, kept from before, hide either bar
+    h.show_ribbon_tab("Toolpaths");
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(h.palette_rect().is_some() && h.toolpaths_bar_rect().is_some());
+}
+
+#[test]
+fn either_bar_can_be_hidden_in_options() {
+    for (modeling, toolpaths) in [(true, false), (false, true)] {
+        let mut h = Harness::new();
+        h.given_options(|o| {
+            o.general.layout = WindowLayout::Canvas;
+            o.general.canvas_modeling_bar = modeling;
+            o.general.canvas_toolpaths_bar = toolpaths;
+        });
+        h.frame(vec![]);
+        h.frame(vec![]);
+        assert_eq!(h.palette_rect().is_some(), modeling);
+        assert_eq!(h.toolpaths_bar_rect().is_some(), toolpaths);
+    }
+}
+
+#[test]
+fn the_toolpaths_bar_snaps_like_any_bar() {
+    let mut h = canvas();
+    h.invoke("toolbar:toolpaths_bar:snap:right");
+    assert_eq!(
+        h.options().canvas_toolpaths,
+        crate::bars::Place::Snapped {
+            side: crate::bars::Side::Right
+        }
+    );
+    assert!(
+        h.options().canvas_palette.is_column(),
+        "the modeling bar stays"
+    );
+    h.frame(vec![]);
+    h.frame(vec![]);
+    let bar = h.toolpaths_bar_rect();
+    assert!(bar.is_none_or(|r| r.right() > 0.9 * h.window.x), "{bar:?}");
+}
+
+#[test]
+fn the_save_group_has_view_gcode_and_machine_files() {
+    let h = canvas();
+    let save = h
+        .canvas_toolpath_groups()
+        .into_iter()
+        .find(|g| g.name == "Save for the Machine")
+        .expect("the group");
+    assert_eq!(
+        save.tools,
+        ["save_toolpaths", "view_gcode", "machine_files"]
+    );
+    assert_eq!(h.tool_label("view_gcode"), "View G-code");
 }

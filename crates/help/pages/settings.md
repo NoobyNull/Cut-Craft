@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-26
+reviewed: 2026-11-27
 see-also: toolbars, backups, view_2d, performance, setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
 ---
 
@@ -134,11 +134,12 @@ form, picks the way. In every layout, **General ▸ Other ways to draw a shape**
 gives [Draw Rectangle from Center](help:draw_rectangle_from_center) and
 [Draw Circle from Edge](help:draw_circle_from_edge) buttons of their own again.
 
-In the Canvas layout a palette group lists its tools as soon as you point at it. Set
-**General ▸ Canvas tool lists open** to **On Click** to open a list only when you click
-its group.
+In the Canvas layout a group on the Modeling or Toolpaths bar lists its tools as soon as you
+point at it. Set **General ▸ Canvas tool lists open** to **On Click** to open a list only
+when you click its group. **General ▸ Canvas modeling bar** and **Canvas toolpaths bar**
+(both ticked to begin with) show or hide each bar.
 
-Bars of tools (the Canvas palette and [your own toolbars](help:toolbars)) can be snapped to a
+Bars of tools (the Canvas Modeling and Toolpaths bars and [your own toolbars](help:toolbars)) can be snapped to a
 side of the drawing. **General ▸ Bars snapped to a side** picks whether the drawing makes room
 for them (**Push the drawing over**, the first choice) or they lie over its edge (**Over the
 drawing**). **General ▸ New toolbars start** picks whether a toolbar you make floats over the
@@ -154,8 +155,9 @@ on the right.
 
 ![The Rail layout, light theme on the left and dark on the right](pictures/layouts/rail-light-and-dark.png)
 
-**[Canvas](help:layout_canvas)**: the whole window is the drawing. A palette of tool groups
-floats down the left, the open tool's form floats on the right, and the sheets, layers and
+**[Canvas](help:layout_canvas)**: the whole window is the drawing. The Modeling bar of tool groups
+floats down the left and the Toolpaths bar down the right, the open tool's form floats
+beside it, and the sheets, layers and
 toolpaths open from chips along the foot. A box in the header finds a tool by name.
 
 ![The Canvas layout, light theme on the left and dark on the right](pictures/layouts/canvas-light-and-dark.png)

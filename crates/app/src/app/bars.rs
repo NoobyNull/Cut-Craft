@@ -197,6 +197,10 @@ impl CutCraftApp {
             .fixed_pos(at)
             .constrain(true)
             .show(ctx, |ui| {
+                // an area's box is only as big as it was last frame: the bar may grow to
+                // what the window has left, so one that comes to hold more (a taller window,
+                // a tool added) shows it all rather than scrolling in its old size
+                ui.set_max_size(window.max - at);
                 egui::Frame::window(ui.style())
                     .inner_margin(ui.spacing().item_spacing.y)
                     .show(ui, |ui| {

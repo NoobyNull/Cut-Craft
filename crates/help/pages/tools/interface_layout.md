@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-27
 see-also: layout_ribbon, layout_rail, layout_canvas, layout_classic, favourites, find_tool, settings
 ---
 
@@ -38,8 +38,8 @@ tools by name. The open tool's settings are on the right.
 
 ![The Rail layout, light theme on the left and dark on the right](pictures/layouts/rail-light-and-dark.png)
 
-**[Canvas](help:layout_canvas)**: the whole window is your drawing. A palette of tool
-groups, the open tool's settings and your sheets, layers and toolpaths float over it, and a
+**[Canvas](help:layout_canvas)**: the whole window is your drawing. A Modeling bar of
+tool groups on the left, a Toolpaths bar on the right, the open tool's settings and your sheets, layers and toolpaths float over it, and a
 box in the header finds a tool by name.
 
 ![The Canvas layout, light theme on the left and dark on the right](pictures/layouts/canvas-light-and-dark.png)

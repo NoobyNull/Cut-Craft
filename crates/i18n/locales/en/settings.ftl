@@ -191,6 +191,14 @@ setting-on-hover-b0e222 = On hover
 setting-as-soon-as-the-pointer-a3646c = As soon as the pointer is over the group
 setting-on-click-9d4b08 = On click
 setting-when-the-group-is-clicked-3b431a = When the group is clicked
+setting-canvas-modeling-bar-5b0e7d = Canvas modeling bar
+setting-show-the-canvas-layout-s-f8564b =
+    Show the Canvas layout's modeling bar: the drawing and modeling tools' groups,
+    floating on the left. Off leaves Find a Tool, your favourites and your own toolbars
+setting-canvas-toolpaths-bar-52709a = Canvas toolpaths bar
+setting-show-the-canvas-layout-s-022de8 =
+    Show the Canvas layout's toolpaths bar: every kind of toolpath and saving for the
+    machine, floating on the right. Off suits a job that is only being drawn
 setting-bars-snapped-to-a-side-69fd7b = Bars snapped to a side
 setting-what-a-bar-of-tools-72005c =
     What a bar of tools snapped to a side does to the drawing: Push the Drawing Over
