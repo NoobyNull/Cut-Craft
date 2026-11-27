@@ -819,3 +819,34 @@ fn a_new_jobs_default_bit_has_its_flute_length_so_the_form_warns_of_nothing() {
     let line = h.form_reach().expect("a reach line");
     assert!(!line.text().contains("not checked"), "{line:?}");
 }
+
+/// A job keeps each toolpath's own copy of its bit; the form says when the Bit Library's
+/// bit of that name has another shape, and Use the Bit Library's puts it in.
+#[test]
+fn a_toolpaths_bit_unlike_the_bit_librarys_is_said_and_can_be_swapped() {
+    let mut h = Harness::new();
+    h.invoke("profile_toolpath");
+    h.choose_tool("3 mm End Mill");
+    h.frame(vec![]);
+    assert!(h.text_at("Use the Bit Library's").is_none(), "the same bit");
+    // as another computer's job, or one made before the bit was edited
+    let mut params = h.form_settings().clone();
+    params["tool"]["diameter"] = 3.175.into();
+    h.set_form_settings(params);
+    h.frame(vec![]);
+    h.frame(vec![]);
+    assert!(
+        h.text_at(
+            "Not the Bit Library's bit of this name: diameter 3.175 mm here, 3 mm in the Bit \
+             Library. This toolpath was made for its own copy; Calculate it again with the Bit \
+             Library's, or put this one in the machine"
+        )
+        .is_some(),
+        "the difference is said"
+    );
+    let swap = h.text_at("Use the Bit Library's").expect("the button");
+    h.click(swap, Modifiers::NONE);
+    h.frame(vec![]);
+    assert_eq!(h.form_value("tool")["diameter"], 3.0);
+    assert!(h.text_at("Use the Bit Library's").is_none());
+}

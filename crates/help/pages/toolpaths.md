@@ -24,6 +24,12 @@ grey part is the shank the collet holds. An end mill shows a flat bottom, a ball
 one, a V-bit its point. Point at the drawing to see it bigger with its flute length and
 shank. Dashed lines are sizes the Bit Library has not been given yet; **Edit…** sets them.
 
+The job keeps each toolpath's own copy of its bit, with every size, so it opens and cuts the
+same on another computer. When the Bit Library's bit of the same name has another shape
+(edited since, or another computer's), the form says how they differ and offers **Use the Bit
+Library's**; press Calculate after it. The checks before cutting say so too
+([Each toolpath cut with its own bit](help:check_bit_shapes)).
+
 A toolpath's form shows its lengths in the job's units, whatever the bit's own units are.
 In an inch job, picking a metric bit (a 6 mm end mill, say) leaves Cut Depth, Allowance
 Offset, lead lengths and the rest in inches; only the bit's own sizes show as the Bit
