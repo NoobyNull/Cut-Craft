@@ -201,6 +201,31 @@ pub fn limit_vectors(doc: &Document, boundary: MachiningBoundary) -> Vec<EntityI
     }
 }
 
+/// Why a rotary toolpath's machining limit leaves it nothing to cut, said in red: no closed
+/// vectors selected, no level of that name, or outlines with nothing inside. The toolpath is
+/// then made with no moves rather than refused, so the job keeps it and recalculating once the
+/// limit is put right fills it in. `None` when the limit has something in it (or is the whole
+/// Material, or the job isn't rotary).
+#[must_use]
+pub fn nothing_in(
+    doc: &Document,
+    boundary: MachiningBoundary,
+    offset: f64,
+    level: &str,
+) -> Option<String> {
+    Limit::of(doc, boundary, offset, level).err()?;
+    let missing = boundary == MachiningBoundary::SelectedLevel
+        && !doc.levels.values().any(|l| l.name == level);
+    Some(if missing {
+        format!(
+            "Nothing is cut: there is no level called \"{level}\" for the machining limit. \
+             Pick the level in Level, or another limit, then press Calculate."
+        )
+    } else {
+        format!("Nothing is cut. {EMPTY}")
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,5 +265,21 @@ mod tests {
             ..slotted()
         };
         assert!(round.holds_step(true, Some(&at(10.0, 99.5)), &at(10.0, 100.5)));
+    }
+
+    #[test]
+    fn a_limit_with_nothing_in_it_says_so_instead_of_refusing() {
+        use cut_craft_core::document::{Along, Job};
+        let doc = Document {
+            job: Job::rotary(60.0, 40.0, Along::X),
+            ..Document::default()
+        };
+        assert_eq!(nothing_in(&doc, MachiningBoundary::Material, 0.0, ""), None);
+        let none = nothing_in(&doc, MachiningBoundary::SelectedVectors, 0.0, "").unwrap();
+        assert!(none.starts_with("Nothing is cut"), "{none}");
+        assert!(none.contains("select the closed vectors"), "{none}");
+        let gone = nothing_in(&doc, MachiningBoundary::SelectedLevel, 0.0, "Leaves").unwrap();
+        assert!(gone.contains("no level called \"Leaves\""), "{gone}");
+        assert!(gone.contains("Pick the level"), "says what to do: {gone}");
     }
 }

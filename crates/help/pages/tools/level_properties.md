@@ -1,6 +1,6 @@
 ---
 reviewed: 2026-11-23
-see-also: component_levels, insert_level, level_clipping
+see-also: component_levels, insert_level, level_clipping, rotary_finishing_toolpath, 3d_finishing_toolpath
 ---
 
 **Level Properties** changes a level of the 3D model: its name, how it combines with the levels
@@ -25,7 +25,8 @@ Right-click the level in **Components** ▸ **Properties**.
 
 ## Settings
 
-- **Name**: what it is called in the Components list.
+- **Name**: what it is called in the Components list. Toolpaths limited to the level (a
+  **Selected Level** machining limit) follow it to its new name.
 - **Combine Mode**: how the level meets the levels below it.
 - **Visible**: hidden levels are left out of the model.
 - **Base Height**: raises the whole level on a flat plane this thick.

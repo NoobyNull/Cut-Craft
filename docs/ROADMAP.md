@@ -75,6 +75,7 @@ pictures.
 | 2.3h | One button per shape: Draw Rectangle (Corner or Center) and Draw Circle (Center or Edge) each have one button, with **Draw from** at the top of the form picking the way and the button opening the way picked last. A setting gives each way its own button again | PR open |
 | 2.3i | Bars you can move: every bar (your toolbars, the Canvas palette) gets a grip of dots, no words. Drag it to move a floating bar; right-click for Snap to Top/Bottom/Left/Right, Float, Lock Position, Turn, Detach/Attach to Header. Snapped bars push the drawing over or lie over it (a setting); new toolbars float (a setting). Then Favourites becomes the first toolbar (renamable, never deleted) with Add to each bar on every right-click, and a Customize Toolbars window | Bars #784, Favourites bar #786 and Customize window PRs open |
 | 2.3j | Announcements: a window at the first start of each day an announcement is meant for (in place of that start's tip), with Don't show this again per note and a switch in Settings; Help ▸ Announcements rereads them. Bundled ones ship in Fluent with a release (first: the PowerWhittle heads-up); hand-written notes with a date or range go in `announcements.md` on main and are read from GitHub at start | In review |
+| 2.3k | Choose what rotary toolpaths cut: Material, Model, Selected Vector(s) or Selected Level on every rotary toolpath (Lathe by its span along the part), the vectors remembered so changing them marks it out of date; renaming a level keeps its toolpaths on it; nothing to cut in the limit makes an empty toolpath with a red note, never a refusal. Matthew brought it into 1.0 on 2026-11-26 | Picker done (#731); the rest PR open |
 | 2.4 | Walk the whole path by hand on both platforms and file every snag | Not started; 9 to 11 Dec, snags fixed by 18 Dec |
 | 2.5 | Help on every step of the path, including the built-in actions with no help page | Not started; 9 to 15 Dec |
 | 2.6 | Making a toolpath across a keep-out zone still refuses, against "tools never refuse" | Not started; 3 to 8 Dec |
@@ -128,8 +129,7 @@ credits list is generated and checked by CI.
 - **Paid subscription add-ons** with online activation and a grace period.
 - **Online catalogue** (#597 to #603) and gadget network access (#587).
 - **Auto Toolpath** (#595).
-- **Rotary:** choose what rotary toolpaths cut (Material, Model, Vector, Level) and the true
-  XYZA speed work.
+- **Rotary:** the true XYZA speed work.
 - **Rotary:** a rotary toolpath that follows an open vector wrapped round the part (drive curve).
 - **Cut list optimizer** stays a separate program.
 

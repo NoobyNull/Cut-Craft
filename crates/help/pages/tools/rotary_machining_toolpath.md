@@ -80,10 +80,13 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
   [Machine Configuration](help:rotary_firmware). They count from the material's start
   whatever XY zero [Job Setup](help:job_setup) uses: zeroed on the middle, the toolpath is
   written where the material is, just as with a corner.
-- **Machining limit**: where on the material it may cut. **Material** (the usual) is all of
-  it; **Model**, a **Selected Level** or **Selected Vector(s)** keep it within their outline,
-  grown by **Boundary Offset**. Vectors drawn on the job wrap round the part, just as the job
-  does. Selected vectors are kept with the toolpath, so it recalculates the same.
+- **Machining limit**: where on the material it may cut. **Material** (the usual) is all of it;
+  **Model**, a **Selected Level** or **Selected Vector(s)** keep it within their outline, grown
+  by **Boundary Offset**. Vectors drawn on the job wrap round the part, just as the job does.
+  Selected vectors are kept with the toolpath, so it recalculates the same. Changing, moving or
+  deleting those vectors marks the toolpath out of date, and renaming the level keeps it on the
+  renamed level. With nothing to cut in the limit (no closed vectors selected, or no level of
+  that name) it is made empty and says in red what to pick: put it right and press Calculate.
 - **Allowance**: material left all the way round for a later pass.
 - **Cut Away the Support**: cuts away the centre stock [Job Setup](help:job_setup) leaves
   along the axis (Holding the Part), down to the model. Tick it only on the last toolpath:
