@@ -523,3 +523,29 @@ fn renaming_a_level_keeps_the_toolpaths_limited_to_it() {
     assert!(history.undo(&mut doc));
     assert_eq!(doc.toolpaths[&limited].params["boundary_level"], "Leaves");
 }
+
+#[test]
+fn moving_a_level_keeps_each_toolpath_on_its_own_level() {
+    use cut_craft_core::component::Level;
+    let mut doc = with_toolpath();
+    let flat = EntityId(1);
+    let named = |name: &str| Level {
+        name: name.into(),
+        ..Level::default()
+    };
+    let mut c = Change::builder(&doc);
+    c.set_level(1, Some(named("Top")));
+    c.set_level(2, Some(named("Bottom")));
+    let mut on_top = doc.toolpaths[&flat].clone();
+    on_top.params = serde_json::json!({ "boundary_level": "Top" });
+    let on_top = c.add_toolpath(on_top);
+    doc.apply(&c.finish()).unwrap();
+    // a move swaps the two levels' records, names and all: no level is renamed
+    let mut history = History::default();
+    let mut c = Change::builder(&doc);
+    c.set_level(2, Some(doc.levels[&1].clone()));
+    c.set_level(1, Some(doc.levels[&2].clone()));
+    let change = c.finish();
+    history.apply(&mut doc, change).unwrap();
+    assert_eq!(doc.toolpaths[&on_top].params["boundary_level"], "Top");
+}

@@ -933,7 +933,7 @@ impl Change {
         outdated: &std::collections::BTreeSet<EntityId>,
         made: &std::collections::BTreeSet<EntityId>,
     ) {
-        let renamed = self.renamed_levels();
+        let renamed = self.renamed_levels(doc);
         for (&id, toolpath) in &doc.toolpaths {
             if made.contains(&id) {
                 continue;
@@ -957,17 +957,27 @@ impl Change {
         }
     }
 
-    /// The levels this change renames, old name and new, in the order it renames them.
-    fn renamed_levels(&self) -> Vec<(String, String)> {
-        self.edits
+    /// The levels this change renames on `doc`, old name and new: a level whose name it
+    /// changes, where no level has the old name once it is done. Moving a level swaps two
+    /// levels' records, names and all, so it renames neither.
+    fn renamed_levels(&self, doc: &Document) -> Vec<(String, String)> {
+        let mut after: BTreeMap<u64, Option<&Level>> =
+            doc.levels.iter().map(|(&id, l)| (id, Some(l))).collect();
+        for edit in &self.edits {
+            if let Edit::SetLevel {
+                id, after: level, ..
+            } = edit
+            {
+                after.insert(*id, level.as_ref());
+            }
+        }
+        let named = |name: &str| after.values().flatten().any(|l| l.name == name);
+        doc.levels
             .iter()
-            .filter_map(|edit| match edit {
-                Edit::SetLevel {
-                    before: Some(before),
-                    after: Some(after),
-                    ..
-                } if before.name != after.name => Some((before.name.clone(), after.name.clone())),
-                _ => None,
+            .filter_map(|(id, before)| {
+                let now = after.get(id).copied().flatten()?;
+                (now.name != before.name && !named(&before.name))
+                    .then(|| (before.name.clone(), now.name.clone()))
             })
             .collect()
     }
@@ -1100,17 +1110,14 @@ pub struct ChangeBuilder<'a> {
 }
 
 /// `toolpath` kept limited to the level it was limited to (a machining limit names its level)
-/// through each of `renamed` (old name, new name), in turn.
+/// when that level is one of `renamed` (old name, new name).
 fn follow_renamed_levels(toolpath: &mut Toolpath, renamed: &[(String, String)]) {
-    for (old, new) in renamed {
-        if toolpath
-            .params
-            .get("boundary_level")
-            .and_then(|l| l.as_str())
-            == Some(old.as_str())
-        {
-            toolpath.params["boundary_level"] = new.clone().into();
-        }
+    let level = toolpath
+        .params
+        .get("boundary_level")
+        .and_then(|l| l.as_str());
+    if let Some((_, new)) = renamed.iter().find(|(old, _)| level == Some(old.as_str())) {
+        toolpath.params["boundary_level"] = new.clone().into();
     }
 }
 
