@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-26
+reviewed: 2026-11-27
 see-also: job_setup, check_zeroing, 3d_finishing_toolpath, 3d_roughing_toolpath, create_shape, preview_detail
 ---
 
@@ -16,11 +16,54 @@ up to the [Preview detail](help:preview_detail) slider on the Toolpaths page's P
   zoom where the pointer is. If a direction feels backwards, turn it the other way: see
   [Moving the views](help:view_controls).
 - **Double-click** off the job, or press **F**, to fit the whole job in the view.
-- The cube in the top corner turns the view too: click a face, edge or corner to look
-  from there, or drag it.
+- The **view cube** in the top corner turns the view too: see **The view cube**
+  below.
 - **Top**, **Front**, **Right** and **Iso** along the top jump to those views; **Fit**
   fits the job; **Perspective** makes near things larger, as your eye sees them; **Vectors**
   shows or hides the vectors drawn over the model.
+
+## The view cube
+
+The cube in the top right corner of the 3D view is turned with the job, so its faces show
+which side of the job you are looking at. Every part of it can be clicked:
+
+- **A face** (Top, Front, Right...) looks straight at that side of the job.
+- **A bevelled edge** looks from between the two faces beside it.
+- **A cut-off corner** looks from that corner, between three faces.
+- **Drag** the cube to turn the view, as dragging in the view does. **Double-click** it to
+  look from the opposite side.
+
+The part under the pointer lights up blue, so you can see what a click will do before you
+click.
+
+![The view cube seen from a corner: Home at its top left, the turn buttons at its top right](pictures/view-cube.png)
+
+Round the cube are buttons:
+
+- **Home** (the house, top left) goes back to the Home view and fits the whole job in the
+  view. To make the view you have now the Home view, **right-click** Home and choose **Make
+  This View Home**; **Reset Home** goes back to the starting view.
+- **Turn left** and **Turn right** (the two round buttons, top right) turn the view a
+  quarter turn about the line you are looking along, as you would turn a sheet of paper on
+  the desk. They work when you look straight at a face: click a face first. Looking at the
+  Front, a turn spins the view about Y; at the Top, about Z; at a side, about X.
+- **The four triangles** appear when you look straight at a face. Each one brings round
+  the face on that side of the screen: ▲ shows the face now at the top of the screen, ◀
+  the one on the left, and so on. Hover over one and its tip names the face it will show.
+
+![Looking straight at the Front: the four triangles round the cube, the turns ready](pictures/view-cube-front-light-and-dark.png)
+
+The view turns smoothly to each new view, so you can see which way the job went. These
+choices are in Edit ▸ Options ▸ 3D View:
+
+- **View cube style**: **Flat** (light grey, easiest to read small) or **Shaded** (a solid
+  block lit from the upper left).
+- **View cube size**: **Small**, **Medium** or **Large**.
+- **Turn smoothly to new views**: untick it to jump to each view at once.
+
+With **Rotation** set to **Turntable**, the job's top always stays up while you drag. The
+turn buttons can still lay the view on its side; the next drag stands it upright again
+first, then turns it.
 
 ## Which way is X, Y and Z
 
@@ -29,9 +72,9 @@ The same colours are on the arrows in the views, on the rings and arrows you dra
 or move something, and on the **X**, **Y** and **Z** boxes in the forms, so a red box always
 means X.
 
-The **view cube** in the top right corner has three arrows along its edges, one
-for each axis, each with its letter at the **+** end. They turn with the cube, so however you
-have turned the view you can see at once which way X, Y and Z run.
+Beside the **view cube**'s bottom left corner are three arrows, one for each axis, each
+with its letter at the **+** end. They turn with the cube, so however you have turned the
+view you can see at once which way X, Y and Z run.
 
 ![The view cube with its red X, green Y and blue Z arrows, and the job's zero arrows on the material](pictures/axis-colours.png)
 
@@ -121,7 +164,8 @@ angle hides: a shallow pocket, a groove on the far side, a V-carve in shadow.
    round, from 2 to 90 degrees a second. The speed is kept for next time, and can be set in
    Edit ▸ Options ▸ 3D View as **Auto-rotate speed** too.
 3. To stop, click **Auto-rotate** again, or just drag in the view (or on the cube) to take
-   over: the job stays where it stopped. Top, Front, Right and Iso stop it too.
+   over: the job stays where it stopped. Top, Front, Right and Iso stop it too, as do
+   the view cube and its buttons.
 
 A flat job turns about its own upright, keeping the tilt you gave it, so tilt the view
 first to look at the job from lower down or higher up while it turns.

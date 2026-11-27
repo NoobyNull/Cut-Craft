@@ -359,18 +359,106 @@ fn the_view_cube_looks_from_the_face_edge_or_corner_clicked() {
     looks_from(&h, DVec3::X);
     assert_eq!(h.framing_3d(), framing, "turned, not refitted");
     // face on now: its top corner at the back, then its top edge
-    let corner = cube.screen(h.orbit(), DVec3::new(1.0, 0.8, 0.8));
+    let middle = view3d::ViewCube::part_middle;
+    let corner = cube.screen(h.orbit(), middle(DVec3::new(1.0, 1.0, 1.0)));
     h.click(corner, Modifiers::NONE);
     looks_from(&h, DVec3::new(1.0, 1.0, 1.0));
-    let edge = cube.screen(h.orbit(), DVec3::new(0.8, 0.0, 1.0));
+    let edge = cube.screen(h.orbit(), middle(DVec3::new(1.0, 0.0, 1.0)));
     h.click(edge, Modifiers::NONE);
     looks_from(&h, DVec3::new(1.0, 0.0, 1.0));
     // a double-click looks from the other side, and the view behind takes no clicks
     let selected = h.doc().selected_components.clone();
-    h.double_click(cube.screen(h.orbit(), DVec3::new(1.0, 0.0, 1.0)));
+    h.double_click(cube.screen(h.orbit(), middle(DVec3::new(1.0, 0.0, 1.0))));
     looks_from(&h, DVec3::new(-1.0, 0.0, -1.0));
     assert_eq!(h.doc().selected_components, selected);
     assert_eq!(h.framing_3d(), framing);
+}
+
+#[test]
+fn the_view_cubes_buttons_turn_nudge_and_go_home() {
+    use cut_craft_core::glam::DVec3;
+    use view3d::{CubeButton, Nudge, Orbit};
+    let mut h = shape_in_3d();
+    let looks_from = |h: &Harness, from: DVec3| {
+        let towards = h.orbit().towards_viewer();
+        assert!(towards.abs_diff_eq(from, 1e-9), "{towards} not {from}");
+    };
+    let press = |h: &mut Harness, button| {
+        let at = h.view_cube().button_rect(button).center();
+        h.click(at, Modifiers::NONE);
+        h.frame(vec![]);
+    };
+    // looking from a corner the turns do nothing: they need a face straight on
+    let start = h.orbit();
+    press(&mut h, CubeButton::TurnRight);
+    assert_eq!(h.orbit(), start);
+    // straight at the front: a quarter turn clockwise lays Z along the screen's x
+    h.given_orbit(Orbit::FRONT);
+    h.frame(vec![]);
+    press(&mut h, CubeButton::TurnRight);
+    looks_from(&h, DVec3::NEG_Y);
+    assert!(h.orbit().project(DVec3::Z).0.x > 0.99, "Z points right");
+    // the nudge above brings round the face now at the top of the screen: Left
+    press(&mut h, CubeButton::Nudge(Nudge::Up));
+    looks_from(&h, DVec3::NEG_X);
+    // Home goes back to the starting view and fits the job
+    h.given_framing_3d(h.framing_3d().zoomed_about(egui::Vec2::ZERO, 3.0));
+    press(&mut h, CubeButton::Home);
+    assert_eq!(h.orbit(), Orbit::default());
+    assert_eq!(h.framing_3d().zoom, 1.0);
+}
+
+#[test]
+fn the_home_buttons_menu_makes_this_view_home_and_resets_it() {
+    use view3d::{CubeButton, Orbit};
+    let mut h = shape_in_3d();
+    h.given_orbit(Orbit::RIGHT);
+    h.frame(vec![]);
+    let home = h.view_cube().button_rect(CubeButton::Home).center();
+    h.right_click(home);
+    h.click(h.text_at("Make This View Home").unwrap(), Modifiers::NONE);
+    assert!(h.options().view_3d.home_view.is_some());
+    h.given_orbit(Orbit::TOP);
+    h.frame(vec![]);
+    h.click(home, Modifiers::NONE);
+    h.frame(vec![]);
+    assert!((h.orbit().towards_viewer() - Orbit::RIGHT.towards_viewer()).length() < 1e-9);
+    h.right_click(home);
+    h.click(h.text_at("Reset Home").unwrap(), Modifiers::NONE);
+    assert_eq!(h.options().view_3d.home_view, None);
+}
+
+#[test]
+fn the_view_turns_smoothly_to_a_clicked_face_and_a_turntable_stands_it_upright() {
+    use cut_craft_core::glam::DVec3;
+    use view3d::{CubeButton, Rotation};
+    let mut h = shape_in_3d();
+    h.given_options(|o| o.view_3d.smooth_turns = true);
+    let right = h.view_cube().screen(h.orbit(), DVec3::X);
+    h.click(right, Modifiers::NONE);
+    // a frame (a tenth of a second) on, part of the way round
+    let partway = h.orbit().towards_viewer();
+    assert!(partway.x > 0.05 && partway.x < 0.99, "{partway}");
+    for _ in 0..4 {
+        h.frame(vec![]);
+    }
+    assert!(h.orbit().towards_viewer().abs_diff_eq(DVec3::X, 1e-9));
+    // turned on its side, then dragged as a turntable: upright again, smoothly
+    h.given_options(|o| o.view_3d.rotation = crate::options::Rotation::Turntable);
+    let turn = h.view_cube().button_rect(CubeButton::TurnRight).center();
+    h.click(turn, Modifiers::NONE);
+    for _ in 0..4 {
+        h.frame(vec![]);
+    }
+    assert!(h.orbit().roll.abs() > 1.0, "on its side");
+    let cube = h.view_cube().rect();
+    let from = cube.left_bottom() + egui::vec2(-cube.width(), cube.height());
+    h.drag(from, from + egui::vec2(-40.0, 0.0));
+    for _ in 0..4 {
+        h.frame(vec![]);
+    }
+    assert!(h.orbit().roll.abs() < 1e-9, "upright: {}", h.orbit().roll);
+    assert_eq!(h.options().view_3d.rotation.view(), Rotation::Turntable);
 }
 
 #[test]

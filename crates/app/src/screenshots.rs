@@ -309,6 +309,15 @@ const SCENES: &[Scene] = &[
             form.dirty = true;
         }
     }),
+    // Help: 3D View ▸ The view cube (from a corner, then a face straight on, light and dark)
+    ("view-cube", |app, ctx| {
+        height_start(app, ctx);
+        app.orbit = crate::view3d::Orbit::default();
+    }),
+    ("view-cube-front", |app, _| {
+        app.orbit = crate::view3d::Orbit::FRONT;
+    }),
+    ("view-cube-front-dark", |_, _| {}),
     // Help: Long jobs and the time left
     ("progress-window", progress_window),
 ];

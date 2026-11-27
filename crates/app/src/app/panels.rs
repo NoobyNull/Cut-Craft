@@ -23,6 +23,7 @@ mod toolpath_tree;
 mod toolpaths_page;
 mod tools;
 mod view_3d;
+mod view_cube;
 
 /// The push-pin's two drawings.
 pub(super) const PIN_ICON: &str = "view/pin.png";

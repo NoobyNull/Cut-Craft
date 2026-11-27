@@ -34,6 +34,8 @@ pub(super) struct Motion3d {
     detail: (Detail, bool),
     /// The pass that was judged.
     judged: u64,
+    /// A smooth turn to a new view under way (the view cube, Home, the turn buttons).
+    turning: Option<crate::view3d::Turning>,
 }
 
 impl Default for Motion3d {
@@ -44,6 +46,7 @@ impl Default for Motion3d {
             pacer: Pacer::default(),
             detail: (Detail::default(), false),
             judged: u64::MAX,
+            turning: None,
         }
     }
 }
@@ -86,6 +89,30 @@ impl Motion3d {
         let last = self.spinning?;
         self.spinning = Some(now);
         Some(now - last)
+    }
+
+    /// Turns smoothly from `from` to `to`, starting `now`.
+    pub(super) fn turn(&mut self, from: crate::view3d::Orbit, to: crate::view3d::Orbit, now: f64) {
+        self.turning = Some(crate::view3d::Turning::new(from, to, now));
+    }
+
+    /// The smooth turn under way, to move where it ends.
+    pub(super) fn turning(&mut self) -> Option<&mut crate::view3d::Turning> {
+        self.turning.as_mut()
+    }
+
+    /// The smooth turn stops where it is.
+    pub(super) fn stop_turning(&mut self) {
+        self.turning = None;
+    }
+
+    /// While a smooth turn is under way, the view at `now`; the turn ends once there.
+    pub(super) fn turned(&mut self, now: f64) -> Option<crate::view3d::Orbit> {
+        let (orbit, done) = self.turning?.at(now);
+        if done {
+            self.turning = None;
+        }
+        Some(orbit)
     }
 
     /// Judges `frame`'s detail, once a pass: the view counts as moving for the settle time
