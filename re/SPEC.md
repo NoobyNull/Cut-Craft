@@ -915,15 +915,22 @@ What was found, and what Cut Craft does where Aspire's behaviour is not known.
 ### 3D view: ViewCube, perspective, tilt, hidden overlays
 
 #### What was built
-- **ViewCube** (`view3d::ViewCube`) in the top right of the 3D view. Each face facing the
-  viewer is cut in thirds both ways: the middle tile looks from that face, the strips from
-  that edge, the corner squares from that corner (26 directions). The tile under the pointer
-  is highlighted (in every face that shares it). A click turns the view to look from there, a
-  double-click looks from the opposite side, and a drag on it orbits like the view. Face names
-  (Top, Bottom, Front, Back, Right, Left) are drawn on the faces that have room.
-  The cube's size comes from its longest name in the theme's Small text style plus item
-  spacing; its colours come from the theme (inactive widget fill, selection fill,
-  noninteractive stroke, text colour).
+- **ViewCube** (`view3d::ViewCube`) in the top right of the 3D view, redesigned 2026-11-27
+  (Matthew: the flat cube was hard to read). It is a dice: each edge bevelled at 45° (15% of
+  the cube across) and each corner cut off, so its 26 parts (6 faces, 12 edge bevels, 8
+  corners) each show as their own shaded polygon and turn the view to look from there. The
+  part under the pointer lights up. A click looks from there, a double-click from the opposite
+  side, a drag orbits like the view. Face names (Fluent, `view-cube.ftl`) are printed along
+  the faces, as large as fits. The X/Y/Z triad sits off its bottom left corner.
+  Round it: **Home** (top left; Iso + fit, or the view set from its right-click menu, kept in
+  Options as `home_view`), **turn left/right** (top right; a quarter turn about the line of
+  sight, only while looking straight at a face, greyed otherwise; they roll the view in Free
+  and Turntable alike, the next Turntable drag standing it upright first), and four **nudge**
+  triangles shown only head-on, each bringing round the face on that side of the *screen*
+  (screen-relative, Matthew), tooltip naming it. Every jump turns smoothly over 0.25 s
+  (Options ▸ 3D View ▸ Turn smoothly to new views). Options also has **View cube style**
+  (Flat default, Shaded) and **View cube size** (Small/Medium/Large). Deliberate difference:
+  the reference's cube is a flat 3×3-tiled cube with no turn or nudge buttons.
 - **Perspective**: a "Perspective" toggle in the 3D view's button row (beside Top, Front,
   Right, Iso, Fit). It lives in `Framing.perspective`; Fit, the standard view buttons,
   double-click-off-the-model and F keep it (`Framing::fitted`). The eye stands just far
@@ -957,8 +964,8 @@ instead of half-cell steps.
 - `re/extracted/help-12.5/3d-view-controls.txt`, "View Controller": drag it to rotate
   smoothly; highlight a face and click to move smoothly to face it; double-click a
   highlighted face to rotate to the opposite side. Also "Orthographic or Perspective view:
-  toggle between Orthographic and Perspective camera projection". Both are implemented,
-  except that the turns are instant, not animated.
+  toggle between Orthographic and Perspective camera projection". Both are implemented;
+  turns ease over 0.25 s (Options ▸ 3D View Settings ▸ Turn smoothly to new views).
 - `re/SPEC.md` lines 58–59: the 3D view overlay (`View_Overlay/*.png`) has an
   ortho/perspective toggle, and there is a ViewCube.
 - Guessed (not in the help): edge and corner clicks (Aspire's help only mentions faces, but
@@ -975,7 +982,6 @@ instead of half-cell steps.
 - `app.rs`: `TOOL_HEIGHT_DIAMETERS` 4, `SETTLE_SECONDS`, `MESH_CELLS` / `FINE_MESH_CELLS`.
 
 #### What's left
-- Smooth (animated) turns for cube clicks, as in Aspire.
 - The playing tool's cylinder is still drawn whole over the surface (ponytail-marked).
 - Overlays are still left off the auto-wrapped rotary view (as before).
 - Toolpaths aren't drawn as lines in the 3D view at all (only the preview's cut material),

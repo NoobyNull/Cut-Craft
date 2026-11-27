@@ -1111,12 +1111,12 @@ fn the_view_cube_turns_to_what_is_under_the_pointer() {
         let at = cube.screen(iso, from);
         assert_eq!(cube.direction_at(iso, at), Some(from), "{from}");
     }
-    let corner = cube.screen(iso, DVec3::new(0.8, -0.8, 1.0));
+    let corner = cube.screen(iso, ViewCube::part_middle(DVec3::new(1.0, -1.0, 1.0)));
     let towards = cube.direction_at(iso, corner).unwrap();
     assert!(towards.abs_diff_eq(DVec3::new(1.0, -1.0, 1.0).normalize(), 1e-12));
-    let edge = cube.screen(iso, DVec3::new(0.0, 0.8, 1.0));
+    let edge = cube.screen(iso, ViewCube::part_middle(DVec3::new(0.0, -1.0, 1.0)));
     let towards = cube.direction_at(iso, edge).unwrap();
-    assert!(towards.abs_diff_eq(DVec3::new(0.0, 1.0, 1.0).normalize(), 1e-12));
+    assert!(towards.abs_diff_eq(DVec3::new(0.0, -1.0, 1.0).normalize(), 1e-12));
     assert_eq!(cube.direction_at(iso, pos2(0.0, 0.0)), None, "off it");
     assert!(cube.rect().contains(cube.screen(iso, DVec3::ONE)));
     // face on, the faces seen edge-on take no clicks
@@ -1124,4 +1124,157 @@ fn the_view_cube_turns_to_what_is_under_the_pointer() {
         cube.direction_at(Orbit::RIGHT, cube.screen(Orbit::RIGHT, DVec3::X)),
         Some(DVec3::X)
     );
+}
+
+#[test]
+fn the_view_cube_is_a_dice_with_26_parts() {
+    let parts = &*super::cube::PARTS;
+    assert_eq!(parts.len(), 26);
+    let corners = |n: usize| parts.iter().filter(|p| p.outline.len() == n).count();
+    // eight-sided faces, four-sided edge bevels and six-sided corners (touching three faces
+    // and three edges)
+    assert_eq!((corners(8), corners(4), corners(6)), (6, 12, 8));
+    // each edge bevel is 15% of the cube across
+    let top = parts.iter().find(|p| p.from == DVec3::Z).unwrap();
+    let widest = top.outline.iter().map(|p| p.x).fold(f64::MIN, f64::max);
+    assert!((widest - (1.0 - BEVEL)).abs() < 1e-9, "{widest}");
+    assert!((BEVEL / 2.0 - 0.15).abs() < 1e-12);
+}
+
+#[test]
+fn the_view_cube_turns_to_the_bevel_under_the_pointer_seen_straight_on() {
+    let cube = ViewCube {
+        centre: pos2(100.0, 100.0),
+        half: 30.0,
+    };
+    // looking at the front, its bevels still show round it and take clicks
+    let front = Orbit::FRONT;
+    let top_edge = cube.screen(front, ViewCube::part_middle(DVec3::new(0.0, -1.0, 1.0)));
+    let towards = cube.direction_at(front, top_edge).unwrap();
+    assert!(towards.abs_diff_eq(DVec3::new(0.0, -1.0, 1.0).normalize(), 1e-12));
+    let corner = cube.screen(front, ViewCube::part_middle(DVec3::new(1.0, -1.0, 1.0)));
+    let towards = cube.direction_at(front, corner).unwrap();
+    assert!(towards.abs_diff_eq(DVec3::new(1.0, -1.0, 1.0).normalize(), 1e-12));
+}
+
+#[test]
+fn the_cube_turns_and_nudges_only_straight_on() {
+    let cube = ViewCube {
+        centre: pos2(100.0, 100.0),
+        half: 30.0,
+    };
+    let pressable = |orbit| -> Vec<CubeButton> {
+        ViewCube::buttons(orbit)
+            .into_iter()
+            .filter_map(|(b, on)| on.then_some(b))
+            .collect()
+    };
+    assert_eq!(pressable(Orbit::default()), vec![CubeButton::Home]);
+    assert_eq!(
+        pressable(Orbit::FRONT).len(),
+        7,
+        "Home, two turns, four nudges"
+    );
+    // the buttons sit apart, round the cube
+    let rects: Vec<_> = ViewCube::buttons(Orbit::FRONT)
+        .into_iter()
+        .map(|(b, _)| cube.button_rect(b))
+        .collect();
+    for (k, a) in rects.iter().enumerate() {
+        assert!(cube.rect().expand(1.0).contains_rect(*a), "{a:?}");
+        for b in &rects[k + 1..] {
+            assert!(!a.intersects(*b), "{a:?} {b:?}");
+        }
+    }
+    let up = cube.button_rect(CubeButton::Nudge(Nudge::Up)).center();
+    assert_eq!(
+        cube.button_at(Orbit::FRONT, up),
+        Some(CubeButton::Nudge(Nudge::Up))
+    );
+    assert_eq!(
+        cube.button_at(Orbit::default(), up),
+        None,
+        "hidden off straight on"
+    );
+}
+
+#[test]
+fn a_quarter_turn_turns_the_picture_about_the_line_of_sight() {
+    let on_screen = |orbit: Orbit, v: DVec3| orbit.project(v).0;
+    // from the top, clockwise: X from pointing right to pointing down the screen
+    let turned = Orbit::TOP.quarter_turned(true);
+    assert!(turned.head_on());
+    assert!(on_screen(turned, DVec3::X).abs_diff_eq(DVec2::NEG_Y, 1e-12));
+    assert!(turned.towards_viewer().abs_diff_eq(DVec3::Z, 1e-12));
+    let back = turned.quarter_turned(false);
+    assert!(on_screen(back, DVec3::X).abs_diff_eq(DVec2::X, 1e-12));
+    // from the front it turns about Y, from the right about X
+    let front = Orbit::FRONT.quarter_turned(true);
+    assert!(front.towards_viewer().abs_diff_eq(DVec3::NEG_Y, 1e-12));
+    assert!(on_screen(front, DVec3::Z).abs_diff_eq(DVec2::X, 1e-12));
+    let right = Orbit::RIGHT.quarter_turned(false);
+    assert!(right.towards_viewer().abs_diff_eq(DVec3::X, 1e-12));
+}
+
+#[test]
+fn a_nudge_brings_round_the_face_beyond_that_side_of_the_screen() {
+    let from = |orbit: Orbit| orbit.towards_viewer();
+    let front = Orbit::FRONT;
+    assert_eq!(front.face_beyond(Nudge::Up), "view-cube-top");
+    assert!(from(front.nudged(Nudge::Up)).abs_diff_eq(DVec3::Z, 1e-12));
+    assert!(from(front.nudged(Nudge::Down)).abs_diff_eq(DVec3::NEG_Z, 1e-12));
+    assert!(from(front.nudged(Nudge::Left)).abs_diff_eq(DVec3::NEG_X, 1e-12));
+    assert!(from(front.nudged(Nudge::Right)).abs_diff_eq(DVec3::X, 1e-12));
+    // relative to the screen: turned on its side, up is what is now at the top
+    let turned = front.quarter_turned(true);
+    assert_eq!(turned.face_beyond(Nudge::Up), "view-cube-left");
+    assert!(from(turned.nudged(Nudge::Up)).abs_diff_eq(DVec3::NEG_X, 1e-12));
+    assert!(front.nudged(Nudge::Up).head_on());
+    assert!(!Orbit::default().head_on());
+}
+
+#[test]
+fn a_nudge_brings_round_the_face_its_tooltip_names_however_the_picture_is_turned() {
+    // looking straight at the front with the picture turned partway (a drag's roll)
+    for roll in [0.3_f64, 0.7, -0.6, 2.0, -2.5] {
+        let rolled = Orbit {
+            roll,
+            ..Orbit::FRONT
+        };
+        for side in [Nudge::Up, Nudge::Down, Nudge::Left, Nudge::Right] {
+            let named = rolled.face_beyond(side);
+            let out = crate::view3d::FACES
+                .iter()
+                .find(|f| f.3 == named)
+                .unwrap()
+                .0;
+            let to = rolled.nudged(side);
+            assert!(
+                to.towards_viewer().abs_diff_eq(out, 1e-9),
+                "roll {roll}, {side:?}: nudge shows {:?}, tooltip names {named}",
+                to.towards_viewer()
+            );
+        }
+    }
+}
+
+#[test]
+fn a_smooth_turn_eases_from_one_view_to_the_next() {
+    let turning = Turning::new(Orbit::FRONT, Orbit::TOP, 10.0);
+    let (start, done) = turning.at(10.0);
+    assert!(!done && start.towards_viewer().abs_diff_eq(DVec3::NEG_Y, 1e-9));
+    let (half, _) = turning.at(10.0 + TURN_SECONDS / 2.0);
+    let way = DVec3::new(0.0, -1.0, 1.0).normalize();
+    assert!(
+        half.towards_viewer().abs_diff_eq(way, 1e-9),
+        "{}",
+        half.towards_viewer()
+    );
+    let (end, done) = turning.at(10.0 + TURN_SECONDS);
+    assert!(done);
+    assert_eq!(end, Orbit::TOP);
+    // a turntable stands a view turned on its side upright
+    let side = Orbit::FRONT.quarter_turned(true);
+    assert_eq!(side.upright(Rotation::Turntable).roll, 0.0);
+    assert_eq!(side.upright(Rotation::Free), side);
 }

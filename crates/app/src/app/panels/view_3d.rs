@@ -329,6 +329,7 @@ impl CutCraftApp {
                         moved(view, (translate, rotate), seconds, settings, rotation);
                     self.motion_3d.moved(ctx.input(|i| i.time));
                     self.motion_3d.stop_spin();
+                    self.motion_3d.stop_turning();
                 }
                 Input::Button {
                     number,
@@ -352,16 +353,15 @@ impl CutCraftApp {
 
     /// The 3D view's row of standard views, Fit and the perspective toggle.
     pub(super) fn view_3d_buttons(&mut self, ui: &mut egui::Ui) {
-        for (label, orbit) in [
-            ("Top", view3d::Orbit::TOP),
-            ("Front", view3d::Orbit::FRONT),
-            ("Right", view3d::Orbit::RIGHT),
-            ("Iso", view3d::Orbit::default()),
+        for (key, orbit) in [
+            ("view-cube-top", view3d::Orbit::TOP),
+            ("view-cube-front", view3d::Orbit::FRONT),
+            ("view-cube-right", view3d::Orbit::RIGHT),
+            ("view-cube-iso", view3d::Orbit::default()),
         ] {
-            if ui.small_button(label).clicked() {
-                self.orbit = orbit;
+            if ui.small_button(tr!(key)).clicked() {
+                self.look_3d(orbit, ui.input(|i| i.time));
                 self.framing = self.framing.fitted();
-                self.motion_3d.stop_spin();
             }
         }
         if ui.small_button(tr!("panels-fit")).clicked() {
@@ -518,8 +518,9 @@ impl CutCraftApp {
             ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
         self.views_drawn.drawn_3d(area);
         // the ViewCube over the view's corner, so the view does not see its clicks
-        let font = egui::TextStyle::Small.resolve(ui.style());
-        let cube = view3d::ViewCube::new(area, ui.painter(), &font, ui.spacing().item_spacing.x);
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let half = self.options.view_3d.cube_size.half();
+        let cube = view3d::ViewCube::new(area, half, ui.spacing().item_spacing.x);
         let on_cube = ui.interact(
             cube.rect(),
             ui.scope_id().with("view_cube"),
@@ -538,9 +539,10 @@ impl CutCraftApp {
                 (i.key_pressed(egui::Key::F) && !typing) || i.key_pressed(egui::Key::F6),
             )
         });
-        let (before, rotation) = (
+        let (before, rotation, now) = (
             (self.orbit, self.framing),
             self.options.view_3d.rotation.view(),
+            ui.input(|i| i.time),
         );
         // while sculpting the left button sculpts; the right turns the view, the middle pans
         let sculpting = self.view_3d_drop_and_sculpt(ui, &response, area);
@@ -557,7 +559,7 @@ impl CutCraftApp {
                 match mode {
                     Some(view3d::DragMode::Rotate) => {
                         let turn = self.options.controls.turn(delta);
-                        self.orbit = self.orbit.dragged_by(turn, area.size(), rotation);
+                        self.drag_view_3d(turn, area.size(), rotation, now);
                     }
                     Some(view3d::DragMode::Pan) => self.framing = self.framing.panned(delta),
                     None => {}
@@ -565,26 +567,19 @@ impl CutCraftApp {
             }
         }
         // the ViewCube: a drag turns the view, a click looks from the face, edge or corner
-        // clicked, and a double-click from the other side
+        // clicked, and a double-click from the other side; its buttons take their clicks
+        let buttons = self.view_cube_buttons(ui, cube);
+        let on_buttons = buttons.iter().any(|b| b.2);
         let orbit = self.orbit;
         let pointed = |at: Option<egui::Pos2>| at.and_then(|at| cube.direction_at(orbit, at));
-        let hovered = pointed(on_cube.hover_pos());
+        let hovered = pointed(on_cube.hover_pos()).filter(|_| !on_buttons);
         // any drag in the view or on the cube, or a click on the cube, stops Auto-rotate
         if response.dragged() || on_cube.dragged() || on_cube.clicked() {
             self.motion_3d.stop_spin();
         }
         self.spin_3d(ui.ctx());
-        if on_cube.dragged() {
-            let turn = self.options.controls.turn(on_cube.drag_delta());
-            self.orbit = (self.orbit).dragged_by(turn, area.size(), rotation);
-        } else if on_cube.double_clicked() {
-            self.orbit = view3d::Orbit::facing(-self.orbit.towards_viewer());
-        } else if let Some(from) =
-            pointed(on_cube.interact_pointer_pos()).filter(|_| on_cube.clicked())
-        {
-            // ponytail: turns at once; the turns smoothly
-            self.orbit = view3d::Orbit::facing(from);
-        }
+        self.view_cube_input(&on_cube, cube, (area.size(), rotation, now));
+        self.turn_3d(ui.ctx());
         // as in the 2D view: the wheel or a pinch zooms about the pointer, tilting the wheel
         // (or two fingers, in Trackpad mode) pans
         if let Some(at) = response.hover_pos() {
@@ -612,7 +607,7 @@ impl CutCraftApp {
         self.pace_3d(ui.ctx());
         self.paint_3d(ui, area);
         let painter = ui.painter_at(area);
-        cube.paint(&painter, self.orbit, hovered, ui.visuals(), &font);
+        self.paint_view_cube(ui, &painter, (cube, hovered, &font), &buttons);
         self.view_cube = Some(cube);
         self.handles_3d(ui, area, fit);
         self.rings_3d(ui, area, fit);

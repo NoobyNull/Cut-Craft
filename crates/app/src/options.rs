@@ -230,6 +230,10 @@ impl Default for Options {
                 perspective_angle: perspective_angle(),
                 settle_seconds: settle_seconds(),
                 spin_speed: SPIN_SPEED,
+                cube_style: CubeStyle::default(),
+                cube_size: CubeSize::default(),
+                smooth_turns: true,
+                home_view: None,
             },
             toolpaths: ToolpathSettings {
                 auto_open_3d_view: d.auto_open_3d,

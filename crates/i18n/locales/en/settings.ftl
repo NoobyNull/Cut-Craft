@@ -59,6 +59,24 @@ setting-auto-rotate-speed-1888c5 = Auto-rotate speed
 setting-how-quickly-the-3d-view-c851ce =
     How quickly the 3D view's Auto-rotate button turns the job round, degrees a second:
     slower to look closely, faster for a quick look all round
+setting-view-cube-style-b670f8 = View cube style
+setting-how-the-view-cube-in-bcfb92 =
+    How the view cube in the 3D view's corner is drawn: flat and light reads best small,
+    shaded looks like a solid block
+setting-flat-170fba = Flat
+setting-light-grey-with-crisp-bevels-991662 = Light grey with crisp bevels: easiest to read small
+setting-shaded-eb28ca = Shaded
+setting-shaded-as-a-solid-block-f36d2a = Shaded as a solid block lit from the upper left
+setting-view-cube-size-97243e = View cube size
+setting-how-big-the-view-cube-359918 = How big the view cube and the buttons round it are drawn
+setting-small-80662c = Small
+setting-medium-be5f96 = Medium
+setting-large-8b9f54 = Large
+setting-turn-smoothly-to-new-views-219bec = Turn smoothly to new views
+setting-the-view-cube-its-buttons-2c9b26 =
+    The view cube, its buttons and the Top, Front, Right and Iso buttons turn the view
+    smoothly to the new view, so you see which way the job turned, rather than jumping
+    there at once
 setting-toolpath-settings-6e771d = Toolpath Settings
 setting-toolpath-settings-fa8b29 = Toolpath settings.
 setting-auto-open-3d-view-f6563e = Auto open 3D view
@@ -253,7 +271,6 @@ setting-how-finely-the-model-is-d06960 =
     takes longer to draw after each change
 setting-low-dd9521 = Low
 setting-quickest-about-250-points-across-f2f2ac = Quickest: about 250 points across the job
-setting-medium-be5f96 = Medium
 setting-about-500-points-across-the-19c8c9 = About 500 points across the job
 setting-high-0a061d = High
 setting-about-800-points-across-the-2cff16 = About 800 points across the job
@@ -1281,7 +1298,6 @@ setting-angular-de7989 = Angular
 setting-rises-at-the-angle-all-5ae27d = Rises at the angle all the way
 setting-smooth-02d9cf = Smooth
 setting-rises-in-an-s-curving-59f9bd = Rises in an S, curving smoothly out of the edge and over the top
-setting-flat-170fba = Flat
 setting-one-height-all-over-47704d = One height all over
 setting-custom-25b78e = Custom
 setting-the-open-vector-selected-with-911b44 =

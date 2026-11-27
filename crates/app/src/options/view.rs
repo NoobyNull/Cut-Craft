@@ -76,6 +76,26 @@ pub struct View3d {
         range(min = 2, max = 90)
     )]
     pub spin_speed: f64,
+    /// How the view cube in the 3D view's corner is drawn: flat and light reads best small,
+    /// shaded looks like a solid block
+    #[serde(default)]
+    #[schemars(title = "View cube style")]
+    pub cube_style: CubeStyle,
+    /// How big the view cube and the buttons round it are drawn
+    #[serde(default)]
+    #[schemars(title = "View cube size")]
+    pub cube_size: CubeSize,
+    /// The view cube, its buttons and the Top, Front, Right and Iso buttons turn the view
+    /// smoothly to the new view, so you see which way the job turned, rather than jumping
+    /// there at once
+    #[serde(default = "yes")]
+    #[schemars(title = "Turn smoothly to new views")]
+    pub smooth_turns: bool,
+    /// The view the view cube's Home button goes to (its right-click menu sets it): turn,
+    /// tilt and roll, radians; none for the starting view
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub home_view: Option<[f64; 3]>,
 }
 
 pub(super) fn preview_detail() -> u8 {
@@ -126,6 +146,15 @@ impl View3d {
     /// Seconds still before full detail, kept to the setting's range.
     pub fn settle(&self) -> f64 {
         self.settle_seconds.clamp(0.05, 2.0)
+    }
+
+    /// The Home button's view: the one set from its menu, else the starting view.
+    pub fn home(&self) -> crate::view3d::Orbit {
+        self.home_view
+            .filter(|v| v.iter().all(|a| a.is_finite()))
+            .map_or_else(crate::view3d::Orbit::default, |[yaw, pitch, roll]| {
+                crate::view3d::Orbit { yaw, pitch, roll }
+            })
     }
 
     /// Auto-rotate's degrees a second, kept to the setting's range.
@@ -207,6 +236,47 @@ pub enum MovingDetail {
     High,
     #[schemars(title = "Very High")]
     VeryHigh,
+}
+
+/// How the view cube is drawn.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CubeStyle {
+    /// Light grey with crisp bevels: easiest to read small
+    #[default]
+    Flat,
+    /// Shaded as a solid block lit from the upper left
+    Shaded,
+}
+
+impl CubeStyle {
+    pub fn look(self) -> crate::view3d::CubeLook {
+        match self {
+            Self::Flat => crate::view3d::CubeLook::Flat,
+            Self::Shaded => crate::view3d::CubeLook::Shaded,
+        }
+    }
+}
+
+/// How big the view cube is drawn.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CubeSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
+}
+
+impl CubeSize {
+    /// Half the cube's edge, points.
+    pub fn half(self) -> f32 {
+        match self {
+            Self::Small => 30.0,
+            Self::Medium => 38.0,
+            Self::Large => 48.0,
+        }
+    }
 }
 
 /// How dragging (and a SpaceMouse) turns the 3D view.

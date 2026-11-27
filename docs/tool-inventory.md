@@ -522,7 +522,7 @@ say "not implemented yet".
   the active material are greyed; the tree's right-click Hide Unset Tools leaves them out.
   A search box over the tree finds tools by name (indexed by word: each word typed matches
   the start of a word in the name, in any order and case).
-- 3D view: ViewCube (faces, edges, corners), perspective, tilting underneath, overlays hidden
+- 3D view: ViewCube (bevelled dice: faces, edges, corners; Home, quarter turns, nudges), perspective, tilting underneath, overlays hidden
   behind the model.
 - Drawing tab:
   - Select, Job Setup, Pan, Zoom Box, Zoom to Job, Zoom to Selection, Switch Layout.

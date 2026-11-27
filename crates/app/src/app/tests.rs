@@ -105,6 +105,8 @@ impl Harness {
         h.app.options.favourites.bar = crate::bars::Place::Layout;
         // previews appear cut at once unless a test plays one
         h.app.display.animate_preview = false;
+        // and the 3D view jumps to a new view at once unless a test turns it smoothly
+        h.app.options.view_3d.smooth_turns = false;
         // slow jobs finish in place, as quick ones do, unless a test waits on one
         h.app.wait_before_showing = std::time::Duration::from_mins(10);
         // no browser opens from a test
@@ -215,7 +217,13 @@ impl Harness {
             .iter()
             .filter_map(|clipped| match &clipped.shape {
                 egui::Shape::Text(t) if t.galley.text() == text => {
-                    Some(t.pos + t.galley.size() / 2.0)
+                    // its middle, the text turned about its top left corner by its angle
+                    let half = t.galley.size() / 2.0;
+                    let (sin, cos) = t.angle.sin_cos();
+                    Some(
+                        t.pos
+                            + egui::vec2(half.x * cos - half.y * sin, half.x * sin + half.y * cos),
+                    )
                 }
                 _ => None,
             });
