@@ -132,6 +132,36 @@ setting-off-the-usual-each-rotary-269e56 =
     Off (the usual): each rotary toolpath cuts only what the toolpaths above it in the
     list leave of the blank. On: each cuts the whole blank, as if nothing were above it,
     and you decide what it cuts with its Start, End and allowance
+setting-v-carve-carving-style-ea4386 = V-Carve carving style
+setting-how-a-new-v-carve-7bd3b9 =
+    How a new V-Carve toolpath cuts its passes; each toolpath keeps its own, changed on
+    its form
+setting-light-passes-2775d4 = Light passes
+setting-every-pass-clears-its-whole-e64530 =
+    Every pass clears its whole floor, never cutting more than a pass depth: the most
+    moves, for hard woods and light machines
+setting-stay-down-1b43cc = Stay down
+setting-one-ring-round-the-floor-ada16a =
+    One ring round the floor each pass on the way down, the centre lines once in the last
+    pass; the bit stays down in each shape
+setting-lift-between-cuts-e085bd = Lift between cuts
+setting-as-stay-down-but-each-bc7538 =
+    As Stay down, but each stretch of centre line is cut once, lifting between them: the
+    fewest moves
+setting-v-carve-order-9fc763 = V-Carve order
+setting-the-order-a-new-v-04c538 = The order a new V-Carve toolpath that stays down carves its centre lines in
+setting-round-the-shape-3b16b5 = Round the shape
+setting-the-same-way-round-every-cfb748 =
+    The same way round every shape, out and back along each branch, so every point is
+    cut alike
+setting-shortest-path-925c66 = Shortest path
+setting-the-nearest-cut-next-ac1623 = The nearest cut next
+setting-v-carve-direction-0907e6 = V-Carve direction
+setting-which-end-of-each-stretch-ed25ac = Which end of each stretch a new V-Carve toolpath that lifts between cuts starts at
+setting-shallow-in-45217a = Shallow in
+setting-from-the-surface-at-a-d5acc2 = From the surface at a point down to depth: no deep plunges, so points chip less
+setting-depth-out-00b3e2 = Depth out
+setting-straight-down-at-the-deep-694eba = Straight down at the deep end, up to the surface at the point
 setting-general-settings-95789c = General Settings
 setting-general-settings-da55d6 = General settings.
 setting-recent-file-list-size-ed84cd = Recent file list size
@@ -1150,7 +1180,6 @@ setting-bottom-to-top-109aa8 = Bottom to top
 setting-from-the-parts-at-the-3f7ab7 = From the parts at the bottom up to the top
 setting-grid-b366b1 = Grid
 setting-square-by-square-over-a-9267a7 = Square by square over a grid the size of the biggest part
-setting-shortest-path-925c66 = Shortest path
 setting-on-each-time-to-the-9ac0a0 = On each time to the nearest shape not yet cut
 setting-start-at-ce42d0 = Start at
 setting-where-the-cut-round-each-989560 = Where the cut round each closed shape starts.
@@ -1363,6 +1392,12 @@ setting-how-deep-the-groove-s-459a42 =
     How deep the groove's point goes below the start depth (Fill works its depth out
     from each shape's width instead)
 setting-a-v-bit-its-stepover-dc5060 = A V-bit; its stepover sets how close together the carving passes are
+setting-carving-style-b631f2 = Carving style
+setting-how-the-passes-are-cut-512afc = How the passes are cut, and how the bit gets from one cut to the next
+setting-carving-style-268192 = Carving Style
+setting-the-order-the-centre-lines-e62a57 = The order the centre lines are carved in
+setting-direction-fefc0a = Direction
+setting-which-end-of-each-stretch-829d04 = Which end of each stretch of centre line the bit starts at
 setting-end-mills-that-clear-the-5ae6fe =
     End mills that clear the flat bottom first, largest first (needs a flat depth): each
     makes a toolpath of its own, and each bit after it, the V-bit last, cuts only what
@@ -1710,7 +1745,6 @@ setting-kept-from-a-job-saved-1b90ac =
 setting-the-engraving-bit-or-drag-6b726a = The engraving bit or drag point that marks the lines
 
 ## Keyhole Toolpath (keyhole_toolpath)
-setting-direction-fefc0a = Direction
 setting-which-way-the-slot-runs-f516af = Which way the slot runs from the entry hole
 setting-keyhole-2c9b1e = Keyhole
 setting-from-the-entry-hole-up-b99cd1 = From the entry hole up the job

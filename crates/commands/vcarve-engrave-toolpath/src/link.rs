@@ -111,9 +111,13 @@ pub(crate) struct Links<'a, F: Fn(f64) -> f64> {
 }
 
 /// The centre lines' points, joined along each line and where lines meet.
-struct Graph {
-    points: Vec<(Point, f64)>,
-    next: Vec<Vec<(usize, f64)>>,
+pub(crate) struct Graph {
+    /// Each point and how far it is from the edges.
+    pub(crate) points: Vec<(Point, f64)>,
+    /// The points each joins, and how far away they are.
+    pub(crate) next: Vec<Vec<(usize, f64)>>,
+    /// The joins between the ends of lines that meet (the rest join points along a line).
+    pub(crate) meets: Vec<(usize, usize)>,
 }
 
 impl<'a, F: Fn(f64) -> f64> Links<'a, F> {
@@ -215,10 +219,11 @@ impl<'a, F: Fn(f64) -> f64> Links<'a, F> {
 }
 
 impl Graph {
-    fn new(lines: &[CentreLine]) -> Self {
+    pub(crate) fn new(lines: &[CentreLine]) -> Self {
         let mut points = vec![];
         let mut next: Vec<Vec<(usize, f64)>> = vec![];
         let mut ends: HashMap<Cell, Vec<usize>> = HashMap::new();
+        let mut meets = vec![];
         for line in lines {
             let first = points.len();
             for (k, (&p, &r)) in line.points.iter().zip(&line.radii).enumerate() {
@@ -246,13 +251,18 @@ impl Graph {
                             if i < j && d <= MEET {
                                 next[i].push((j, d));
                                 next[j].push((i, d));
+                                meets.push((i, j));
                             }
                         }
                     }
                 }
             }
         }
-        Self { points, next }
+        Self {
+            points,
+            next,
+            meets,
+        }
     }
 
     /// The shortest way from `start` to `end`, both included.

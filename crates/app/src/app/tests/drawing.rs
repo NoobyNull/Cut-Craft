@@ -166,9 +166,21 @@ fn reshaping_a_made_shape_by_hand_stops_it_being_remade_from_its_settings() {
 
 #[test]
 fn every_measurement_picture_is_in_the_icon_set() {
+    // a picture of what is picked: one for each choice
     fn walk(fields: &[form::Field], out: &mut Vec<String>) {
         for f in fields {
-            out.extend(f.diagram.clone());
+            if let Some(template) = &f.diagram {
+                match &f.kind {
+                    form::Kind::Choice(options, _) if template.contains("{}") => {
+                        out.extend(
+                            options
+                                .iter()
+                                .map(|o| form::icon_path(template, &Value::from(o.value.clone()))),
+                        );
+                    }
+                    _ => out.push(template.clone()),
+                }
+            }
             if let form::Kind::Group(inner) = &f.kind {
                 walk(inner, out);
             }

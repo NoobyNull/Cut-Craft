@@ -1191,3 +1191,20 @@ fn the_2d_view_draws_vectors_and_toolpaths_in_the_colours_picked() {
         "its profile in the toolpath colour"
     );
 }
+
+#[test]
+fn a_new_vcarve_carves_as_the_options_say() {
+    use cmd_vcarve_engrave_toolpath::{Direction, Style};
+    let mut h = Harness::new();
+    assert_eq!(h.options().toolpaths.vcarve_style, Style::StayDown);
+    h.invoke("vcarve_engrave_toolpath");
+    assert_eq!(h.form_value("style"), "stay_down");
+    h.close_form();
+    h.given_options(|o| {
+        o.toolpaths.vcarve_style = Style::Lift;
+        o.toolpaths.vcarve_direction = Direction::DepthOut;
+    });
+    h.invoke("vcarve_engrave_toolpath");
+    assert_eq!(h.form_value("style"), "lift");
+    assert_eq!(h.form_value("direction"), "depth_out");
+}

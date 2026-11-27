@@ -37,7 +37,7 @@ pub(super) fn show_within(
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
                 ui.strong(super::setting_text(group));
-                diagram(ui, block, look);
+                diagram(ui, block, params, look);
                 let mut changed = plain(ui, block, params, look, top);
                 if let Some(end) = look.group_end {
                     changed |= end(ui, group, params);
@@ -46,7 +46,7 @@ pub(super) fn show_within(
             })
             .inner
         } else {
-            diagram(ui, block, look);
+            diagram(ui, block, params, look);
             plain(ui, block, params, look, top)
         };
         rest = after;
@@ -54,13 +54,22 @@ pub(super) fn show_within(
     changed
 }
 
-/// The measurements picture of the first of `fields` that has one (`x-diagram`), as wide as
-/// there is room for, up to [`DIAGRAM_ROWS`] tall, at [`DIAGRAM_ASPECT`].
-pub(super) fn diagram(ui: &mut egui::Ui, fields: &[&Field], look: &Look) {
+/// The picture of `fields` (`x-diagram`), as wide as there is room for, up to
+/// [`DIAGRAM_ROWS`] tall, at [`DIAGRAM_ASPECT`]: the last one's that has one, so a choice
+/// shown only for another choice draws the two together; `{}` in it stands for the field's
+/// value in `params` (a picture of what is picked).
+pub(super) fn diagram(ui: &mut egui::Ui, fields: &[&Field], params: &Value, look: &Look) {
     let Some(picture) = fields
         .iter()
-        .find_map(|f| f.diagram.as_deref())
-        .and_then(|path| (look.picture)(path))
+        .rev()
+        .filter_map(|f| {
+            let template = f.diagram.as_deref()?;
+            Some(icon_path(
+                template,
+                params.get(&f.key).unwrap_or(&Value::Null),
+            ))
+        })
+        .find_map(|path| (look.picture)(&path))
     else {
         return;
     };

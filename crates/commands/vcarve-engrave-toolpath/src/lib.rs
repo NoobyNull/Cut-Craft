@@ -16,6 +16,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 mod link;
+mod tour;
 
 pub struct VcarveEngraveToolpath;
 
@@ -42,6 +43,57 @@ pub enum Place {
     Outside,
 }
 
+/// How the passes are cut, and how the bit gets from one cut to the next.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Style {
+    /// Every pass clears its whole floor, never cutting more than a pass depth: the most
+    /// moves, for hard woods and light machines
+    #[schemars(title = "Light passes")]
+    LightPasses,
+    /// One ring round the floor each pass on the way down, the centre lines once in the last
+    /// pass; the bit stays down in each shape
+    #[default]
+    #[schemars(title = "Stay down")]
+    StayDown,
+    /// As Stay down, but each stretch of centre line is cut once, lifting between them: the
+    /// fewest moves
+    #[schemars(title = "Lift between cuts")]
+    Lift,
+}
+
+/// Jobs saved before there was a choice keep the passes they were made with.
+fn light_passes() -> Style {
+    Style::LightPasses
+}
+
+/// The order Stay down carves the centre lines in.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Order {
+    /// The same way round every shape, out and back along each branch, so every point is
+    /// cut alike
+    #[default]
+    #[schemars(title = "Round the shape")]
+    RoundTheShape,
+    /// The nearest cut next
+    #[schemars(title = "Shortest path")]
+    ShortestPath,
+}
+
+/// Which end of each stretch of centre line Lift between cuts starts at.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Direction {
+    /// From the surface at a point down to depth: no deep plunges, so points chip less
+    #[default]
+    #[schemars(title = "Shallow in")]
+    ShallowIn,
+    /// Straight down at the deep end, up to the surface at the point
+    #[schemars(title = "Depth out")]
+    DepthOut,
+}
+
 fn one() -> f64 {
     1.0
 }
@@ -65,7 +117,10 @@ pub struct Params {
     /// Fill carves the whole shape, as deep as its width needs; Inside, On the Line and
     /// Outside carve a V groove of the depth set
     #[serde(default)]
-    #[schemars(title = "Carve", extend("x-group" = "Cutting Depths"))]
+    #[schemars(
+        title = "Carve",
+        extend("x-group" = "Cutting Depths", "x-widget" = "drop-down")
+    )]
     pub place: Place,
     /// How deep the groove's point goes below the start depth (Fill works its depth out
     /// from each shape's width instead)
@@ -79,6 +134,36 @@ pub struct Params {
     pub depth: f64,
     /// A V-bit; its stepover sets how close together the carving passes are
     pub tool: Tool,
+    /// How the passes are cut, and how the bit gets from one cut to the next
+    #[serde(default = "light_passes")]
+    #[schemars(
+        title = "Carving style",
+        extend(
+            "x-group" = "Carving Style",
+            "x-widget" = "drop-down",
+            "x-diagram" = "diagrams/vcarve_{}.png",
+            "x-show-when" = {"place": ["fill", "inside", "outside"]}
+        )
+    )]
+    pub style: Style,
+    /// The order the centre lines are carved in
+    #[serde(default)]
+    #[schemars(extend(
+        "x-group" = "Carving Style",
+        "x-widget" = "drop-down",
+        "x-diagram" = "diagrams/vcarve_order_{}.png",
+        "x-show-when" = {"style": "stay_down", "place": ["fill", "inside", "outside"]}
+    ))]
+    pub order: Order,
+    /// Which end of each stretch of centre line the bit starts at
+    #[serde(default)]
+    #[schemars(extend(
+        "x-group" = "Carving Style",
+        "x-widget" = "drop-down",
+        "x-diagram" = "diagrams/vcarve_direction_{}.png",
+        "x-show-when" = {"style": "lift", "place": ["fill", "inside", "outside"]}
+    ))]
+    pub direction: Direction,
     /// End mills that clear the flat bottom first, largest first (needs a flat depth): each
     /// makes a toolpath of its own, and each bit after it, the V-bit last, cuts only what
     /// the ones before it left (rest machining)
@@ -128,6 +213,9 @@ impl Default for Params {
                 .into_iter()
                 .find(|t| t.shape == ToolShape::VBit)
                 .expect("the starter bits include a V-bit"),
+            style: Style::default(),
+            order: Order::default(),
+            direction: Direction::default(),
             clearance_tools: vec![],
             clearing: None,
             cleared_within: None,
@@ -156,7 +244,11 @@ impl Command for VcarveEngraveToolpath {
     fn run(doc: &Document, p: &Params) -> Result<Change, CommandError> {
         let mut c = Change::builder(doc);
         if p.clearance_tools.is_empty() {
-            c.add_toolpath(vcarve(doc, p)?);
+            let toolpath = vcarve(doc, p)?;
+            if let Some(note) = bit_too_short(doc, p, &toolpath) {
+                c.note(note);
+            }
+            c.add_toolpath(toolpath);
             return Ok(c.finish());
         }
         if p.place != Place::Fill {
@@ -222,6 +314,41 @@ impl Command for VcarveEngraveToolpath {
         })?);
         Ok(c.finish())
     }
+}
+
+/// Where Fill's widest parts need the bit deeper than its V is tall, so it cuts them flat
+/// at that depth: what to do about it (nothing to say when a flat depth was asked for, or
+/// the material's bottom is what stops it).
+fn bit_too_short(
+    doc: &Document,
+    p: &Params,
+    toolpath: &cut_craft_core::toolpath::Toolpath,
+) -> Option<String> {
+    let tool = &p.tool;
+    if p.place != Place::Fill || p.flat_depth > 0.0 || p.clearing.is_some() {
+        return None;
+    }
+    let tall = (tool.diameter / 2.0) / (tool.angle.to_radians() / 2.0).tan();
+    let full = p.start_depth + tall;
+    let deepest = -toolpath
+        .moves
+        .iter()
+        .map(|m| m.to.z)
+        .fold(f64::INFINITY, f64::min);
+    let material = if doc.job.thickness > 0.0 && !p.project_onto_model {
+        doc.job.thickness
+    } else {
+        f64::INFINITY
+    };
+    (deepest >= full - 1e-6 && material > full + 1e-6).then(|| {
+        format!(
+            "Parts of these shapes are wider than {} can carve to a point: they are cut flat \
+             {} deep, as deep as its V goes. Clearance Bits clear that flat bottom quicker; a \
+             wider V-bit carves them deeper",
+            tool.name,
+            doc.job.units.length(tall, 2)
+        )
+    })
 }
 
 /// The toolpath for `p`'s own bit: the V-bit's carving, or (`clearing`) an end mill's
@@ -567,11 +694,20 @@ fn carve_together(
         }
         let ways = link::Links::new(&piece, &lines, |r| carving.depth_at(r));
         let enter = |run: &Run| entered(run, -p.start_depth, v_entry(p), p.tool.diameter, notes);
-        moves.extend(run_moves(&runs, safe, |a, b| ways.between(a, b), enter));
+        // Lift between cuts goes up and over to each cut; the others stay down
+        let lift = p.style == Style::Lift;
+        let link = |a, b| if lift { None } else { ways.between(a, b) };
+        moves.extend(run_moves(&runs, safe, link, enter));
         cut_craft_core::progress::report_steps(carved, total);
     }
-    moves
+    // the centre lines are found from points along the edges, so they wobble by a few
+    // thousandths of a millimetre: cut straight past what is that close to the line
+    cut_craft_core::simplify::simplify(&moves, SMOOTH)
 }
+
+/// How far, mm, a cut may pass a point of the carving rather than going through it: the
+/// centre lines' wobble, far below what a router cuts to.
+const SMOOTH: f64 = 0.01;
 
 /// A few points round `piece`'s outlines, to find which piece is nearest quickly.
 fn marks(piece: &[Path]) -> Vec<Point> {
@@ -600,7 +736,9 @@ impl Carving<'_> {
     }
 
     /// The cuts carving `piece` (whose centre lines are `lines`), pass after pass, starting
-    /// nearest `from`.
+    /// nearest `from`. Light passes carve the centre lines and clear the floor in every pass;
+    /// the other styles cut one ring round each floor on the way down and carve the centre
+    /// lines once, in the last pass, in the style's order.
     fn runs(&self, piece: &[Path], lines: &[medial::CentreLine], mut from: Point) -> Vec<Run> {
         let (p, tool, spread) = (self.p, &self.p.tool, self.spread);
         let widest_shape = lines
@@ -611,8 +749,10 @@ impl Carving<'_> {
         if widest <= 0.0 {
             return vec![];
         }
+        let light = p.style == Style::LightPasses;
         let mut all = vec![];
-        let mut above = -p.start_depth;
+        let surface = -p.start_depth;
+        let mut above = surface;
         // passes set by hand were set against the Groove depth, which Fill doesn't cut to:
         // its passes go at the pass depth (a thin last pass still counts)
         let even = Tool {
@@ -625,20 +765,54 @@ impl Carving<'_> {
             if level >= above - 1e-9 {
                 continue;
             }
-            // the centre lines, where they are deeper than the last pass, down to this one
-            let runs = centre_runs(
-                lines,
-                level,
-                |r| self.depth_at(r) < above - 1e-9 && r <= self.cleared,
-                |r| self.depth_at(r),
-            );
-            let mut runs = nearest_first(runs, from);
+            let finishing = (level - last_level).abs() < 1e-9;
+            let wanted = |r: f64| r <= self.cleared;
+            let mut runs = if light {
+                // the centre lines, where they are deeper than the last pass, down to this one
+                nearest_first(
+                    centre_runs(
+                        lines,
+                        level,
+                        above,
+                        |r| self.depth_at(r) < above - 1e-9 && wanted(r),
+                        |r| self.depth_at(r),
+                    ),
+                    from,
+                )
+            } else if finishing {
+                // the centre lines all the way from the surface, once
+                let depth = |r: f64| self.depth_at(r).max(level);
+                match (p.style, p.order) {
+                    (Style::Lift, _) => tour::stretches(
+                        lines,
+                        depth,
+                        wanted,
+                        p.direction == Direction::ShallowIn,
+                        from,
+                    ),
+                    (_, Order::RoundTheShape) => tour::round(lines, depth, wanted, from),
+                    (_, Order::ShortestPath) => nearest_first(
+                        centre_runs(
+                            lines,
+                            level,
+                            surface,
+                            |r| self.depth_at(r) < surface - 1e-9 && wanted(r),
+                            |r| self.depth_at(r),
+                        ),
+                        from,
+                    ),
+                }
+            } else {
+                vec![]
+            };
+            if let Some(last) = runs.last().and_then(Run::end) {
+                from = last;
+            }
             // the floor: where this pass is too deep for the cone to reach the edges
             let floor_reach = ((-level - p.start_depth) * spread).min(self.reach);
             // (none where only the centre line itself is that far from the edges)
             if floor_reach > 1e-6 && floor_reach < widest_shape - CENTRE_SPACING {
                 let floor = polygon::offset_regions(piece, -floor_reach, Corners::Round);
-                let finishing = (level - last_level).abs() < 1e-9;
                 // a pass on the way down only has to leave ridges low enough for the next
                 // pass to take with the rest: a quarter of a pass depth
                 let step = if finishing {
@@ -648,11 +822,27 @@ impl Carving<'_> {
                         .min(tool.diameter / 2.0)
                         .max(tool.finishing_stepover() * tool.diameter)
                 };
-                let mut rings =
-                    floor_rings(&floor, step, self.cleared - floor_reach, level, self.starts);
+                // on the way down, other than in light passes, only the ring round its edge:
+                // the passes below take the rest with their own
+                let within = if light || finishing {
+                    self.cleared - floor_reach
+                } else {
+                    (self.cleared - floor_reach).min(0.0)
+                };
+                let mut rings = floor_rings(&floor, step, within, level, self.starts);
                 // from the middle out, the edge of the floor last
                 rings.reverse();
-                runs.extend(rings);
+                let rings = if light || finishing {
+                    rings
+                } else {
+                    nearest_first(rings, from)
+                };
+                if !light && !finishing {
+                    // the ring first, then the last pass's centre lines from where it ends
+                    runs.splice(0..0, rings);
+                } else {
+                    runs.extend(rings);
+                }
             }
             if let Some(last) = runs.last().and_then(Run::end) {
                 from = last;
@@ -664,34 +854,55 @@ impl Carving<'_> {
     }
 }
 
-/// The stretches of `lines` where `deeper` (given the distance to the edge) holds, one point
-/// more each end to come up to where the last pass was, at `depth_at` but no lower than
-/// `level`.
+/// The stretches of `lines` where `deeper` (given the distance to the edge) holds, at
+/// `depth_at` but no lower than `level`. Each runs on at either end to where it meets what the
+/// pass before cut (`above`): part way to the next point when the carving there is no deeper
+/// than that pass, so a later pass stops where the last one reached rather than going on to
+/// the next point (on a straight stretch, the far end of it).
 fn centre_runs(
     lines: &[medial::CentreLine],
     level: f64,
+    above: f64,
     deeper: impl Fn(f64) -> bool,
     depth_at: impl Fn(f64) -> f64,
 ) -> Vec<Run> {
     let mut runs = vec![];
     for line in lines {
         let count = line.points.len();
+        let at = |k: usize| {
+            let q = line.points[k];
+            DVec3::new(q.x, q.y, depth_at(line.radii[k]))
+        };
+        // from the first point carved (`inner`) towards one that is not (`outer`): where the
+        // carving comes up to the last pass, if it does between them
+        let met = |inner: usize, outer: usize| {
+            let (a, b) = (at(inner), at(outer));
+            if b.z >= above - 1e-9 && a.z < above && b.z > a.z {
+                let t = (above - a.z) / (b.z - a.z);
+                a.lerp(b, t)
+            } else {
+                b
+            }
+        };
         let mut i = 0;
         while i < count {
             if !deeper(line.radii[i]) {
                 i += 1;
                 continue;
             }
-            let first = i.saturating_sub(1);
+            let first = i;
             while i < count && deeper(line.radii[i]) {
                 i += 1;
             }
-            let points: Vec<DVec3> = (first..(i + 1).min(count))
-                .map(|k| {
-                    let q = line.points[k];
-                    DVec3::new(q.x, q.y, depth_at(line.radii[k]).max(level))
-                })
-                .collect();
+            let mut points: Vec<DVec3> = vec![];
+            if first > 0 {
+                points.push(met(first, first - 1));
+            }
+            points.extend((first..i).map(at));
+            if i < count {
+                points.push(met(i - 1, i));
+            }
+            let points = flattened(&points, level);
             if points.len() > 1 {
                 runs.push(Run {
                     points,
@@ -701,6 +912,23 @@ fn centre_runs(
         }
     }
     runs
+}
+
+/// `points` kept no lower than `level`, with a point added where they go below it or come
+/// back up: cut level there and on down the line, not straight from a point held up to the
+/// next one, which would leave the slope between them shallower than carved.
+fn flattened(points: &[DVec3], level: f64) -> Vec<DVec3> {
+    let mut out: Vec<DVec3> = Vec::with_capacity(points.len());
+    for (i, &q) in points.iter().enumerate() {
+        if let Some(&before) = i.checked_sub(1).map(|k| &points[k])
+            && (before.z < level) != (q.z < level)
+            && (before.z - q.z).abs() > 1e-12
+        {
+            out.push(before.lerp(q, (level - before.z) / (q.z - before.z)));
+        }
+        out.push(q.truncate().extend(q.z.max(level)));
+    }
+    out
 }
 
 /// Rings round `floor` at `level`, its edge and then a `step` further in each time while no
@@ -929,6 +1157,11 @@ fn entered(
         let passes = f64::from(settings.zigzag_passes.max(1));
         (drop / (passes * slope), slope)
     };
+    // a ring (a floor's edge) too short for the leg: round and round it on the way down,
+    // as steep as the leg would be, arriving at its start
+    if leg > length + 1e-9 && run.closed {
+        return round_down(&line, &at, top, slope);
+    }
     // a groove too short for the leg: straight down (Matthew's rule)
     if leg > length + 1e-9 {
         note(EntryMode::Plunge);
@@ -968,6 +1201,51 @@ fn entered(
             break;
         }
     }
+    moves
+}
+
+/// Down into a closed ring (`line`, its start repeated at the end, `at` how far along each
+/// point is) from `top`, going round it backwards from where the slope reaches `top` so
+/// as to arrive at its start as deep as the ring is there, `slope` down for each millimetre
+/// along, never below the ring.
+fn round_down(line: &[DVec3], at: &[f64], top: f64, slope: f64) -> Vec<Move> {
+    let start = line[0];
+    let length = at[at.len() - 1];
+    let distance = (top - start.z) / slope.max(1e-9);
+    // the ring's points behind the start, nearest first, until the slope reaches the top
+    let mut behind: Vec<(f64, DVec3)> = vec![];
+    let mut laps = 0.0;
+    'round: loop {
+        for k in (0..line.len() - 1).rev() {
+            let back = laps + length - at[k];
+            if back >= distance {
+                // part way along to where it starts
+                let after = line[k + 1];
+                let span = (at[k + 1] - at[k]).max(1e-12);
+                let over = (back - distance) / span;
+                behind.push((distance, line[k].lerp(after, over.clamp(0.0, 1.0))));
+                break 'round;
+            }
+            if back > 0.0 {
+                behind.push((back, line[k]));
+            }
+        }
+        laps += length;
+    }
+    behind.reverse();
+    let mut moves: Vec<Move> = behind
+        .iter()
+        .map(|&(back, q)| Move {
+            kind: MoveKind::Plunge,
+            to: q
+                .truncate()
+                .extend(q.z.max(top - (distance - back) * slope)),
+        })
+        .collect();
+    moves.push(Move {
+        kind: MoveKind::Plunge,
+        to: start,
+    });
     moves
 }
 
@@ -1060,3 +1338,6 @@ fn stepped_in(regions: &[Path], step: f64) -> Vec<(f64, Vec<Path>)> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod style_tests;
