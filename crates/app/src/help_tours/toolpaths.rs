@@ -61,21 +61,21 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:pocket_toolpath"),
             },
             Step {
+                caption: "Check the bit, first in the form, drawn beside its name. **Select…** \
+                          picks another one from your Bit Library; its feeds, speeds and depth \
+                          per pass come with it.",
+                setup: |app, ctx| app.invoke(ctx, "pocket_toolpath"),
+                mark: Mark::At("field:tool"),
+            },
+            Step {
                 caption: "Set the **Cut Depth** (D): how far below the top of the material the \
                           floor of the pocket ends up. Here it is 10 mm.",
-                setup: |app, ctx| {
-                    app.invoke(ctx, "pocket_toolpath");
+                setup: |app, _| {
                     if let Some(open) = app.form.as_mut() {
                         open.params["depth"] = 10.0.into();
                     }
                 },
                 mark: Mark::At("field:depth"),
-            },
-            Step {
-                caption: "Check the bit. **Select…** picks another one from your Bit Library; \
-                          its feeds, speeds and depth per pass come with it.",
-                setup: |_, _| {},
-                mark: Mark::At("button:Select…"),
             },
             Step {
                 caption: "Press **Calculate** to make the toolpath.",

@@ -80,6 +80,21 @@ impl CutCraftApp {
                 }
                 return;
             }
+            if key == form::AFTER_TOOL {
+                if extras
+                    && super::shows_rest(params)
+                    && let Some(ask) = rest_section(ui, params, tools, &slots, units)
+                {
+                    *list_ask.borrow_mut() = Some((super::ToolList::Rest, ask));
+                }
+                if extras {
+                    selector_section(ui, params, &layers, units);
+                }
+                if extras && rotary && !laser {
+                    locked_face_section(ui, params);
+                }
+                return;
+            }
             if key != "tool" {
                 // the form's tools in the order they cut, each picked as the form's own tool
                 let (changed, ask) = super::tools_section(ui, key, params, tools, &slots, units);
@@ -100,18 +115,6 @@ impl CutCraftApp {
                 }
                 listed.set(listed.get() | super::passes::edit_passes(ui, params, units));
             });
-            if extras
-                && super::shows_rest(params)
-                && let Some(ask) = rest_section(ui, params, tools, &slots, units)
-            {
-                *list_ask.borrow_mut() = Some((super::ToolList::Rest, ask));
-            }
-            if extras {
-                selector_section(ui, params, &layers, units);
-            }
-            if extras && rotary && !laser {
-                locked_face_section(ui, params);
-            }
         };
         let stock = form_stock(&self.doc, &open.params, units, bed(&self.machines));
         // Scale to Fit Material is pressed inside Model Size, and worked out once it is drawn

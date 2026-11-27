@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-26
+reviewed: 2026-11-27
 see-also: preview_detail, rotary_machining_toolpath, rotary_locked_angles_toolpath, rotary_firmware, job_setup
 ---
 
@@ -11,6 +11,18 @@ Pick a toolpath's tool to open its form; choose the cutter from the bit library 
 choose one, a new form starts with a common 6 mm two-flute end mill (6 mm shank, 22 mm of
 flute), so it can already say how deep the bit reaches; pick your own bit with Select… so
 the sizes and speeds are really yours.
+
+## The bit comes first
+
+Every toolpath form opens with its **Bit**: what cuts decides the rest, as its depth per pass
+sets how many passes a depth takes and a V-bit's angle sets how deep it carves. Clearing
+bits (Pocket, V-Carve) and 3D Finishing's bits come right under it, then the Cutting Depths
+and which side to cut. Rest Machining and the vector selector stay under the depths.
+
+Beside the bit's name is a small drawing of it, to scale: the orange part is what cuts, the
+grey part is the shank the collet holds. An end mill shows a flat bottom, a ball nose a round
+one, a V-bit its point. Point at the drawing to see it bigger with its flute length and
+shank. Dashed lines are sizes the Bit Library has not been given yet; **Edit…** sets them.
 
 A toolpath's form shows its lengths in the job's units, whatever the bit's own units are.
 In an inch job, picking a metric bit (a 6 mm end mill, say) leaves Cut Depth, Allowance

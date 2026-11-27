@@ -227,7 +227,7 @@ impl CutCraftApp {
         // nothing the beginner did not set
         starter_tool(&mut params);
         // a toolpath's form in the standard order
-        let fields = if fields.iter().any(|f| f.key == "tool") {
+        let fields = if form::picks_bits(&fields) {
             form::arrange(fields)
         } else {
             fields

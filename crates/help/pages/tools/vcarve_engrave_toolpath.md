@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-27
 see-also: draw_text, save_toolpaths
 ---
 
@@ -15,11 +15,11 @@ see-also: draw_text, save_toolpaths
 
    ![Step 2](pictures/vcarve_engrave_toolpath/step-2.png)
 
-3. Choose how to carve. **Fill** carves the whole shape, as deep as each part's width needs, so the sides meet in a sharp crease.
+3. Check the bit is a **V-bit**: first in the form, drawn with its point beside its name. **Select…** picks one from your Bit Library; its angle sets how deep each part is carved.
 
    ![Step 3](pictures/vcarve_engrave_toolpath/step-3.png)
 
-4. Check the bit is a **V-bit**. **Select…** picks one from your Bit Library; its angle sets how deep each part is carved.
+4. Choose how to carve. **Fill** carves the whole shape, as deep as each part's width needs, so the sides meet in a sharp crease.
 
    ![Step 4](pictures/vcarve_engrave_toolpath/step-4.png)
 

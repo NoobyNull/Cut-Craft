@@ -2,7 +2,7 @@
 
 use super::{
     DIAGRAM_ASPECT, DIAGRAM_ROWS, DIM_COLOUR, FIELD_PICTURE_ROWS, Field, HoverHint, Kind, Look,
-    Number, TOOL_LISTS, Units, Value, Widget, edit, egui, round, tr,
+    Number, Units, Value, Widget, edit, egui, round, tr,
 };
 
 /// [`show`] for `params` somewhere inside the form, whose top-level parameters are `top`.
@@ -122,8 +122,7 @@ pub(super) fn plain(
     top: &Value,
 ) -> bool {
     let mut changed = false;
-    let own_block =
-        |f: &&Field| f.section || f.key == "tool" || TOOL_LISTS.contains(&f.key.as_str());
+    let own_block = |f: &&Field| f.section || super::drawn_by_tool(&f.key);
     let mut rest = fields;
     while !rest.is_empty() {
         let run = rest.iter().position(own_block).unwrap_or(rest.len());
@@ -135,8 +134,7 @@ pub(super) fn plain(
             break;
         };
         rest = after;
-        if (section.key == "tool" || TOOL_LISTS.contains(&section.key.as_str())) && !section.section
-        {
+        if super::drawn_by_tool(&section.key) && !section.section {
             if let Some(tool) = look.tool {
                 let place = ui.scope(|ui| tool(ui, &section.key, params)).response.rect;
                 crate::marks::note(ui, &format!("field:{}", section.key), place);
