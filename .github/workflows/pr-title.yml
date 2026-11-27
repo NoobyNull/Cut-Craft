@@ -25,6 +25,8 @@ jobs:
         run: scripts/test-release-commit
       - name: Release version's own tests
         run: scripts/test-release-version
+      - name: The timeline's own tests
+        run: scripts/test-timeline
       - name: The title names a kind of change
         if: github.event_name == 'pull_request'
         env:
