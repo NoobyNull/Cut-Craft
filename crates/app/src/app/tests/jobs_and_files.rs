@@ -1152,3 +1152,29 @@ fn a_new_job_forgets_a_save_anyway_answer() {
     h.reset_job();
     assert!(h.save_anyway_agreed().is_empty(), "forgotten");
 }
+
+#[test]
+fn jobs_saved_by_powerwhittle_open_by_drop_like_any_other_job() {
+    let dir = fresh_dir("pwjob");
+    let mut h = Harness::new();
+    h.rectangle(10.0, 10.0, 20.0, 10.0);
+    let bytes = cut_craft_core::file::save_job(h.doc());
+    let job = dir.join("sign.pwjob");
+    let template = dir.join("plate.pwjobt");
+    std::fs::write(&job, &bytes).unwrap();
+    std::fs::write(&template, &bytes).unwrap();
+    let mut fresh = Harness::at_start();
+    fresh.drop_files(std::slice::from_ref(&job), true);
+    assert_eq!(fresh.screen(), Screen::Job);
+    assert_eq!(fresh.job_path(), Some(job.as_path()));
+    assert_eq!(fresh.doc().vectors.len(), 1);
+    let mut fresh = Harness::at_start();
+    fresh.drop_files(std::slice::from_ref(&template), true);
+    assert_eq!(fresh.doc().vectors.len(), 1);
+    assert_eq!(
+        fresh.job_path(),
+        None,
+        "a template opens as a new, unsaved job"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
