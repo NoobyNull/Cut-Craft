@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-27
 see-also: toolpaths, save_toolpaths, protect_the_machine
 ---
 
@@ -103,6 +103,7 @@ back, it stays ticked; a new or changed warning needs a new tick.
 - [Bits loaded in the tool changer](help:check_tool_changer)
 - [Each bit its own number](help:check_tool_numbers)
 - [Bit changes you can make](help:check_bit_changes)
+- [Each toolpath cut with its own bit](help:check_bit_shapes)
 - [Keeps out of keep-out zones](help:check_keep_out)
 - [Rotary set up](help:check_rotary_setup)
 

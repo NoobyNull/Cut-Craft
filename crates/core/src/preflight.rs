@@ -235,6 +235,7 @@ pub fn check(doc: &Document, toolpaths: &[&Toolpath], limits: &Limits) -> Vec<Fi
         machine(doc, toolpaths, limits, &mut found);
         keep_out(doc, toolpaths, limits, &mut found);
         tool_numbers(toolpaths, &mut found);
+        bit_shapes::check(toolpaths, limits, doc.job.units, &mut found);
         rotary_setup(doc, toolpaths, limits, &mut found);
         support_last(doc, toolpaths, &mut found);
     }
@@ -1441,5 +1442,6 @@ fn cut_before(material: &Material, at: DVec3, n: u32) -> bool {
         && (1..n).contains(&material.cut_by[row * material.columns + column])
 }
 
+mod bit_shapes;
 #[cfg(test)]
 mod tests;

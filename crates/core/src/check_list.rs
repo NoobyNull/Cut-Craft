@@ -27,6 +27,8 @@ pub enum Check {
     /// Bit changes by hand planned: Z zero set again for each bit, a pause the controller
     /// can be zeroed at, and the cutting order when Group by bit changes it.
     BitChanges,
+    /// Each toolpath cut with the bit it was made for: no bit name standing for two shapes.
+    BitShapes,
     /// No cutting into the keep-out zones (clamps).
     KeepOut,
     /// A rotary job's rotary set up: its centre line found, lying the job's way.
@@ -108,7 +110,7 @@ impl Phase {
 
 impl Check {
     /// Every check, in the order they are listed.
-    pub const ALL: [Self; 24] = [
+    pub const ALL: [Self; 25] = [
         Self::CanCut,
         Self::UpToDate,
         Self::Zeroing,
@@ -119,6 +121,7 @@ impl Check {
         Self::ToolChanger,
         Self::ToolNumbers,
         Self::BitChanges,
+        Self::BitShapes,
         Self::KeepOut,
         Self::RotarySetup,
         Self::Rapids,
@@ -149,6 +152,7 @@ impl Check {
             Self::ToolChanger => "Bits loaded in the tool changer",
             Self::ToolNumbers => "Each bit its own number",
             Self::BitChanges => "Bit changes you can make",
+            Self::BitShapes => "Each toolpath cut with its own bit",
             Self::KeepOut => "Keeps out of keep-out zones",
             Self::RotarySetup => "Rotary set up",
             Self::Rapids => "Rapid moves clear of the material",
@@ -216,6 +220,12 @@ impl Check {
                  each new bit, warned when the controller cannot jog while paused to do so, \
                  and shown the new cutting order when Group by bit changes it, so the \
                  second bit does not cut at the first bit's height or in the wrong order"
+            }
+            Self::BitShapes => {
+                "Each toolpath is cut with the bit it was made for. The job keeps every \
+                 toolpath's bit with its sizes, but bits are changed and loaded by name, so \
+                 a Bit Library bit, a tool changer holder or another toolpath with the same \
+                 name and another shape is caught before it cuts the wrong size"
             }
             Self::KeepOut => {
                 "No cut goes into a keep-out zone, so the bit does not hit a clamp or \
@@ -294,6 +304,7 @@ impl Check {
             Self::ToolChanger => "check_tool_changer",
             Self::ToolNumbers => "check_tool_numbers",
             Self::BitChanges => "check_bit_changes",
+            Self::BitShapes => "check_bit_shapes",
             Self::KeepOut => "check_keep_out",
             Self::RotarySetup => "check_rotary_setup",
             Self::Rapids => "check_rapids",
@@ -321,6 +332,7 @@ impl Check {
             | Self::KeepOut
             | Self::ToolNumbers
             | Self::BitChanges
+            | Self::BitShapes
             | Self::RotarySetup => Phase::Machine,
             Self::Rapids | Self::AirCutting => Phase::Cutting,
             Self::Collisions => Phase::Collisions,

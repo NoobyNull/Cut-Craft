@@ -12,6 +12,38 @@ pub(super) enum ToolAsk {
     Select,
     /// Edit…: the Bit Library to change this tool in.
     Edit,
+    /// Use the Bit Library's: the Bit Library's bit of the same name, in place of the
+    /// toolpath's own copy of another shape.
+    UseLibrary,
+}
+
+/// What a form says when its bit, as the job keeps it, is not the Bit Library's bit of the
+/// same name (edited since, or another computer's): how they differ, and a button to use
+/// the library's. Whether it was pressed.
+fn not_the_library_bit(
+    ui: &mut egui::Ui,
+    tool: &Tool,
+    listed: &Tool,
+    units: cut_craft_core::document::Units,
+) -> bool {
+    let differences = tool.shape_differences(listed, units);
+    if differences.is_empty() {
+        return false;
+    }
+    let said: Vec<String> = differences
+        .iter()
+        .map(|d| match d.split_once(" here, ") {
+            Some((ours, theirs)) => tr!("tool-shape-difference", ours = ours, theirs = theirs),
+            None => d.clone(),
+        })
+        .collect();
+    ui.colored_label(
+        ui.visuals().warn_fg_color,
+        tr!("tool-not-the-library-bit", differences = said.join("; ")),
+    );
+    ui.button(tr!("tool-use-library"))
+        .on_hover_hint(tr!("tool-use-library.tooltip"))
+        .clicked()
 }
 
 /// What a drag knife form says of its tool, in place of a bit's size and pass: a knife
@@ -38,6 +70,7 @@ pub(super) fn tool_picker(
     let picked = serde_json::from_value::<Tool>(tool.clone())
         .ok()
         .filter(|_| !current.is_empty());
+    let mut use_library = false;
     match &picked {
         Some(tool) => {
             // The Passes: how many the cut depth takes, as set in Edit Passes
@@ -68,11 +101,14 @@ pub(super) fn tool_picker(
             if surfacing::wants_surfacing_bit(top, tool) {
                 ui.weak(surfacing::NOT_A_SURFACING_BIT);
             }
-            if tools.get(current).is_none() {
-                ui.colored_label(
-                    ui.visuals().warn_fg_color,
-                    t!("Not in the Bit Library: Select… one, or add it there"),
-                );
+            match tools.get(current) {
+                None => {
+                    ui.colored_label(
+                        ui.visuals().warn_fg_color,
+                        t!("Not in the Bit Library: Select… one, or add it there"),
+                    );
+                }
+                Some(listed) => use_library = not_the_library_bit(ui, tool, listed, units),
             }
         }
         None => {
@@ -103,6 +139,7 @@ pub(super) fn tool_picker(
         }
     })
     .inner
+    .or(use_library.then_some(ToolAsk::UseLibrary))
 }
 
 /// How tall the picture of a form's bit is, beside its name.

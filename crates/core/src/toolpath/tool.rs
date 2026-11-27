@@ -42,6 +42,10 @@ impl ToolShape {
     }
 }
 
+/// One size two bits are compared by in [`Tool::shape_differences`]: its name, each bit's,
+/// whether it is compared for this bit type, and how it is written.
+type Size<'a> = (&'static str, f64, f64, bool, &'a dyn Fn(f64) -> String);
+
 /// The units a bit's feed and plunge rates are shown in. Rates are kept
 /// in mm/min whatever the tool shows them in.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -495,6 +499,82 @@ impl Tool {
                     .find(|m| MaterialClass::of(&m.material) == Some(class))
             })
         })
+    }
+
+    /// How `self`'s shape differs from `other`'s, each as "diameter 6 mm here, 6.35 mm" in
+    /// `units`: its bit type, then each size that sets the cut it makes. Empty when they cut
+    /// the same, whatever their names, numbers, feeds or speeds. A length one of them was
+    /// saved without (0, as flute lengths were before they were kept) is not a difference.
+    #[must_use]
+    pub fn shape_differences(&self, other: &Tool, units: crate::document::Units) -> Vec<String> {
+        /// Sizes closer than this, mm or degrees, are the same: a size typed in inches and
+        /// kept in millimetres comes back the same
+        const SAME: f64 = 1e-3;
+        let kind = |t: &Tool| crate::tool_names::expand("{Bit Type}", t, "", "");
+        if self.shape != other.shape {
+            return vec![format!("{} here, {}", kind(self), kind(other))];
+        }
+        let length = |mm: f64| match units {
+            crate::document::Units::Mm => {
+                let text = format!("{mm:.3}");
+                format!("{} mm", text.trim_end_matches('0').trim_end_matches('.'))
+            }
+            crate::document::Units::Inch => units.length(mm, 1),
+        };
+        let angle = |deg: f64| {
+            let text = format!("{deg:.2}");
+            format!("{}°", text.trim_end_matches('0').trim_end_matches('.'))
+        };
+        let v = self.shape == ToolShape::VBit;
+        let thread = self.shape == ToolShape::ThreadMill;
+        let sizes: [Size; 8] = [
+            ("diameter", self.diameter, other.diameter, true, &length),
+            ("angle", self.angle, other.angle, v || thread, &angle),
+            (
+                "tip radius",
+                self.tip_radius,
+                other.tip_radius,
+                self.shape == ToolShape::RadiusedEndMill,
+                &length,
+            ),
+            ("taper", self.taper, other.taper, true, &angle),
+            (
+                "flute length",
+                self.flute_length,
+                other.flute_length,
+                self.flute_length > 0.0 && other.flute_length > 0.0,
+                &length,
+            ),
+            (
+                "shank",
+                self.shank_diameter,
+                other.shank_diameter,
+                self.shank_diameter > 0.0 && other.shank_diameter > 0.0,
+                &length,
+            ),
+            ("tooth", self.tooth_size, other.tooth_size, thread, &length),
+            (
+                "tooth offset",
+                self.tooth_offset,
+                other.tooth_offset,
+                thread,
+                &length,
+            ),
+        ];
+        let mut said: Vec<String> = sizes
+            .iter()
+            .filter(|(_, ours, theirs, compared, _)| *compared && (ours - theirs).abs() > SAME)
+            .map(|(what, ours, theirs, _, shown)| {
+                format!("{what} {} here, {}", shown(*ours), shown(*theirs))
+            })
+            .collect();
+        let same_form = self.form.len() == other.form.len()
+            && (self.form.iter().zip(&other.form))
+                .all(|(a, b)| (a[0] - b[0]).abs() <= SAME && (a[1] - b[1]).abs() <= SAME);
+        if self.shape == ToolShape::FormTool && !same_form {
+            said.push("another form".to_owned());
+        }
+        said
     }
 
     /// A thread mill's tooth height (H): its size and angle make a triangle, so this

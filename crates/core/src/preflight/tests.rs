@@ -1219,3 +1219,147 @@ fn cutting_after_the_centre_stock_is_cut_away_is_warned() {
     assert!(found[0].contains("Details"), "{}", found[0]);
     assert!(said(&[&after, &away]).is_empty(), "last: nothing to say");
 }
+
+/// A bit with the same name as `tool()` but 1/4" across, as another computer's Bit Library
+/// might have it.
+fn quarter_inch_bit() -> Tool {
+    Tool {
+        diameter: 6.35,
+        ..tool()
+    }
+}
+
+#[test]
+fn a_bit_shaped_unlike_the_bit_library_one_of_its_name_is_called_out() {
+    let slot = slot("Slot", 50.0, 20.0, 180.0, 3.0);
+    let found = check(&job(), &[&slot], &with_library(vec![quarter_inch_bit()]));
+    let shapes: Vec<&Finding> = found
+        .iter()
+        .filter(|f| f.check == Check::BitShapes)
+        .collect();
+    assert_eq!(shapes.len(), 1, "{found:?}");
+    assert_eq!(
+        shapes[0].severity,
+        Severity::Warning,
+        "no tool changer picks it"
+    );
+    let message = &shapes[0].message;
+    assert!(message.contains("Slot"), "{message}");
+    assert!(
+        message.contains("diameter 6 mm here, 6.35 mm in the library"),
+        "{message}"
+    );
+    assert!(message.contains("Select…"), "{message}");
+    // the same shape: nothing to say, whatever its feeds
+    let faster = Tool {
+        feed_rate: 3000.0,
+        ..tool()
+    };
+    let found = check(&job(), &[&slot], &with_library(vec![faster]));
+    assert!(!checks_of(&found).contains(&Check::BitShapes), "{found:?}");
+    // a size the job's copy was saved without is not a difference
+    let older = Toolpath {
+        tool: Tool {
+            flute_length: 0.0,
+            ..tool()
+        },
+        ..slot.clone()
+    };
+    let found = check(&job(), &[&older], &with_library(vec![tool()]));
+    assert!(!checks_of(&found).contains(&Check::BitShapes), "{found:?}");
+}
+
+#[test]
+fn a_tool_changer_holding_a_different_bit_of_the_same_name_must_be_decided() {
+    let slot = slot("Slot", 50.0, 20.0, 180.0, 3.0);
+    let limits = Limits {
+        slots: vec![None, None, Some("6 mm End Mill".into())],
+        ..with_library(vec![quarter_inch_bit()])
+    };
+    let found = check(&job(), &[&slot], &limits);
+    let shapes: Vec<&Finding> = found
+        .iter()
+        .filter(|f| f.check == Check::BitShapes)
+        .collect();
+    assert_eq!(shapes.len(), 1, "{found:?}");
+    assert_eq!(shapes[0].severity, Severity::Error, "{found:?}");
+    assert!(shapes[0].message.contains("T3"), "{}", shapes[0].message);
+}
+
+#[test]
+fn two_toolpaths_with_different_bits_of_one_name_are_called_out() {
+    let first = slot("Rough", 50.0, 20.0, 180.0, 3.0);
+    let second = Toolpath {
+        tool: quarter_inch_bit(),
+        ..slot("Finish", 80.0, 20.0, 180.0, 3.0)
+    };
+    let found = check(&job(), &[&first, &second], &Limits::default());
+    let shapes: Vec<&Finding> = found
+        .iter()
+        .filter(|f| f.check == Check::BitShapes)
+        .collect();
+    assert_eq!(shapes.len(), 1, "{found:?}");
+    assert_eq!(
+        shapes[0].severity,
+        Severity::Error,
+        "no bit change is written"
+    );
+    let message = &shapes[0].message;
+    assert!(
+        message.contains("Rough") && message.contains("Finish"),
+        "{message}"
+    );
+    assert!(message.contains("6 mm End Mill"), "{message}");
+    assert!(
+        message.contains("diameter 6 mm in Rough, 6.35 mm in Finish"),
+        "{message}"
+    );
+    // the same bit twice: nothing to say
+    let again = slot("Again", 80.0, 20.0, 180.0, 3.0);
+    let found = check(&job(), &[&first, &again], &Limits::default());
+    assert!(!checks_of(&found).contains(&Check::BitShapes), "{found:?}");
+}
+
+#[test]
+fn bits_differ_by_shape_not_by_name_feeds_or_number() {
+    let units = crate::document::Units::Mm;
+    assert_eq!(
+        tool().shape_differences(&tool(), units),
+        Vec::<String>::new()
+    );
+    let other = Tool {
+        name: "Another".into(),
+        number: 4,
+        feed_rate: 1.0,
+        spindle_speed: 1.0,
+        ..tool()
+    };
+    assert_eq!(
+        tool().shape_differences(&other, units),
+        Vec::<String>::new()
+    );
+    let v = Tool {
+        shape: crate::toolpath::ToolShape::VBit,
+        angle: 60.0,
+        ..tool()
+    };
+    let said = tool().shape_differences(&v, units);
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(
+        said[0].contains("End Mill") && said[0].contains("V-Bit"),
+        "{said:?}"
+    );
+    let wider = Tool {
+        angle: 90.0,
+        ..v.clone()
+    };
+    assert_eq!(
+        v.shape_differences(&wider, units),
+        ["angle 60° here, 90°".to_owned()]
+    );
+    let inches = crate::document::Units::Inch;
+    assert_eq!(
+        tool().shape_differences(&quarter_inch_bit(), inches),
+        ["diameter 0.236 in here, 0.250 in".to_owned()]
+    );
+}

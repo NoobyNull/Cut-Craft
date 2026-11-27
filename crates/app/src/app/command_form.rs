@@ -152,6 +152,14 @@ impl CutCraftApp {
             match ask {
                 super::ToolAsk::Select => self.select_tool(name.as_deref().unwrap_or_default()),
                 super::ToolAsk::Edit => self.edit_tool(ui.ctx(), name),
+                super::ToolAsk::UseLibrary => {
+                    if let Some(name) = name {
+                        self.choose_tool(&name);
+                        if let Some(form) = &mut self.form {
+                            form.dirty = true;
+                        }
+                    }
+                }
             }
         }
         if let Some((which, ask)) = list_ask.into_inner() {
