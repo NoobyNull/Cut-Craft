@@ -157,9 +157,15 @@ impl View {
 
     /// The tool as big as fits `draw`, inside `rect`, standing on `draw`'s foot.
     fn within(rect: egui::Rect, draw: egui::Rect, shape: &Outline) -> Self {
+        Self::showing(rect, draw, shape, shape.top)
+    }
+
+    /// [`Self::within`] showing the tool up to `height` mm above its tip, the rest cut off
+    /// at the top.
+    fn showing(rect: egui::Rect, draw: egui::Rect, shape: &Outline, height: f64) -> Self {
         let widest = shape.radius.max(shape.shank_radius);
         #[expect(clippy::cast_possible_truncation, reason = "a scale in points")]
-        let scale = (f64::from(draw.height()) / shape.top)
+        let scale = (f64::from(draw.height()) / height)
             .min(f64::from(draw.width()) / (2.0 * widest)) as f32;
         Self {
             rect,
@@ -204,9 +210,14 @@ pub fn editor(ui: &mut egui::Ui, tool: &mut Tool) -> bool {
 /// How wide a [`picture`] is for its height: room for most bits' shank and flutes side by
 /// side.
 pub const PICTURE_ASPECT: f32 = 0.6;
+/// A [`picture`] at least this tall shows the whole bit; a smaller one shows its cutting
+/// end close up (two diameters of it, or its whole cutting edge), the shank going on out of
+/// the top, so its shape reads at a glance.
+const WHOLE_PICTURE: f32 = 120.0;
 
 /// The tool `height` points tall, to scale and with no sizes, as a toolpath form shows the
-/// bit it picked: the cutting part shaded, the shank grey, guessed sizes dashed. `None` for
+/// bit it picked: the cutting part shaded, the shank grey, guessed sizes dashed; small, only
+/// its cutting end ([`WHOLE_PICTURE`]). `None` for
 /// a tool with no diameter, or a laser, which has no shape to draw.
 pub fn picture(ui: &mut egui::Ui, tool: &Tool, height: f32) -> Option<egui::Response> {
     if tool.shape == ToolShape::Laser {
@@ -217,7 +228,15 @@ pub fn picture(ui: &mut egui::Ui, tool: &Tool, height: f32) -> Option<egui::Resp
         egui::vec2(height * PICTURE_ASPECT, height),
         egui::Sense::hover(),
     );
-    let view = View::within(rect, rect.shrink(2.0), &shape);
+    let draw = rect.shrink(2.0);
+    let view = if height >= WHOLE_PICTURE {
+        View::within(rect, draw, &shape)
+    } else {
+        // how high the cutting edge's shape goes: a V-bit's cone, a ball's round end
+        let edge = tool.profile(tool.reach()).unwrap_or(0.0);
+        let close = edge.max(2.0 * tool.diameter).min(shape.top);
+        View::showing(rect, draw, &shape, close)
+    };
     paint(ui, &view, &shape);
     Some(response)
 }
