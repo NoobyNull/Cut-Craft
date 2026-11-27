@@ -59,21 +59,28 @@ fn with_vector_start_points_the_first_pass_starts_by_the_vectors_start() {
         ],
         true,
     );
-    let start = |use_vector_start_points| {
+    let start = |style| {
         let t = carve(
             vec![path.clone()],
             &Params {
-                use_vector_start_points,
+                use_vector_start_points: true,
+                style,
                 ..Params::default()
             },
         );
         let m = t.moves.iter().find(|m| m.kind != MoveKind::Rapid).unwrap();
         Point::new(m.to.x, m.to.y)
     };
+    let corner = Point::new(20.0, 20.0);
+    // light passes start down the centre line, from the corner itself
+    let light = start(Style::LightPasses);
+    assert!(light.distance(corner) < 1.0, "{light}");
+    // staying down starts at the corner of the first pass's floor, the nearest it cuts
+    let down = start(Style::StayDown);
+    let reach = 6.35 / 2.0;
     assert!(
-        start(true).distance(Point::new(20.0, 20.0)) < 1.0,
-        "{}",
-        start(true)
+        (down.x - down.y).abs() < 1e-6 && down.distance(corner) < reach * 2.0,
+        "{down}"
     );
 }
 
@@ -307,7 +314,10 @@ fn corners_are_carved_sharp() {
 
 #[test]
 fn no_cut_goes_more_than_a_pass_depth_below_what_is_cut_already() {
-    let mut p = Params::default();
+    let mut p = Params {
+        style: Style::LightPasses,
+        ..Params::default()
+    };
     p.tool.angle = 60.0;
     p.tool.pass_depth = 2.0;
     let t = carve(vec![rectangle(40.0, 10.0)], &p);
@@ -812,4 +822,33 @@ fn it_needs_a_v_bit_and_closed_vectors() {
     let open = Path::polyline(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0)], false);
     let why = made_toolpath::<VcarveEngraveToolpath>(vec![open], &Params::default()).unwrap_err();
     assert!(why.contains("closed"), "{why}");
+}
+
+/// The notes Fill leaves on the form for `paths`.
+fn notes_for(paths: Vec<Path>, p: &Params) -> Vec<String> {
+    let doc = cut_craft_core::testing::document_with(paths);
+    VcarveEngraveToolpath::run(&doc, p).unwrap().notes
+}
+
+#[test]
+fn a_shape_wider_than_the_bit_can_carve_to_a_point_says_so() {
+    // the default 1/2" 90° bit is 6.35 mm tall: a 30 mm wide strip needs 15
+    let p = Params::default();
+    let notes = notes_for(vec![rectangle(60.0, 30.0)], &p);
+    assert_eq!(notes.len(), 1, "{notes:?}");
+    assert!(notes[0].contains("6.35"), "its V's height: {}", notes[0]);
+    assert!(notes[0].contains("Clearance Bits"), "{}", notes[0]);
+    // narrow enough to carve to a point, a flat bottom asked for, or cleared by end mills
+    assert_eq!(
+        notes_for(vec![rectangle(60.0, 10.0)], &p),
+        Vec::<String>::new()
+    );
+    let flat = Params {
+        flat_depth: 2.0,
+        ..Params::default()
+    };
+    assert_eq!(
+        notes_for(vec![rectangle(60.0, 30.0)], &flat),
+        Vec::<String>::new()
+    );
 }

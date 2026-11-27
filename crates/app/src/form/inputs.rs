@@ -159,7 +159,7 @@ pub(super) fn choose(
                     .find(|o| o.value == shown)
                     .and_then(|o| o.help.as_ref())
                 {
-                    ui.weak(help);
+                    ui.weak(flowed(help));
                 }
                 picked
             })
@@ -192,6 +192,15 @@ pub(super) fn choose(
         }
         _ => hidden,
     }
+}
+
+/// `text` as one paragraph to wrap to the room there is: the line breaks of the source's
+/// comments are not kept, a blank line still starts a new paragraph.
+pub(super) fn flowed(text: &str) -> String {
+    text.split("\n\n")
+        .map(|p| p.split_whitespace().collect::<Vec<_>>().join(" "))
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 /// A picture button an option, side by side, the chosen one pressed; an option with no
