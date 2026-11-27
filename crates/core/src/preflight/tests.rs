@@ -1323,7 +1323,10 @@ fn two_toolpaths_with_different_bits_of_one_name_are_called_out() {
 #[test]
 fn bits_differ_by_shape_not_by_name_feeds_or_number() {
     let units = crate::document::Units::Mm;
-    assert!(tool().shape_differences(&tool(), units).is_empty());
+    assert_eq!(
+        tool().shape_differences(&tool(), units),
+        Vec::<String>::new()
+    );
     let other = Tool {
         name: "Another".into(),
         number: 4,
@@ -1331,7 +1334,10 @@ fn bits_differ_by_shape_not_by_name_feeds_or_number() {
         spindle_speed: 1.0,
         ..tool()
     };
-    assert!(tool().shape_differences(&other, units).is_empty());
+    assert_eq!(
+        tool().shape_differences(&other, units),
+        Vec::<String>::new()
+    );
     let v = Tool {
         shape: crate::toolpath::ToolShape::VBit,
         angle: 60.0,

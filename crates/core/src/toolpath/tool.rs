@@ -42,6 +42,10 @@ impl ToolShape {
     }
 }
 
+/// One size two bits are compared by in [`Tool::shape_differences`]: its name, each bit's,
+/// whether it is compared for this bit type, and how it is written.
+type Size<'a> = (&'static str, f64, f64, bool, &'a dyn Fn(f64) -> String);
+
 /// The units a bit's feed and plunge rates are shown in. Rates are kept
 /// in mm/min whatever the tool shows them in.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -523,7 +527,7 @@ impl Tool {
         };
         let v = self.shape == ToolShape::VBit;
         let thread = self.shape == ToolShape::ThreadMill;
-        let sizes: [(&str, f64, f64, bool, &dyn Fn(f64) -> String); 8] = [
+        let sizes: [Size; 8] = [
             ("diameter", self.diameter, other.diameter, true, &length),
             ("angle", self.angle, other.angle, v || thread, &angle),
             (
