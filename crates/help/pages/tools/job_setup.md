@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-28
 see-also: setup_material, material_setup, settings, draw_rectangle, rotary_firmware, check_rotary_setup, rotary_machining_toolpath, view_2d
 ---
 
@@ -59,7 +59,7 @@ Choose **Rotary** under **Job Type** to carve material turned by a 4th axis (see
    The size's name changes with the shape you pick. Whatever its name, it is the
    material's size straight up through the axis at A=0.
 
-   ![Round, square and board seen down the axis: D straight up through the axis, and the circle each swings through](pictures/job_setup/rotary_shapes.png)
+   ![Round, square and board seen down the axis: D straight up through the axis, and the circle each swings through](pictures/job_setup/rotary_shapes.svg)
 
 3. Pick the **Orientation**: whether the axis runs along X or along Y.
 4. Pick where **Z zero** is: **Material Top** (touch the bit off on the top of the
@@ -83,7 +83,7 @@ a shaded band past each seam showing what wraps round from the other side. See
 A long or thin part, such as a figure lying along the axis, can flex or snap off part way
 through when everything round it is cut away. Two settings keep it held:
 
-![Left: the part kept joined at the chuck end and held at the head by centre stock. Right: the last toolpath cuts the centre stock away, and the chuck end still holds the part, ready to saw off flat](pictures/job_setup/holding-the-part.png)
+![Left: the part kept joined at the chuck end and held at the head by centre stock. Right: the last toolpath cuts the centre stock away, and the chuck end still holds the part, ready to saw off flat](pictures/job_setup/holding-the-part.svg)
 
 - **Keep Joined At**: the end (or ends) of the material the part stays joined to. Past the
   model at that end the material is left whole, so that end of the model comes out as a flat

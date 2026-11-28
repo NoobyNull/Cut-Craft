@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-28
 see-also: checks_before_cutting, check_generic_tool, check_machine_speeds
 ---
 
 # Feeds and speeds as the maker gives
 
-![A feed rate changed from the maker's figure](pictures/checks/makers-figures.png)
+![A feed rate changed from the maker's figure](pictures/checks/makers-figures.svg)
 
 ## What it looks for
 

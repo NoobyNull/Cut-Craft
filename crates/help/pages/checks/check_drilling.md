@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-28
 see-also: checks_before_cutting, check_plunges
 ---
 
 # Drills and holes
 
-![A drill used for a profile, and holes the wrong size](pictures/checks/drilling.png)
+![A drill used for a profile, and holes the wrong size](pictures/checks/drilling.svg)
 
 ## What it looks for
 

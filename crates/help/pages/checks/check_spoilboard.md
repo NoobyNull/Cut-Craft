@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-28
 see-also: checks_before_cutting, check_reach, protect_the_machine
 ---
 
 # Not cutting into the spoilboard
 
-![A cut going well below the material](pictures/checks/spoilboard.png)
+![A cut going well below the material](pictures/checks/spoilboard.svg)
 
 ## What it looks for
 

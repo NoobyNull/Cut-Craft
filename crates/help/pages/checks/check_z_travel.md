@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-28
 see-also: checks_before_cutting, check_bed, protect_the_machine
 ---
 
 # Fits the Z axis travel
 
-![From the clearance height down to the deepest cut](pictures/checks/z-travel.png)
+![From the clearance height down to the deepest cut](pictures/checks/z-travel.svg)
 
 ## What it looks for
 

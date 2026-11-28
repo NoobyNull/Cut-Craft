@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-28
 see-also: checks_before_cutting, tabs
 ---
 
 # Cut-out parts held down
 
-![Tabs holding a part as it is cut out](pictures/checks/loose-parts.png)
+![Tabs holding a part as it is cut out](pictures/checks/loose-parts.svg)
 
 ## What it looks for
 

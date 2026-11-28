@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-28
 see-also: checks_before_cutting, check_rapids
 ---
 
 # Not cutting air
 
-![A second pass over a pocket already cleared](pictures/checks/air-cutting.png)
+![A second pass over a pocket already cleared](pictures/checks/air-cutting.svg)
 
 ## What it looks for
 

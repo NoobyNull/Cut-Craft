@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-28
 see-also: checks_before_cutting, check_bed
 ---
 
 # Stays on the material
 
-![Copies running off the edge of the material](pictures/checks/on-material.png)
+![Copies running off the edge of the material](pictures/checks/on-material.svg)
 
 ## What it looks for
 

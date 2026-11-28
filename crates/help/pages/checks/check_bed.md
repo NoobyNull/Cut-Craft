@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-28
 see-also: checks_before_cutting, check_z_travel, protect_the_machine
 ---
 
 # Fits on the machine's bed
 
-![Toolpaths wider than the bed](pictures/checks/bed.png)
+![Toolpaths wider than the bed](pictures/checks/bed.svg)
 
 ## What it looks for
 

@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-28
 see-also: checks_before_cutting
 ---
 
 # Settings that can cut
 
-![A toolpath with no feed rate cannot move](pictures/checks/can-cut.png)
+![A toolpath with no feed rate cannot move](pictures/checks/can-cut.svg)
 
 ## What it looks for
 

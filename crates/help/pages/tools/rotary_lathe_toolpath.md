@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-28
 see-also: rotary_roughing_toolpath, rotary_finishing_toolpath, rotary_machining_toolpath, orientate_3d_model, rounding_toolpath, rotary_firmware, job_setup, collisions, save_toolpaths
 ---
 
@@ -44,7 +44,7 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
 
 ## What it does
 
-![Face, Turn and Part off, seen from the side](pictures/rotary_lathe_toolpath/operations.png)
+![Face, Turn and Part off, seen from the side](pictures/rotary_lathe_toolpath/operations.svg)
 
 - **Face** takes everything between **Start** and **End** down to the **Holding stub**: the
   waste at an end of the material, or room beside the part so the collet nut can get down to

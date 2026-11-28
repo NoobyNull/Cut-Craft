@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-28
 see-also: checks_before_cutting, check_drilling
 ---
 
 # Going down into the material
 
-![A ramp in, and a straight plunge](pictures/checks/plunges.png)
+![A ramp in, and a straight plunge](pictures/checks/plunges.svg)
 
 ## What it looks for
 
