@@ -159,11 +159,11 @@ boxes to tick):
   by a personal account). Without it the workflow warns and skips. When the token expires,
   make a new one the same way and replace the secret under Settings > Secrets and variables >
   Actions.
-- **The release mirror.** Power-Whittle/PowerWhittle is a read-only copy for releases. Once the
-  release workflow's mirror step lands (it pushes each release's tag and `main` there and adds
-  the same files), never commit to the mirror's `main` by hand: the next release could no longer
-  push `main` there. Change its description, rulesets or settings when a
-  change here makes them wrong (for example a new release step or a renamed branch).
+- **The repository's home.** This repository is Power-Whittle/PowerWhittle; it moved there
+  from NoobyNull/Cut-Craft, which GitHub forwards. Never create a repository named
+  NoobyNull/Cut-Craft: it would end the forwarding that older installs rely on for updates.
+  The release-only copy that came before the move is archived as
+  Power-Whittle/PowerWhittle-old-mirror.
 - **The add-ons and the org.** When a change touches where add-ons, updates or links point
   (the updater's homes, add-on repositories, links shown in the app), check the matching
   Power-Whittle repository and the organisation settings still agree.

@@ -42,7 +42,7 @@ pub(super) const CARVE_AREA_ALPHA: f32 = 0.35;
 pub(super) const RING_SHARE: f64 = 0.6;
 
 /// Where every Report a Bug Here… goes: PowerWhittle's own repository.
-pub(super) const BUG_REPO: &str = "NoobyNull/Cut-Craft";
+pub(super) const BUG_REPO: &str = "Power-Whittle/PowerWhittle";
 /// PowerWhittle's crash-report service, where the crash logs of people who said yes go: a
 /// Cloudflare Worker that groups them by cause for the maintainer and clears them out once
 /// dealt with (`services/crash-reports`).
@@ -279,13 +279,13 @@ pub(super) const WHATS_NEW: &str = include_str!("../../whats-new.md");
 pub(super) const CONTRIBUTORS: &str = include_str!("../../contributors.tsv");
 /// Machine ▸ Search for Machine Online: the machine packages in PowerWhittle's repository.
 pub(super) const MACHINES_ONLINE: &str =
-    "https://github.com/NoobyNull/Cut-Craft/tree/main/machines";
+    "https://github.com/Power-Whittle/PowerWhittle/tree/main/machines";
 /// Where PowerWhittle is found online, in Help ▸ Community (GitHub on the start page too): label,
 /// address and icon (the social ones are placeholders: each site's home page).
 pub(crate) const LINKS: [(&str, &str, &str); 7] = [
     (
         "GitHub",
-        "https://github.com/NoobyNull/cut-craft",
+        "https://github.com/Power-Whittle/PowerWhittle",
         "file/github_link.png",
     ),
     (

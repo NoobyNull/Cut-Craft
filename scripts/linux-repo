@@ -13,7 +13,7 @@ set -euo pipefail
 packages=$1
 site=$2
 key=${REPO_KEY_ID:?REPO_KEY_ID names the signing key}
-base=${BASE_URL:-https://noobynull.github.io/Cut-Craft}
+base=${BASE_URL:-https://power-whittle.github.io/PowerWhittle}
 rm -rf "$site"
 mkdir -p "$site/apt/pool/main" "$site/apt/dists/stable/main/binary-amd64" "$site/rpm"
 gpg --batch --export "$key" >"$site/cut-craft.gpg"
@@ -74,7 +74,7 @@ sudo zypper install powerwhittle</pre>
 <h2>Arch, CachyOS, Manjaro</h2>
 <pre>paru -S cut-craft-bin    # or: yay -S cut-craft-bin</pre>
 <p>Cut Craft is free for people and one-person businesses, even to make things to sell, under the PolyForm Strict 1.0.0 licence with an extra permission (see its LICENSE).
-<a href="https://github.com/NoobyNull/Cut-Craft">Source and releases</a>.</p>
+<a href="https://github.com/Power-Whittle/PowerWhittle">Source and releases</a>.</p>
 </body></html>
 HTML
 echo "$site: $(ls "$site"/apt/pool/main | wc -l) .deb, $(ls "$site"/rpm/*.rpm | wc -l) .rpm"

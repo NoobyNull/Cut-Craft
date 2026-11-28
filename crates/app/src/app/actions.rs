@@ -821,7 +821,7 @@ fn about(ui: &mut egui::Ui) -> bool {
     ui.label(LICENCE_SUMMARY);
     ui.hyperlink_to(
         tr!("about-read-license"),
-        "https://github.com/NoobyNull/Cut-Craft/blob/main/LICENSE",
+        "https://github.com/Power-Whittle/PowerWhittle/blob/main/LICENSE",
     );
     ui.separator();
     ui.strong(tr!("about-acknowledgements"));

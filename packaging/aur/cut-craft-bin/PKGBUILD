@@ -9,7 +9,7 @@ pkgver=0.6.5
 pkgrel=1
 pkgdesc='Design in 2D and 3D and make CNC router toolpaths'
 arch=('x86_64')
-url='https://github.com/NoobyNull/Cut-Craft'
+url='https://github.com/Power-Whittle/PowerWhittle'
 # PolyForm Strict 1.0.0 with Cut Craft's own additional permission (see LICENSE)
 license=('LicenseRef-Cut-Craft')
 # the window's libraries are loaded while it opens, so they are named here, not linked
@@ -22,7 +22,7 @@ provides=("$_pkgname")
 conflicts=("$_pkgname")
 options=('!strip' '!debug')
 _tarball="$_pkgname-$pkgver-linux-$CARCH.tar.gz"
-_raw="https://raw.githubusercontent.com/NoobyNull/Cut-Craft/v$pkgver"
+_raw="https://raw.githubusercontent.com/Power-Whittle/PowerWhittle/v$pkgver"
 source=("$url/releases/download/v$pkgver/$_tarball"
         "$url/releases/download/v$pkgver/$_tarball.minisig"
         "family.yax.CutCraft-$pkgver.desktop::$_raw/packaging/linux/family.yax.CutCraft.desktop"

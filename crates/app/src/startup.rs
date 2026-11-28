@@ -236,7 +236,7 @@ pub fn failure_message(failure: &str) -> String {
         ),
         None => format!(
             "PowerWhittle couldn't open its window.\n\nWhat the system said:\n{}\n\nIf this \
-             keeps happening, please report it at github.com/NoobyNull/Cut-Craft/issues \
+             keeps happening, please report it at github.com/Power-Whittle/PowerWhittle/issues \
              with the text above.",
             failure.trim()
         ),

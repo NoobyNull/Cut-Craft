@@ -106,9 +106,9 @@ test('turning a crash into a GitHub issue deletes its logs and stops keeping new
   await post(e, report(), at('2026-11-12T10:00:00Z'));
   const bad = await admin(e, 'POST', '/admin/api/crashes/sig-aaaaaaaa/issue', { url: 'https://example.com/x' });
   assert.equal(bad.status, 400);
-  const r = await admin(e, 'POST', '/admin/api/crashes/sig-aaaaaaaa/issue', { url: 'https://github.com/NoobyNull/Cut-Craft/issues/300' });
+  const r = await admin(e, 'POST', '/admin/api/crashes/sig-aaaaaaaa/issue', { url: 'https://github.com/Power-Whittle/PowerWhittle/issues/300' });
   assert.equal(r.status, 200);
-  assert.equal((await r.json()).issue_url, 'https://github.com/NoobyNull/Cut-Craft/issues/300');
+  assert.equal((await r.json()).issue_url, 'https://github.com/Power-Whittle/PowerWhittle/issues/300');
   await post(e, report(), at('2026-11-12T12:00:00Z'));
   assert.equal(rows(e, 'SELECT * FROM samples').length, 0);
   assert.equal(rows(e, 'SELECT count, status FROM crashes')[0].count, 2);

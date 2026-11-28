@@ -48,7 +48,7 @@ its front page.
 1. **AUR:** make an account at <https://aur.archlinux.org/register>, then
    `ssh-keygen -t ed25519 -f ~/.ssh/aur -C cut-craft-aur` and paste `~/.ssh/aur.pub` into
    *My Account ▸ SSH Public Key*. Store the private key: `gh secret set AUR_SSH_KEY -R
-   NoobyNull/Cut-Craft < ~/.ssh/aur`. Put your AUR name in the PKGBUILD's `# Maintainer:` line.
+   Power-Whittle/PowerWhittle < ~/.ssh/aur`. Put your AUR name in the PKGBUILD's `# Maintainer:` line.
 2. **apt and dnf:** run `scripts/make-repo-key` (it makes the key and stores the secret), then
    Settings ▸ Pages ▸ Source: **GitHub Actions**.
 3. Set `PUBLISH_AUR` and `PUBLISH_LINUX_REPOS` to `true`, and run each workflow once from the

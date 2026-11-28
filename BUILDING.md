@@ -37,11 +37,11 @@ Do this once on a new machine or a fresh clone.
 
    ```text
    gitea   https://git.yax.family/matthew/cut-craft.git (push)
-   origin  git@github.com:NoobyNull/cut-craft.git (push)
+   origin  git@github.com:Power-Whittle/PowerWhittle.git (push)
    ```
 
-   GitHub has renamed the repository to `Cut-Craft` and forwards the old address, so either
-   spelling works.
+   The repository moved from `NoobyNull/Cut-Craft` to `Power-Whittle/PowerWhittle`; GitHub
+   forwards the old address, so a clone that still uses it works.
 
    If `gitea` is missing, add it:
 
@@ -235,7 +235,7 @@ Two rulesets (Settings → Rules → Rulesets) guard the GitHub repository:
 - **A push is refused with "fetch first".** Someone pushed first. Run
   `git pull --rebase origin main`, then push again.
 - **GitHub says "This repository moved".** Point `origin` at the new address:
-  `git remote set-url origin git@github.com:NoobyNull/Cut-Craft.git`.
+  `git remote set-url origin git@github.com:Power-Whittle/PowerWhittle.git`.
 - **A release came out wrong.** Its tag can't be moved or deleted. Fix it on `main` and cut the
   next version (`scripts/release-version`, above).
 - **A version merged but no release appeared.** Open Actions → **Release tag** and read the run

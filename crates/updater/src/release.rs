@@ -132,7 +132,7 @@ mod tests {
 
     const V043: &str = r#"{
         "tag_name": "v0.4.3", "draft": false, "prerelease": false,
-        "html_url": "https://github.com/NoobyNull/Cut-Craft/releases/tag/v0.4.3",
+        "html_url": "https://github.com/Power-Whittle/PowerWhittle/releases/tag/v0.4.3",
         "body": "  **Full Changelog**: v0.4.2...v0.4.3\n",
         "assets": [
             {"name": "cut-craft-v0.4.3-linux-x86_64.tar.gz", "size": 14704949,

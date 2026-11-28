@@ -18,7 +18,7 @@ Never name other CAD/CAM programs in anything a user sees (tests check this).
 
 ### Issue tracker
 
-Issues are tracked in GitHub Issues on `NoobyNull/Cut-Craft`. See `docs/agents/issue-tracker.md`.
+Issues are tracked in GitHub Issues on `Power-Whittle/PowerWhittle`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

@@ -97,7 +97,7 @@ pub fn files() -> Result<(Pack, Vec<File>), String> {
         3/4″ wood and glue, and a knight to cut from both sides as a first two-sided job. \
         Free to carve and sell (CC0)."
         .clone_into(&mut pack.description);
-    pack.homepage = Some("https://github.com/NoobyNull/Cut-Craft".to_owned());
+    pack.homepage = Some("https://github.com/Power-Whittle/PowerWhittle".to_owned());
     pack.items = files.iter().map(|f| f.item.clone()).collect();
     Ok((pack, files))
 }

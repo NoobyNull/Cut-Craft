@@ -64,7 +64,7 @@ jobs:
             printf '%s\n' "# Cut Craft language packs" "" \
               "Each release holds one language-<code>.zip per language, signed with Cut Craft's release key." \
               "Install one from Cut Craft: Gadgets > Add-ons > Languages. The packs are made from" \
-              "language-packs/ in NoobyNull/Cut-Craft; see docs/translating.md there to make one." > README.md
+              "language-packs/ in Power-Whittle/PowerWhittle; see docs/translating.md there to make one." > README.md
             gh api -X PUT "repos/$TRANSLATIONS_REPO/contents/README.md" \
               -f message="Start the language packs' repository" \
               -f content="$(base64 -w0 README.md)"
@@ -74,4 +74,4 @@ jobs:
           gh release create "v$version" out/* --repo "$TRANSLATIONS_REPO" \
             --target main \
             --title "Language packs $version" \
-            --notes "Language packs for Cut Craft 0.7.0 and later: $langs. Install one from Cut Craft: Gadgets > Add-ons > Languages, then pick it in Edit > Options > Language. Made from ${{ github.sha }} of NoobyNull/Cut-Craft."
+            --notes "Language packs for Cut Craft 0.7.0 and later: $langs. Install one from Cut Craft: Gadgets > Add-ons > Languages, then pick it in Edit > Options > Language. Made from ${{ github.sha }} of Power-Whittle/PowerWhittle."
