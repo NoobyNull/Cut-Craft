@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-24
+reviewed: 2026-11-28
 see-also: design, toolpaths, setup_material, finding_help, first_time_setup
 icon: file/new.png
 ---
@@ -36,7 +36,7 @@ In the [Ribbon layout](help:layout_ribbon) PowerWhittle starts in, these are the
 [Rail](help:layout_rail), [Canvas](help:layout_canvas) and [Classic](help:layout_classic) layouts group the same tools
 differently, but the two steps are the same.
 
-![In the Classic layout: Design down the left to draw, Toolpaths down the right to say how to cut it](pictures/basics/design_then_toolpaths.png)
+![In the Classic layout: Design down the left to draw, Toolpaths down the right to say how to cut it](pictures/basics/design_then_toolpaths.svg)
 
 ## Your own first job, step by step
 
@@ -55,7 +55,7 @@ differently, but the two steps are the same.
 
 ## Millimetres or inches
 
-![Switching units converts every measurement, so nothing changes size](pictures/basics/units.png)
+![Switching units converts every measurement, so nothing changes size](pictures/basics/units.svg)
 
 Work in whichever your rulers and bits use. **Edit ▸ Units ▸ Millimetres** or **Inches**
 switches the open job, and converts every measurement in it exactly, so nothing changes
@@ -64,7 +64,7 @@ also take the other units as you type: see [Number fields](help:number_fields).
 
 ## Made a mistake?
 
-![Ctrl+Z undoes the last change](pictures/basics/undo.png)
+![Ctrl+Z undoes the last change](pictures/basics/undo.svg)
 
 **Ctrl+Z** (**Edit ▸ Undo**) undoes the last change, as many times as you need.
 **Ctrl+Y** (**Edit ▸ Redo**) puts it back. Undo covers drawing, moving, deleting and

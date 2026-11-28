@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 224" width="448" height="224">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.8 L10,5 L0,8.2 Z" fill="#B0187E"/></marker><marker id="b" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.6 L10,5 L0,8.4 Z" fill="#3F6FB8"/></marker><marker id="g" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.5 L10,5 L0,8.5 Z" fill="#2E9E5B"/></marker><marker id="k" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.8 L10,5 L0,8.2 Z" fill="#9AA5B4"/></marker><marker id="r" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.5 L10,5 L0,8.5 Z" fill="#C0392B"/></marker></defs>
+  <rect x="0.5" y="0.5" width="447" height="223" rx="10" fill="#FBFAF7" stroke="#D9D4CC"/>
+  <rect x="40.0" y="30.0" width="180.0" height="150.0" rx="6" fill="#FFFFFF" stroke="#3F6FB8" stroke-width="1.6"/>
+  <path d="M40.0,48.0 L220.0,48.0" stroke="#3F6FB8" stroke-width="1.2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="40.0" y="30.0" width="40.0" height="150.0" rx="6" fill="#EEF2F8" stroke="#3F6FB8" stroke-width="1.6"/>
+  <circle cx="140.0" cy="90.0" r="26.0" fill="#FFFFFF" stroke="#3F6FB8" stroke-width="1.8"/>
+  <path d="M130.0,96.0 L130.0,122.0 L137.0,116.0 L142.0,127.0 L147.0,125.0 L142.0,114.0 L151.0,114.0 Z" stroke="#3F6FB8" stroke-width="1.6" fill="#FFFFFF" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="120.0" y="110.0" width="280.0" height="80.0" rx="6" fill="#FFFFFF" stroke="#3F6FB8" stroke-width="1.6"/>
+  <path d="M140.0,132.0 L380.0,132.0" stroke="#9AA5B4" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="136.0" y="148.0" width="248.0" height="30.0" rx="4" fill="#FBE6F2" stroke="#B0187E" stroke-width="1.6"/>
+  <circle cx="160.0" cy="163.0" r="9.0" fill="#FFFFFF" stroke="#B0187E" stroke-width="1.6"/>
+  <path d="M148.0,157.0 L152.0,157.0" stroke="#B0187E" stroke-width="1.4" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M148.0,163.0 L152.0,163.0" stroke="#B0187E" stroke-width="1.4" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M148.0,169.0 L152.0,169.0" stroke="#B0187E" stroke-width="1.4" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M168.0,157.0 L172.0,157.0" stroke="#B0187E" stroke-width="1.4" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M168.0,163.0 L172.0,163.0" stroke="#B0187E" stroke-width="1.4" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M168.0,169.0 L172.0,169.0" stroke="#B0187E" stroke-width="1.4" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M186.0,163.0 L370.0,163.0" stroke="#9AA5B4" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

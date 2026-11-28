@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 224" width="448" height="224">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.8 L10,5 L0,8.2 Z" fill="#B0187E"/></marker><marker id="b" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.6 L10,5 L0,8.4 Z" fill="#3F6FB8"/></marker><marker id="g" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.5 L10,5 L0,8.5 Z" fill="#2E9E5B"/></marker><marker id="k" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.8 L10,5 L0,8.2 Z" fill="#9AA5B4"/></marker><marker id="r" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.5 L10,5 L0,8.5 Z" fill="#C0392B"/></marker></defs>
+  <rect x="0.5" y="0.5" width="447" height="223" rx="10" fill="#FBFAF7" stroke="#D9D4CC"/>
+  <rect x="60.0" y="30.0" width="328.0" height="164.0" rx="6" fill="#FFFFFF" stroke="#3F6FB8" stroke-width="1.6"/>
+  <path d="M60.0,48.0 L388.0,48.0" stroke="#3F6FB8" stroke-width="1.2" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="72.0" y="56.0" width="10.0" height="10.0" rx="2" fill="#EEF2F8" stroke="#3F6FB8" stroke-width="1.6"/>
+  <rect x="72.0" y="76.0" width="10.0" height="10.0" rx="2" fill="#EEF2F8" stroke="#3F6FB8" stroke-width="1.6"/>
+  <rect x="72.0" y="96.0" width="10.0" height="10.0" rx="2" fill="#EEF2F8" stroke="#3F6FB8" stroke-width="1.6"/>
+  <rect x="72.0" y="116.0" width="10.0" height="10.0" rx="2" fill="#EEF2F8" stroke="#3F6FB8" stroke-width="1.6"/>
+  <rect x="72.0" y="136.0" width="10.0" height="10.0" rx="2" fill="#EEF2F8" stroke="#3F6FB8" stroke-width="1.6"/>
+  <rect x="72.0" y="156.0" width="10.0" height="10.0" rx="2" fill="#EEF2F8" stroke="#3F6FB8" stroke-width="1.6"/>
+  <path d="M92.0,64.0 L112.0,64.0" stroke="#3F6FB8" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M92.0,78.0 L112.0,78.0" stroke="#3F6FB8" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M92.0,92.0 L112.0,92.0" stroke="#3F6FB8" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M92.0,106.0 L112.0,106.0" stroke="#3F6FB8" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <rect x="352.0" y="56.0" width="22.0" height="8.0" rx="3" fill="#2E9E5B" stroke="#2E9E5B" stroke-width="1"/>
+  <rect x="352.0" y="74.0" width="22.0" height="8.0" rx="3" fill="#2E9E5B" stroke="#2E9E5B" stroke-width="1"/>
+  <rect x="352.0" y="92.0" width="22.0" height="8.0" rx="3" fill="#2E9E5B" stroke="#2E9E5B" stroke-width="1"/>
+  <rect x="352.0" y="110.0" width="22.0" height="8.0" rx="3" fill="#2E9E5B" stroke="#2E9E5B" stroke-width="1"/>
+  <circle cx="80.0" cy="178.0" r="4.0" fill="#B0187E" stroke="#B0187E" stroke-width="1.4"/>
+  <circle cx="98.0" cy="178.0" r="4.0" fill="#B0187E" stroke="#B0187E" stroke-width="1.4"/>
+  <circle cx="116.0" cy="178.0" r="4.0" fill="#B0187E" stroke="#B0187E" stroke-width="1.4"/>
+</svg>

@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-28
 see-also: guide_lines, settings, draw_polyline, keyboard_shortcuts
 icon: snapping/grid_snapping_on.png
 ---
@@ -11,7 +11,7 @@ point onto it: the end of a line, the middle of a line, the centre of a circle, 
 the material, a [guide line](help:guide_lines) or the grid. That pull is **snapping**. It
 makes shapes meet exactly, with no tiny gaps that spoil a toolpath.
 
-![The pointer snapping to the end of a line, and F4 for what it snaps to](pictures/basics/snapping.png)
+![The pointer snapping to the end of a line, and F4 for what it snaps to](pictures/basics/snapping.svg)
 
 ## What you see
 

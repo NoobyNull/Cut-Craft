@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-28
 see-also:
 ---
 
 # Design
 
-![Design down the left, where you draw; Toolpaths down the right, where you say how to cut it](pictures/basics/design_then_toolpaths.png)
+![Design down the left, where you draw; Toolpaths down the right, where you say how to cut it](pictures/basics/design_then_toolpaths.svg)
 
 The Design page, down the left, draws and edits vectors, then models them in 3D. Its side
 tabs: **Design** (these tools), **Sheets**, **Layers**, **Components** and **Library** (your own folders of models, pictures and drawings: pick a folder in the tree, or All folders, then double-click or drag one in; right-click for more).

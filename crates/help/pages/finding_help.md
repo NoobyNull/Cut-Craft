@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-28
 see-also: find_tool, tips, getting_started, keyboard_shortcuts
 icon: view/zoom_selected.png
 ---
@@ -11,7 +11,7 @@ from a quick note under the pointer to a full page with pictures.
 
 ## A short note: point at it
 
-![Point at a setting's name for a short note about it](pictures/basics/hover_note.png)
+![Point at a setting's name for a short note about it](pictures/basics/hover_note.svg)
 
 - **A setting**: point at its name in a form, and a short note says what it does.
 - **A tool's button**: point at it to see what it does and the next step.
@@ -20,7 +20,7 @@ from a quick note under the pointer to a full page with pictures.
 
 ## The tool's own page: F1
 
-![F1 with a tool's form open opens that tool's help](pictures/basics/f1_help.png)
+![F1 with a tool's form open opens that tool's help](pictures/basics/f1_help.svg)
 
 With a tool's form open, press **F1**. Help opens on that tool's page: what it does, the
 steps, pictures and every setting. With no form open, F1 opens **Help Contents**.

@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-20
+reviewed: 2026-11-28
 see-also: document_variables, setup_material, getting_started, keyboard_shortcuts
 icon: diagrams/size_wh.svg
 ---
@@ -12,7 +12,7 @@ with the arrows, drag it, or type a sum and let PowerWhittle work it out.
 
 ## Nudging with the arrows
 
-![A number field's arrows, and Shift for steps ten times as big](pictures/basics/number_arrows.png)
+![A number field's arrows, and Shift for steps ten times as big](pictures/basics/number_arrows.svg)
 
 1. Click the **up** or **down** arrow on the right of the field. The value moves one step.
 2. Hold the arrow down to keep going.
@@ -34,7 +34,7 @@ a length. Drag right to raise it, left to lower it.
 
 ## Typing a sum
 
-![W/2 typed in a number field becomes half the material's width](pictures/basics/number_sums.png)
+![W/2 typed in a number field becomes half the material's width](pictures/basics/number_sums.svg)
 
 A number field takes a sum as well as a number. Type it, then press **Enter** (or click
 elsewhere) and the answer takes its place.

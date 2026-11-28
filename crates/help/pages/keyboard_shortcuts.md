@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-28
 see-also: find_tool, view_2d, settings, getting_started, screen_readers
 ---
 
@@ -8,7 +8,7 @@ see-also: find_tool, view_2d, settings, getting_started, screen_readers
 Most tools have a key. **Help ▸ Keyboard Shortcuts** lists the key for every tool and
 menu item, so you can work without hunting through the menus.
 
-![Keyboard shortcuts: the key for every tool](pictures/basics/keyboard.png)
+![Keyboard shortcuts: the key for every tool](pictures/basics/keyboard.svg)
 
 On a Mac, read **⌘** (Command) where this help says **Ctrl**, and **⌥** (Option) for
 **Alt**. The menus show each shortcut the Mac way, ⌘S for Save, and the delete key
@@ -25,7 +25,7 @@ deletes the selection.
 - **F2** the 2D view, **F3** the 3D view, **F4** Snapping Options.
 - **Ctrl+S** saves; **Ctrl+Alt+S** [Increment and Save](help:saving_jobs).
 
-![Esc closes the open form without making anything](pictures/basics/esc_close.png)
+![Esc closes the open form without making anything](pictures/basics/esc_close.svg)
 
 ## More about some keys
 
@@ -41,7 +41,7 @@ deletes the selection.
   Replace Below or Reset, it is kept as you left it: E no longer remakes it from its
   settings, so your hand work is never thrown away.
 
-  ![Select a shape and press E to change it in the tool that made it](pictures/basics/edit_again.png)
+  ![Select a shape and press E to change it in the tool that made it](pictures/basics/edit_again.svg)
 - **F11** the designing layout, **F12** the machining layout.
 - The arrow keys nudge the selection one square of the snap grid. Hold **Shift** for half
   a square, **Ctrl+Shift** for a tenth, or **Ctrl** for the **Fixed nudge distance** set in
