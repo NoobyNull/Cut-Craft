@@ -101,9 +101,11 @@ fn copy_missing(from: &Path, to: &Path) -> std::io::Result<()> {
             let mut part = target.clone().into_os_string();
             part.push(format!(".copying-{}", std::process::id()));
             std::fs::copy(entry.path(), &part)?;
-            // a link is made only where there is no file yet, and an older copy is replaced
-            // only while it is still older, so a setting another window has saved meanwhile
-            // is never replaced by the old one
+            // a link is made only where there is no file yet, never over one. An older copy is
+            // replaced only while it is still older: until the bring-over is done nothing but
+            // another bring-over writes here ([`settings_folder`]), and that copies the same
+            // files. A folder that cannot link files fails the bring-over, so the app keeps to
+            // the old folder rather than risk a replace that is not checked as it is made.
             let linked = match std::fs::hard_link(&part, &target) {
                 Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                     if is_older(&target, made) {
@@ -112,8 +114,6 @@ fn copy_missing(from: &Path, to: &Path) -> std::io::Result<()> {
                         Ok(())
                     }
                 }
-                // a folder that cannot link files
-                Err(_) if !target.exists() => std::fs::rename(&part, &target),
                 done => done,
             };
             let _ = std::fs::remove_file(&part);
