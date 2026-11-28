@@ -64,13 +64,13 @@ pre{background:#f3f1ec;padding:.8rem;overflow-x:auto;border-radius:6px}</style><
 <h2>Ubuntu, Debian, Mint</h2>
 <pre>curl -fsSL $base/cut-craft.gpg | sudo tee /usr/share/keyrings/cut-craft.gpg &gt;/dev/null
 echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cut-craft.gpg] $base/apt stable main" | sudo tee /etc/apt/sources.list.d/cut-craft.list
-sudo apt update &amp;&amp; sudo apt install cut-craft</pre>
+sudo apt update &amp;&amp; sudo apt install powerwhittle</pre>
 <h2>Fedora</h2>
 <pre>sudo curl -fsSLo /etc/yum.repos.d/cut-craft.repo $base/rpm/cut-craft.repo
-sudo dnf install cut-craft</pre>
+sudo dnf install powerwhittle</pre>
 <h2>openSUSE</h2>
 <pre>sudo zypper addrepo $base/rpm/cut-craft.repo
-sudo zypper install cut-craft</pre>
+sudo zypper install powerwhittle</pre>
 <h2>Arch, CachyOS, Manjaro</h2>
 <pre>paru -S cut-craft-bin    # or: yay -S cut-craft-bin</pre>
 <p>Cut Craft is free for people and one-person businesses, even to make things to sell, under the PolyForm Strict 1.0.0 licence with an extra permission (see its LICENSE).

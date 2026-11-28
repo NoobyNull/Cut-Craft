@@ -61,6 +61,9 @@ mkdir -p "$deb/DEBIAN"
 cat >"$deb/DEBIAN/control" <<EOF
 Package: powerwhittle
 Version: $version
+Replaces: cut-craft
+Breaks: cut-craft
+Provides: cut-craft
 Architecture: amd64
 Maintainer: $maintainer
 Installed-Size: $(du -sk --exclude=DEBIAN "$deb" | cut -f1)
@@ -97,6 +100,8 @@ cat >"$rpmroot/powerwhittle.spec" <<EOF
 Name: powerwhittle
 Version: $version
 Release: 1
+Obsoletes: cut-craft < $version
+Provides: cut-craft = $version
 Summary: $summary
 License: LicenseRef-Cut-Craft
 URL: $home

@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-28
 see-also: addons, relief_from_photo
 ---
 
@@ -23,7 +23,7 @@ gadget says why in the status bar when you say yes to it. See
 
 The folder is called `gadgets`, inside PowerWhittle's settings folder:
 
-- **Linux**: `~/.config/powerwhittle/gadgets`
+- **Linux**: `~/.config/powerwhittle/gadgets` (`$XDG_CONFIG_HOME/powerwhittle/gadgets` if you set `XDG_CONFIG_HOME`)
 - **Windows**: `%APPDATA%\powerwhittle\gadgets`
 - **macOS**: `~/Library/Application Support/powerwhittle/gadgets`
 

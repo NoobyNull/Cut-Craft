@@ -163,3 +163,43 @@ fn settings_from_before_the_rename_come_over_once_and_stay_where_they_were() {
     assert!(!fresh.join("powerwhittle").exists());
     std::fs::remove_dir_all(&base).unwrap();
 }
+
+#[test]
+fn a_bring_over_cut_short_is_finished_next_start_keeping_what_the_new_folder_has() {
+    use cut_craft_core::file::{BROUGHT_OVER, bring_over_settings};
+    let base = std::env::temp_dir().join(format!("pw-settings-retry-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let (old, new) = (base.join("cut-craft"), base.join("powerwhittle"));
+    std::fs::create_dir_all(old.join("addons/ru")).unwrap();
+    std::fs::write(old.join("options.json"), "{\"old\": true}").unwrap();
+    std::fs::write(old.join("addons/ru/main.ftl"), "old pack").unwrap();
+    // a start that failed part way, after which the log made the new folder, and a pack
+    // copied in by hand before the first start
+    std::fs::create_dir_all(new.join("addons/ru")).unwrap();
+    std::fs::write(new.join("cut-craft.log"), "log").unwrap();
+    std::fs::write(new.join("addons/ru/main.ftl"), "new pack").unwrap();
+    assert!(bring_over_settings(&base).unwrap());
+    assert_eq!(
+        std::fs::read_to_string(new.join("options.json")).unwrap(),
+        "{\"old\": true}",
+        "what was missing comes over"
+    );
+    assert_eq!(
+        std::fs::read_to_string(new.join("addons/ru/main.ftl")).unwrap(),
+        "new pack",
+        "what the new folder had is kept"
+    );
+    assert!(new.join(BROUGHT_OVER).exists());
+    let left: Vec<_> = std::fs::read_dir(&new)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.contains(".copying"))
+        .collect();
+    assert!(left.is_empty(), "no part copies left: {left:?}");
+    // once done, it is not done again
+    std::fs::remove_file(new.join("options.json")).unwrap();
+    assert!(!bring_over_settings(&base).unwrap());
+    assert!(!new.join("options.json").exists());
+    std::fs::remove_dir_all(&base).unwrap();
+}

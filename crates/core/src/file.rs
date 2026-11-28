@@ -44,20 +44,22 @@ pub fn config_dir() -> Option<PathBuf> {
     config_base().map(|dir| dir.join(SETTINGS_FOLDER))
 }
 
-/// On the first start after the rename, copies the old settings folder in `base` to the new
+/// Left in the new settings folder once everything from the old one is in it.
+pub const BROUGHT_OVER: &str = ".brought-over-from-cut-craft";
+
+/// On the first start after the rename, copies the old settings folder in `base` into the new
 /// one, so everything set before carries on. The old folder is left as it was, so going back
-/// to an older copy still finds its settings. Whether anything was copied: nothing is when
-/// the new folder is there already or there was never an old one.
+/// to an older copy still finds its settings. A file already in the new folder is kept, so a
+/// start that stopped part way (or a file put there by hand first) is finished the next time,
+/// and [`BROUGHT_OVER`] marks it done only once every file is in. Whether anything was copied:
+/// nothing is once it is done, or when there was never an old folder.
 pub fn bring_over_settings(base: &Path) -> std::io::Result<bool> {
     let (old, new) = (base.join(OLD_SETTINGS_FOLDER), base.join(SETTINGS_FOLDER));
-    if new.exists() || !old.is_dir() {
+    if !old.is_dir() || new.join(BROUGHT_OVER).exists() {
         return Ok(false);
     }
-    // copied beside, then renamed into place: a copy cut short is never taken as done
-    let part = base.join(format!("{SETTINGS_FOLDER}.copying"));
-    let _ = std::fs::remove_dir_all(&part);
-    copy_folder(&old, &part)?;
-    std::fs::rename(&part, &new)?;
+    copy_missing(&old, &new)?;
+    std::fs::write(new.join(BROUGHT_OVER), "")?;
     Ok(true)
 }
 
@@ -66,15 +68,25 @@ pub fn bring_over_old_settings() -> std::io::Result<bool> {
     config_base().map_or(Ok(false), |base| bring_over_settings(&base))
 }
 
-fn copy_folder(from: &Path, to: &Path) -> std::io::Result<()> {
+/// Copies what `to` lacks from `from`. Each file is written beside its place first and then
+/// renamed into it, so a copy cut short is never taken for the whole file, and two windows
+/// started together don't step on each other's copies.
+fn copy_missing(from: &Path, to: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(to)?;
     for entry in std::fs::read_dir(from)? {
         let entry = entry?;
         let target = to.join(entry.file_name());
         if entry.file_type()?.is_dir() {
-            copy_folder(&entry.path(), &target)?;
-        } else {
-            std::fs::copy(entry.path(), target)?;
+            copy_missing(&entry.path(), &target)?;
+        } else if !target.exists() {
+            let mut part = target.clone().into_os_string();
+            part.push(format!(".copying-{}", std::process::id()));
+            std::fs::copy(entry.path(), &part)?;
+            if target.exists() {
+                std::fs::remove_file(&part)?;
+            } else {
+                std::fs::rename(&part, &target)?;
+            }
         }
     }
     Ok(())

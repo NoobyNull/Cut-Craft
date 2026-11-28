@@ -114,7 +114,7 @@ impl CutCraftApp {
         if let Some(path) = template_dialog()
             .set_file_name(format!("template.{TEMPLATE}"))
             .save_file()
-            && let Some(path) = saving_path(&path, &[TEMPLATE])
+            && let Some(path) = saving_path(&path, &cut_craft_core::file::TEMPLATE_EXTENSIONS)
         {
             match cut_craft_core::file::write_atomic(
                 &path,

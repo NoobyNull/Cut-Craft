@@ -270,7 +270,7 @@ files reach it. **Edit ▸ Options ▸ Use Wayland directly** turns this off (wi
 
 **Edit ▸ Options** holds what the views draw on start, toolpath previews, the number of recent
 files, whether icons are read in advance, the repository bug reports go to, and the Wayland
-choice. Settings are kept in `~/.config/powerwhittle` (Linux), `%APPDATA%\powerwhittle` (Windows)
+choice. Settings are kept in `~/.config/powerwhittle` (Linux; `$XDG_CONFIG_HOME/powerwhittle` when that is set), `%APPDATA%\powerwhittle` (Windows)
 or `~/Library/Application Support/powerwhittle` (macOS).
 
 ## Reporting bugs
