@@ -123,6 +123,7 @@ credits list is generated and checked by CI.
 | 5.2 | Move off the one MPL dependency (usvg 0.37 to 0.45); add missing licence fields on two rotary crates | Not started (with 1.3); 2 to 5 Dec |
 | 5.3 | Update README, About text and landing page to the new terms and name | Not started; 12 to 16 Dec, after 5.4 |
 | 5.4 | Rename the app to PowerWhittle: Matthew decided on 2026-11-26 that 1.0 launches under that name | Waiting on Matthew (build go); 2 to 15 Dec |
+| 5.5 | PowerWhittle logo on the start page: an orange P and a teal W with the router bit between them, in the Cut Craft logo's hexagon (the app icon has no letters and stays) | In review |
 
 ## After 1.0
 
