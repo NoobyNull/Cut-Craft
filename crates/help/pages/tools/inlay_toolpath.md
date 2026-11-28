@@ -15,11 +15,11 @@ see-also: vcarve_inlay_toolpath, pocket_toolpath, profile_toolpath
 
    ![Step 2](pictures/inlay_toolpath/step-2.png)
 
-3. Choose which half this toolpath cuts: **Male** is the insert (straight, or stepped with a shelf round its base), **Female** is the pocket or hole it fits in. Make one toolpath for each half.
+3. On the **Inlay** tab, choose which half this toolpath cuts: **Male** is the insert (straight, or stepped with a shelf round its base), **Female** is the pocket or hole it fits in. Make one toolpath for each half.
 
    ![Step 3](pictures/inlay_toolpath/step-3.png)
 
-4. Set the **Allowance**: the insert is cut this much smaller (or the pocket this much bigger) so they fit.
+4. On the **Inlay** tab, set the **Allowance**: the insert is cut this much smaller (or the pocket this much bigger) so they fit.
 
    ![Step 4](pictures/inlay_toolpath/step-4.png)
 

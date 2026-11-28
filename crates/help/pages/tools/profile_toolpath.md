@@ -27,7 +27,7 @@ see-also: tabs, pocket_toolpath, save_toolpaths
 
    ![Step 5](pictures/profile_toolpath/step-5.png)
 
-6. Add **Tabs**: small bridges that hold the part in the board until the last pass, so it cannot fly loose.
+6. On the **Movement** tab, add **Tabs**: small bridges that hold the part in the board until the last pass, so it cannot fly loose.
 
    ![Step 6](pictures/profile_toolpath/step-6.png)
 

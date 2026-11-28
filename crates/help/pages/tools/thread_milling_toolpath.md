@@ -15,11 +15,11 @@ see-also: drilling_toolpath, pocket_toolpath
 
    ![Step 2](pictures/thread_milling_toolpath/step-2.png)
 
-3. Choose **Internal** for a thread inside a hole, or **External** for a thread round a post.
+3. On the **Thread** tab, choose **Internal** for a thread inside a hole, or **External** for a thread round a post.
 
    ![Step 3](pictures/thread_milling_toolpath/step-3.png)
 
-4. Set the thread's **Diameter** (its largest size) and **Pitch** (the distance between ridges), or pick a standard thread.
+4. On the **Thread** tab, set the thread's **Diameter** (its largest size) and **Pitch** (the distance between ridges), or pick a standard thread.
 
    ![Step 4](pictures/thread_milling_toolpath/step-4.png)
 

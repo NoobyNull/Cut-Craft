@@ -135,9 +135,9 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("field:depth"),
             },
             Step {
-                caption: "Pick the **Pattern**: rows along X, rows along Y, or a spiral from the \
-                          outside in. The bit always starts beside the board, never plunging \
-                          into it.",
+                caption: "On the **Surfacing** tab, pick the **Pattern**: rows along X, rows \
+                          along Y, or a spiral from the outside in. The bit always starts beside \
+                          the board, never plunging into it.",
                 setup: |_, _| {},
                 mark: Mark::At("field:pattern"),
             },
@@ -263,14 +263,15 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:thread_milling_toolpath"),
             },
             Step {
-                caption: "Choose **Internal** for a thread inside a hole, or **External** for a \
-                          thread round a post.",
+                caption: "On the **Thread** tab, choose **Internal** for a thread inside a hole, \
+                          or **External** for a thread round a post.",
                 setup: |app, ctx| app.invoke(ctx, "thread_milling_toolpath"),
                 mark: Mark::At("field:thread_type"),
             },
             Step {
-                caption: "Set the thread's **Diameter** (its largest size) and **Pitch** (the \
-                          distance between ridges), or pick a standard thread.",
+                caption: "On the **Thread** tab, set the thread's **Diameter** (its largest size) \
+                          and **Pitch** (the distance between ridges), or pick a standard \
+                          thread.",
                 setup: |_, _| {},
                 mark: Mark::At("field:diameter"),
             },
@@ -307,15 +308,15 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:keyhole_toolpath"),
             },
             Step {
-                caption: "Choose which way the slot runs from the hole (**Direction**). For a \
-                          sign hung on the wall, the slot runs up, so the screw head slides to \
-                          its top.",
+                caption: "On the **Keyhole** tab, choose which way the slot runs from the hole \
+                          (**Direction**). For a sign hung on the wall, the slot runs up, so the \
+                          screw head slides to its top.",
                 setup: |app, ctx| app.invoke(ctx, "keyhole_toolpath"),
                 mark: Mark::At("field:direction"),
             },
             Step {
-                caption: "Set the **Slot Length** and the **Slot Depth**: deep enough that the \
-                          cutter's wide part is below the surface.",
+                caption: "On the **Keyhole** tab, set the **Slot Length** and the **Slot Depth**: \
+                          deep enough that the cutter's wide part is below the surface.",
                 setup: |_, _| {},
                 mark: Mark::At("field:slot_length"),
             },
@@ -353,8 +354,8 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:quick_engrave_toolpath"),
             },
             Step {
-                caption: "Choose **Outline** to run along the lines, or **Fill** to mark the \
-                          whole inside with rings or hatching.",
+                caption: "On the **Engrave** tab, choose **Outline** to run along the lines, or \
+                          **Fill** to mark the whole inside with rings or hatching.",
                 setup: |app, ctx| {
                     app.invoke(ctx, "quick_engrave_toolpath");
                     set(app, "strategy", "fill".into());
@@ -403,8 +404,9 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("field:flute_depth"),
             },
             Step {
-                caption: "Choose the **Flute Type**: taper down over the whole line, taper at \
-                          the start only, or taper in at the start and out at the end.",
+                caption: "On the **Fluting** tab, choose the **Flute Type**: taper down over the \
+                          whole line, taper at the start only, or taper in at the start and out \
+                          at the end.",
                 setup: |app, _| set(app, "flute_type", "ramp_at_start_and_end".into()),
                 mark: Mark::At("field:flute_type"),
             },
@@ -502,7 +504,7 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("field:max_cut_depth"),
             },
             Step {
-                caption: "Set the **Stepover** (the gap between rows) and the rows' **Angle**.",
+                caption: "On the **Texture** tab, set the **Stepover** (the gap between rows) and the rows' **Angle**.",
                 setup: |_, _| {},
                 mark: Mark::At("field:stepover"),
             },
@@ -541,14 +543,15 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:chamfer_toolpath"),
             },
             Step {
-                caption: "Set the **Width** across the slope. With a V-bit, its angle sets how \
-                          steep the slope is.",
+                caption: "On the **Chamfer** tab, set the **Width** across the slope. With a \
+                          V-bit, its angle sets how steep the slope is.",
                 setup: |app, ctx| app.invoke(ctx, "chamfer_toolpath"),
                 mark: Mark::At("field:width"),
             },
             Step {
-                caption: "Choose the **Side**: **Outside** slopes the edge of a part you cut \
-                          out, **Inside** slopes the rim of a hole or recess.",
+                caption: "On the **Chamfer** tab, choose the **Side**: **Outside** slopes the \
+                          edge of a part you cut out, **Inside** slopes the rim of a hole or \
+                          recess.",
                 setup: |_, _| {},
                 mark: Mark::At("field:side"),
             },
@@ -644,8 +647,8 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("field:pocket_depth"),
             },
             Step {
-                caption: "Set the **Glue Gap**: the space left under the plug for glue once it \
-                          is pressed home.",
+                caption: "On the **V-Carve Inlay** tab, set the **Glue Gap**: the space left \
+                          under the plug for glue once it is pressed home.",
                 setup: |_, _| {},
                 mark: Mark::At("field:glue_gap"),
             },
@@ -685,15 +688,16 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:inlay_toolpath"),
             },
             Step {
-                caption: "Choose which half this toolpath cuts: **Male** is the insert \
-                          (straight, or stepped with a shelf round its base), **Female** is the \
-                          pocket or hole it fits in. Make one toolpath for each half.",
+                caption: "On the **Inlay** tab, choose which half this toolpath cuts: **Male** is \
+                          the insert (straight, or stepped with a shelf round its base), \
+                          **Female** is the pocket or hole it fits in. Make one toolpath for each \
+                          half.",
                 setup: |app, ctx| app.invoke(ctx, "inlay_toolpath"),
                 mark: Mark::At("field:inlay_type"),
             },
             Step {
-                caption: "Set the **Allowance**: the insert is cut this much smaller (or the \
-                          pocket this much bigger) so they fit.",
+                caption: "On the **Inlay** tab, set the **Allowance**: the insert is cut this \
+                          much smaller (or the pocket this much bigger) so they fit.",
                 setup: |_, _| {},
                 mark: Mark::At("field:allowance"),
             },
@@ -884,14 +888,15 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:3d_roughing_toolpath"),
             },
             Step {
-                caption: "Set the **Allowance**: the wood left on the model for the finishing \
-                          toolpath to take off cleanly.",
+                caption: "On the **Finishing** tab, set the **Allowance**: the wood left on the \
+                          model for the finishing toolpath to take off cleanly.",
                 setup: |app, ctx| app.invoke(ctx, "3d_roughing_toolpath"),
                 mark: Mark::At("field:allowance"),
             },
             Step {
-                caption: "Choose the **Strategy**: **Z level** clears flat steps, one pass \
-                          depth at a time; **3D raster** rides over the model in rows.",
+                caption: "On the **3D Roughing** tab, choose the **Strategy**: **Z level** clears \
+                          flat steps, one pass depth at a time; **3D raster** rides over the \
+                          model in rows.",
                 setup: |_, _| {},
                 mark: Mark::At("field:strategy"),
             },
@@ -933,8 +938,8 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:3d_finishing_toolpath"),
             },
             Step {
-                caption: "Choose the **Strategy**: **Raster** rows back and forth, or \
-                          **Offset** rings following the outline.",
+                caption: "On the **3D Finishing** tab, choose the **Strategy**: **Raster** rows \
+                          back and forth, or **Offset** rings following the outline.",
                 setup: |app, ctx| app.invoke(ctx, "3d_finishing_toolpath"),
                 mark: Mark::At("field:strategy"),
             },
@@ -988,14 +993,15 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("field:tool"),
             },
             Step {
-                caption: "Say where along the part the rings **Start** and **End**, clear of \
-                          the chuck and the tailstock.",
+                caption: "On the **Where** tab, say where along the part the rings **Start** and \
+                          **End**, clear of the chuck and the tailstock.",
                 setup: |_, _| {},
                 mark: Mark::At("field:start"),
             },
             Step {
-                caption: "Tick **Registration mark** for a small notch at A=0, so the part can \
-                          go back exactly as it was if the job is started again.",
+                caption: "On the **Rotary** tab, tick **Registration mark** for a small notch at \
+                          A=0, so the part can go back exactly as it was if the job is started \
+                          again.",
                 setup: |_, _| {},
                 mark: Mark::At("field:registration_mark"),
             },
@@ -1033,20 +1039,21 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("field:tool"),
             },
             Step {
-                caption: "Choose what it does: **Face** an end down to a stub, **Turn** the part \
-                          round to its outline, or **Part off** with one groove.",
+                caption: "On the **Lathe** tab, choose what it does: **Face** an end down to a \
+                          stub, **Turn** the part round to its outline, or **Part off** with one \
+                          groove.",
                 setup: |_, _| {},
                 mark: Mark::At("field:operation"),
             },
             Step {
-                caption: "Say where along the part it cuts with **Start** and **End**, measured \
-                          from the chuck end.",
+                caption: "On the **Where** tab, say where along the part it cuts with **Start** \
+                          and **End**, measured from the chuck end.",
                 setup: |_, _| {},
                 mark: Mark::At("field:start"),
             },
             Step {
-                caption: "**Holding stub** is how thick a stub is left on the axis, keeping the \
-                          part joined on until it is cut free.",
+                caption: "On the **Lathe** tab, **Holding stub** is how thick a stub is left on \
+                          the axis, keeping the part joined on until it is cut free.",
                 setup: |_, _| {},
                 mark: Mark::At("field:holding_stub"),
             },
@@ -1085,14 +1092,14 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:rounding_toolpath"),
             },
             Step {
-                caption: "Say what you start from (**Blank**: square or round) and its \
-                          **Blank size**.",
+                caption: "On the **Rounding** tab, say what you start from (**Blank**: square or \
+                          round) and its **Blank size**.",
                 setup: |app, ctx| app.invoke(ctx, "rounding_toolpath"),
                 mark: Mark::At("field:blank"),
             },
             Step {
-                caption: "Choose the **Method**: round the cylinder as it turns, or along it in \
-                          rows.",
+                caption: "On the **Rounding** tab, choose the **Method**: round the cylinder as \
+                          it turns, or along it in rows.",
                 setup: |_, _| {},
                 mark: Mark::At("field:method"),
             },
@@ -1127,9 +1134,9 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:laser_cut_fill_toolpath"),
             },
             Step {
-                caption: "Choose the **Strategy**: cut outside, inside or on the line (the \
-                          beam's width is allowed for), or **Hatch fill** to mark the inside \
-                          with lines.",
+                caption: "On the **Laser** tab, choose the **Strategy**: cut outside, inside or \
+                          on the line (the beam's width is allowed for), or **Hatch fill** to \
+                          mark the inside with lines.",
                 setup: |app, ctx| {
                     app.invoke(ctx, "laser_cut_fill_toolpath");
                     set(app, "strategy", "hatch_fill".into());
@@ -1138,8 +1145,8 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("field:strategy"),
             },
             Step {
-                caption: "Set the **Power** and the number of **Passes**: more passes cut \
-                          through thicker material. Try them on a scrap first.",
+                caption: "On the **Laser** tab, set the **Power** and the number of **Passes**: \
+                          more passes cut through thicker material. Try them on a scrap first.",
                 setup: |_, _| {},
                 mark: Mark::At("field:power"),
             },
@@ -1178,20 +1185,20 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:laser_picture_toolpath"),
             },
             Step {
-                caption: "Set the **Power** for black. Light parts get less.",
+                caption: "On the **Laser Picture** tab, set the **Power** for black. Light parts get less.",
                 setup: |app, ctx| app.invoke(ctx, "laser_picture_toolpath"),
                 mark: Mark::At("field:power"),
             },
             Step {
-                caption: "Tick **Dither image** for materials that only burn or don't (such as \
-                          some plastics): the laser switches fully on and off in tiny dots to \
-                          give the greys.",
+                caption: "On the **Laser Picture** tab, tick **Dither image** for materials that \
+                          only burn or don't (such as some plastics): the laser switches fully on \
+                          and off in tiny dots to give the greys.",
                 setup: |_, _| {},
                 mark: Mark::At("field:dither_image"),
             },
             Step {
-                caption: "Set the **Line spacing**: closer lines give more detail but take \
-                          longer. Then press **Calculate**.",
+                caption: "On the **Laser Picture** tab, set the **Line spacing**: closer lines \
+                          give more detail but take longer. Then press **Calculate**.",
                 setup: |app, _| set(app, "line_spacing", 10.0.into()),
                 mark: Mark::At("field:line_spacing"),
             },
@@ -1231,8 +1238,9 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("field:max_carving_depth"),
             },
             Step {
-                caption: "Choose the **Strategy**: straight lines across (**Raster**), crossing \
-                          lines (**Hatch**), or along vectors you drew.",
+                caption: "On the **Photo V-Carve** tab, choose the **Strategy**: straight lines \
+                          across (**Raster**), crossing lines (**Hatch**), or along vectors you \
+                          drew.",
                 setup: |_, _| {},
                 mark: Mark::At("field:strategy"),
             },
@@ -1271,14 +1279,14 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("tool:sketch_carving_toolpath"),
             },
             Step {
-                caption: "Choose the **Source**: the picture, or the 3D model's dips and \
-                          edges.",
+                caption: "On the **Sketch** tab, choose the **Source**: the picture, or the 3D \
+                          model's dips and edges.",
                 setup: |app, ctx| app.invoke(ctx, "sketch_carving_toolpath"),
                 mark: Mark::At("field:source"),
             },
             Step {
-                caption: "Set the **Line thickness**: heavier lines, but less detail, as it \
-                          goes up.",
+                caption: "On the **Sketch** tab, set the **Line thickness**: heavier lines, but \
+                          less detail, as it goes up.",
                 setup: |_, _| {},
                 mark: Mark::At("field:line_thickness"),
             },

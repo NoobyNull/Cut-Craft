@@ -100,3 +100,33 @@ fn the_slow_tours_ring_what_they_point_at() {
     }
     play_tours(every_tour().filter(|t| SLOW.contains(&t.tool)));
 }
+
+/// A tour step ringing a setting off a toolpath form's first tab says which tab it is on, in
+/// bold as the tab reads, so a beginner following the help finds it.
+#[test]
+fn a_tour_step_on_a_later_tab_names_the_tab() {
+    use crate::form::form_tabs::{self, FormTab};
+    let mut unnamed = vec![];
+    let registry = crate::commands::registry();
+    for tour in every_tour() {
+        let Some(command) = registry.get(tour.tool) else {
+            continue;
+        };
+        let fields = crate::form::arrange(crate::form::fields(&command.schema()));
+        if !form_tabs::tabbed(&fields) {
+            continue;
+        }
+        let own = form_tabs::own_name(tour.tool, "");
+        for (n, step) in tour.steps.iter().enumerate() {
+            let Mark::At(mark) = step.mark else { continue };
+            let Some(tab) = form_tabs::tab_of_mark(&fields, mark) else {
+                continue;
+            };
+            let named = format!("**{}**", form_tabs::name(tab, &own));
+            if tab != FormTab::Cutting && !step.caption.contains(&named) {
+                unnamed.push(format!("{} step {}: {named}", tour.tool, n + 1));
+            }
+        }
+    }
+    assert!(unnamed.is_empty(), "say the tab:\n{}", unnamed.join("\n"));
+}

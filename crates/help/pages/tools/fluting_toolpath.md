@@ -19,7 +19,7 @@ see-also: vcarve_engrave_toolpath, texture_toolpath
 
    ![Step 3](pictures/fluting_toolpath/step-3.png)
 
-4. Choose the **Flute Type**: taper down over the whole line, taper at the start only, or taper in at the start and out at the end.
+4. On the **Fluting** tab, choose the **Flute Type**: taper down over the whole line, taper at the start only, or taper in at the start and out at the end.
 
    ![Step 4](pictures/fluting_toolpath/step-4.png)
 

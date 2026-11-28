@@ -19,7 +19,7 @@ see-also: drill_bank_toolpath, profile_toolpath
 
    ![Step 3](pictures/drilling_toolpath/step-3.png)
 
-4. Turn on **Peck** for deep holes: the bit lifts out now and then to clear the chips, so it does not jam or burn.
+4. On the **Movement** tab, turn on **Peck** for deep holes: the bit lifts out now and then to clear the chips, so it does not jam or burn.
 
    ![Step 4](pictures/drilling_toolpath/step-4.png)
 

@@ -19,7 +19,7 @@ see-also: vcarve_engrave_toolpath, laser_picture_toolpath, sketch_carving_toolpa
 
    ![Step 3](pictures/photo_vcarve_toolpath/step-3.png)
 
-4. Choose the **Strategy**: straight lines across (**Raster**), crossing lines (**Hatch**), or along vectors you drew.
+4. On the **Photo V-Carve** tab, choose the **Strategy**: straight lines across (**Raster**), crossing lines (**Hatch**), or along vectors you drew.
 
    ![Step 4](pictures/photo_vcarve_toolpath/step-4.png)
 

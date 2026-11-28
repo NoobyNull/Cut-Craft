@@ -19,7 +19,7 @@ see-also: pocket_toolpath, drag_knife_toolpath, stepover
 
    ![Step 3](pictures/surfacing_toolpath/step-3.png)
 
-4. Pick the **Pattern**: rows along X, rows along Y, or a spiral from the outside in. The bit always starts beside the board, never plunging into it.
+4. On the **Surfacing** tab, pick the **Pattern**: rows along X, rows along Y, or a spiral from the outside in. The bit always starts beside the board, never plunging into it.
 
    ![Step 4](pictures/surfacing_toolpath/step-4.png)
 
