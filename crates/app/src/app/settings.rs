@@ -48,6 +48,13 @@ pub(super) const BUG_REPO: &str = "Power-Whittle/PowerWhittle";
 /// dealt with (`services/crash-reports`).
 pub(super) const CRASH_SERVICE: &str =
     "https://cutcraft-crash-reports.mattyax.workers.dev/v1/crash";
+/// PowerWhittle's bug-report service, where Report a Bug sends unless the person chose their
+/// own GitHub CLI: the same Worker, which puts the pictures in a pictures repository and opens
+/// the issue, so no GitHub account is needed.
+pub(super) const BUG_SERVICE: &str = "https://cutcraft-crash-reports.mattyax.workers.dev/v1/bug";
+/// Points bug reports elsewhere, such as the service run locally for a test
+/// (`http://localhost:8787/v1/bug`), never the live one.
+pub(super) const BUG_SERVICE_VARIABLE: &str = "CUTCRAFT_BUG_URL";
 /// Points crash reports elsewhere, such as the service run locally for a test
 /// (`http://localhost:8787/v1/crash`), never the live one.
 pub(super) const CRASH_SERVICE_VARIABLE: &str = "CUTCRAFT_CRASH_URL";

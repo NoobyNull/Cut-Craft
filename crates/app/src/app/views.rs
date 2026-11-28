@@ -291,6 +291,7 @@ impl CutCraftApp {
         // the reporter is taken out while the app answers its questions
         // what the person said in Options, as it is now
         self.reporter.computer_details = self.options.bug_reports.computer_details;
+        self.bug_route();
         let mut reporter = std::mem::replace(
             &mut self.reporter,
             cut_craft_bug_report::Reporter::new("", None),
@@ -319,6 +320,35 @@ impl CutCraftApp {
         self.reporter = reporter;
         if let Some(message) = message {
             self.status.set_message(&message);
+        }
+    }
+
+    /// Where Report a Bug sends to, as Options says now: the bug-report service (with this
+    /// install's number, made the first time) unless the person chose their own GitHub CLI.
+    fn bug_route(&mut self) {
+        use cut_craft_bug_report::send::Route;
+        let service = if cfg!(test) {
+            // tests never reach the live service
+            None
+        } else {
+            Some(
+                std::env::var(super::BUG_SERVICE_VARIABLE)
+                    .unwrap_or_else(|_| super::BUG_SERVICE.to_owned()),
+            )
+        };
+        let reports = &self.options.bug_reports;
+        self.reporter.route = match (reports.send_with, service) {
+            (crate::options::SendWith::Service, Some(url)) => Route::Service(url),
+            _ => Route::Cli,
+        };
+        if matches!(self.reporter.route, Route::Service(_)) && self.reporter.install.is_empty() {
+            let fresh = self.options.bug_reports.install_id.is_none();
+            self.reporter.install = (self.options.bug_reports.install_id)
+                .get_or_insert_with(cut_craft_bug_report::relay::new_install_id)
+                .clone();
+            if fresh {
+                self.save_options();
+            }
         }
     }
 

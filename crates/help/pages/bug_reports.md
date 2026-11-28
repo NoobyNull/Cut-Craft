@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-26
+reviewed: 2026-11-28
 see-also: settings, updates, contents, language
 ---
 
@@ -24,8 +24,33 @@ sends that log, or offers it to you in the same form, as you chose in
 2. Give the report a short **title**, and say what you did and what went wrong.
 3. Look at what PowerWhittle would send with it, and **untick** anything you would rather keep
    to yourself (see below).
-4. Press **Submit to GitHub**. The report becomes a public issue on GitHub that the people fixing PowerWhittle
-   read.
+4. Press **Submit to GitHub**. The report and its pictures become a public issue on GitHub that
+   the people fixing PowerWhittle read. When it has gone, the status bar shows the issue's
+   address, and it is copied so you can paste it into your browser.
+
+You don't need a GitHub account or anything installed: PowerWhittle's bug-report service
+files the issue for you. It is **anonymous**: nothing in the issue says who sent it. To follow
+it, open the address shown, and comment there if you have a GitHub account.
+
+## If the report can't be sent
+
+No internet, or the service is busy? PowerWhittle keeps the report in its settings folder
+(under **bug-reports**), then opens two things:
+
+- your **browser**, on a new GitHub issue with the title and the report filled in, and
+- the **folder** holding the report's pictures.
+
+Drag the pictures from the folder into the issue's text box, then press **Create** on GitHub.
+That needs a GitHub account (it is free).
+
+## Sending with your own GitHub CLI
+
+People who work on PowerWhittle can send reports as themselves. Choose
+**Edit ▸ Options ▸ Bug Reports ▸ Send bug reports ▸ My GitHub CLI** and press **Apply**. The
+[GitHub CLI](https://cli.github.com) (`gh`) must be installed and signed in. Its pictures go
+to PowerWhittle's own repository, which needs write access, so for everyone else a report with
+pictures fails and opens in the browser as above. Leave it on **PowerWhittle's bug-report
+service** unless you work on PowerWhittle.
 
 ## A wrong word in another language
 

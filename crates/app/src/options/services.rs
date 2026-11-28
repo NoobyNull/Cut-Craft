@@ -112,8 +112,15 @@ pub struct BugReports {
     #[serde(default = "yes")]
     #[schemars(title = "Send details of my computer")]
     pub computer_details: bool,
-    /// A random number for this install, made when a crash report is first sent, so the
-    /// crash-report service can tell one install from another. Nothing about the person.
+    /// How Report a Bug sends a report. PowerWhittle's bug-report service needs no GitHub
+    /// account and nothing installed. Your own GitHub CLI files it as you, but its pictures
+    /// need write access to PowerWhittle's repository, so it suits only the people who work on
+    /// PowerWhittle. Either way, a report that can't be sent opens in your browser to finish
+    #[serde(default)]
+    #[schemars(title = "Send bug reports")]
+    pub send_with: SendWith,
+    /// A random number for this install, made when a crash or bug report is first sent, so
+    /// the report services can tell one install from another. Nothing about the person.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
     pub install_id: Option<String>,
@@ -124,9 +131,25 @@ impl Default for BugReports {
         Self {
             crash_logs: CrashLogs::default(),
             computer_details: true,
+            send_with: SendWith::default(),
             install_id: None,
         }
     }
+}
+
+/// How Report a Bug sends a report.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SendWith {
+    /// Through PowerWhittle's bug-report service: no GitHub account needed, and nothing in the
+    /// issue names you. Your pictures and report become a public GitHub issue
+    #[default]
+    #[schemars(title = "PowerWhittle's bug-report service")]
+    Service,
+    /// With the GitHub CLI (gh) signed in on this computer, as you. Pictures need write access
+    /// to PowerWhittle's repository
+    #[schemars(title = "My GitHub CLI")]
+    GithubCli,
 }
 
 /// Whether a crash's log is offered as a bug report at the next start.

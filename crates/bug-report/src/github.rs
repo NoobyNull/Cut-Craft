@@ -1,5 +1,9 @@
-//! Sending a report: pictures go to a `bug-reports` branch of the repository (issues cannot
-//! hold uploads through the API), then an issue links them, through the GitHub CLI.
+//! Sending a report through the GitHub CLI, for people who chose that (Edit ▸ Options ▸ Bug
+//! Reports): pictures go to a `bug-reports` branch of the repository (issues cannot hold
+//! uploads through the API), then an issue links them. Pushing that branch needs write access
+//! to the repository, so everyone else sends through the bug-report service
+//! ([`crate::relay::send_bug`]). Also the issue's text, and the browser and kept-folder
+//! fallbacks when a report cannot be sent.
 
 use base64::Engine;
 use eframe::egui;
@@ -89,16 +93,6 @@ fn percent(text: &str) -> String {
     out
 }
 
-/// Whether the GitHub CLI is installed.
-pub fn gh_installed() -> bool {
-    Command::new("gh")
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok()
-}
-
 /// Opens `target` (a folder, a file such as a PDF to print, or a web address) with the
 /// platform's own program for it.
 pub fn open_with_platform(target: &std::ffi::OsStr) -> std::io::Result<()> {
@@ -114,6 +108,20 @@ pub fn open_with_platform(target: &std::ffi::OsStr) -> std::io::Result<()> {
 
 /// The issue's text: the reporter's words, where it was, the state, then the pictures.
 pub fn compose(report: &Report, pictures: &[(String, String)]) -> String {
+    let mut body = details(report);
+    if !pictures.is_empty() {
+        body.push_str("\n### Pictures\n\n");
+        for (name, url) in pictures {
+            let _ = writeln!(body, "![{name}]({url}?raw=true)");
+        }
+    }
+    body.push_str("\n_Sent from PowerWhittle's Report a Bug._\n");
+    body
+}
+
+/// The issue's text before its pictures: the reporter's words, where it was and the state
+/// (what the bug-report service is sent; it adds the pictures itself).
+pub fn details(report: &Report) -> String {
     let mut body = String::new();
     body.push_str(if report.text.trim().is_empty() {
         "_No description._"
@@ -143,13 +151,6 @@ pub fn compose(report: &Report, pictures: &[(String, String)]) -> String {
         body.push_str(report.log.trim());
         body.push_str("\n```\n\n</details>\n");
     }
-    if !pictures.is_empty() {
-        body.push_str("\n### Pictures\n\n");
-        for (name, url) in pictures {
-            let _ = writeln!(body, "![{name}]({url}?raw=true)");
-        }
-    }
-    body.push_str("\n_Sent from PowerWhittle's Report a Bug._\n");
     body
 }
 
@@ -158,7 +159,7 @@ fn args(list: &[&str]) -> Vec<String> {
 }
 
 /// The pictures to send, named: the screenshot, then each added file.
-fn pictures(report: &Report) -> Result<Vec<(String, Vec<u8>)>, String> {
+pub(crate) fn pictures(report: &Report) -> Result<Vec<(String, Vec<u8>)>, String> {
     let mut out = vec![];
     if let Some(shot) = &report.screenshot {
         out.push(("screenshot.png".to_owned(), shot.clone()));

@@ -75,10 +75,30 @@ export async function ipWait(db, ip, signature, { ipPerCrash, ipDaily }, now) {
   const row = await db.prepare(
     `SELECT COALESCE(SUM(count), 0) AS total,
             COALESCE(SUM(CASE WHEN signature = ? THEN count ELSE 0 END), 0) AS same
-     FROM ip_counts WHERE day = ? AND who = ?`,
+     FROM ip_counts WHERE day = ? AND who = ? AND signature != 'bug-report'`,
   ).bind(signature, day, who).first();
   if (row.total < ipDaily && row.same < ipPerCrash) return 0;
   return Date.parse(`${day}T00:00:00Z`) + 86400000 - now.getTime();
+}
+
+/** This IP's salted hash for today, or '-' when there is no IP (tests and local runs). */
+export async function networkOf(db, ip, now) {
+  return ip ? ipHash(db, ip, dayOf(now.toISOString())) : '-';
+}
+
+/** Count one more report under `signature` from network hash `who` today. */
+export async function countAs(db, who, signature, now) {
+  await db.prepare(
+    `INSERT INTO ip_counts (day, who, signature, count) VALUES (?, ?, ?, 1)
+     ON CONFLICT (day, who, signature) DO UPDATE SET count = count + 1`,
+  ).bind(dayOf(now.toISOString()), who, signature).run();
+}
+
+/** Take back one report counted under `signature` from network hash `who` today. */
+export async function uncountAs(db, who, signature, now) {
+  await db.prepare(
+    'UPDATE ip_counts SET count = count - 1 WHERE day = ? AND who = ? AND signature = ? AND count > 0',
+  ).bind(dayOf(now.toISOString()), who, signature).run();
 }
 
 /** Count a report this IP sent. */
