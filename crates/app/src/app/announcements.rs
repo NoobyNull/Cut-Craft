@@ -157,7 +157,7 @@ impl CutCraftApp {
         true
     }
 
-    /// As Cut Craft starts, unless turned off: asks GitHub for its announcements, holding the
+    /// As PowerWhittle starts, unless turned off: asks GitHub for its announcements, holding the
     /// startup tip back a few seconds in case one is due.
     pub(super) fn fetch_announcements_at_startup(&mut self, ctx: &egui::Context) {
         if !self.options.updates.show_announcements

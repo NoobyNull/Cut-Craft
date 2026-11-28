@@ -46,15 +46,15 @@ pub fn parse(mut args: impl Iterator<Item = String>) -> Start {
 
 /// What `--version` prints.
 pub fn version() -> String {
-    format!("Cut Craft {}", env!("CARGO_PKG_VERSION"))
+    format!("PowerWhittle {}", env!("CARGO_PKG_VERSION"))
 }
 
 /// What `--help` prints.
 pub fn help() -> String {
     format!(
         "{}\n\nUsage: cut-craft [OPTION | FILE]\n\n  \
-         (nothing)            open Cut Craft\n  \
-         FILE                 open Cut Craft with FILE (a job opens; a drawing is imported\n  \
+         (nothing)            open PowerWhittle\n  \
+         FILE                 open PowerWhittle with FILE (a job opens; a drawing is imported\n  \
                               into a new job, made with Job Setup)\n  \
          -V, --version        print the version and stop\n  \
          -h, --help           print this and stop\n  \
@@ -96,7 +96,7 @@ pub fn explain_failures() {
         // on Linux rfd asks zenity or kdialog; with neither, the terminal line above is it
         let _ = rfd::MessageDialog::new()
             .set_level(rfd::MessageLevel::Error)
-            .set_title("Cut Craft can't start")
+            .set_title("PowerWhittle can't start")
             .set_description(&text)
             .set_buttons(rfd::MessageButtons::Ok)
             .show();
@@ -211,7 +211,7 @@ pub fn failure_message(failure: &str) -> String {
         Some(library) => {
             let fix = match package_for(library) {
                 Some(p) => format!(
-                    "Install it, then start Cut Craft again:\n\n  \
+                    "Install it, then start PowerWhittle again:\n\n  \
                      Ubuntu, Debian, Mint:     sudo apt install {}\n  \
                      Fedora:                   sudo dnf install {}\n  \
                      Arch, CachyOS, Manjaro:   sudo pacman -S {}",
@@ -219,23 +219,23 @@ pub fn failure_message(failure: &str) -> String {
                 ),
                 None => format!(
                     "Install the package that has {library} with your system's software \
-                     manager or package manager, then start Cut Craft again."
+                     manager or package manager, then start PowerWhittle again."
                 ),
             };
             format!(
-                "Cut Craft can't open its window: this computer is missing {library}, a \
+                "PowerWhittle can't open its window: this computer is missing {library}, a \
                  system library the window needs.\n\n{fix}"
             )
         }
         None if failure.contains("Wgpu(") => format!(
-            "Cut Craft couldn't open its window: it draws with the graphics card, through \
+            "PowerWhittle couldn't open its window: it draws with the graphics card, through \
              Vulkan or OpenGL, and couldn't use it.\n\nInstall or update the graphics driver \
-             (on Linux, Mesa for AMD and Intel, or NVIDIA's driver), then start Cut Craft \
+             (on Linux, Mesa for AMD and Intel, or NVIDIA's driver), then start PowerWhittle \
              again.\n\nWhat the system said:\n{}",
             failure.trim()
         ),
         None => format!(
-            "Cut Craft couldn't open its window.\n\nWhat the system said:\n{}\n\nIf this \
+            "PowerWhittle couldn't open its window.\n\nWhat the system said:\n{}\n\nIf this \
              keeps happening, please report it at github.com/NoobyNull/Cut-Craft/issues \
              with the text above.",
             failure.trim()
@@ -310,7 +310,7 @@ mod tests {
     fn version_prints_the_name_and_number() {
         assert_eq!(
             version(),
-            format!("Cut Craft {}", env!("CARGO_PKG_VERSION"))
+            format!("PowerWhittle {}", env!("CARGO_PKG_VERSION"))
         );
         assert!(help().contains("--version"));
     }
@@ -371,7 +371,7 @@ mod tests {
     fn any_other_failure_shows_what_the_system_said() {
         let text = failure_message("event loop error: neither WAYLAND_DISPLAY nor DISPLAY is set");
         assert!(
-            text.starts_with("Cut Craft couldn't open its window."),
+            text.starts_with("PowerWhittle couldn't open its window."),
             "{text}"
         );
         assert!(

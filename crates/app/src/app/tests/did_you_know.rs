@@ -38,7 +38,7 @@ fn did_you_know_steps_through_the_tips() {
         Some(super::tips::TIPS.len() - 1),
         "round to the last"
     );
-    let show = h.text_at("Show a tip when Cut Craft starts").unwrap();
+    let show = h.text_at("Show a tip when PowerWhittle starts").unwrap();
     h.click(show, Modifiers::NONE);
     h.frame(vec![]);
     assert!(!h.options().general.show_tips_at_startup, "turned off");
@@ -266,7 +266,7 @@ fn the_tips_window_shows_the_illustration_above_the_words() {
             _ => None,
         })
     };
-    let words = starting("New to Cut Craft?").expect("the first tip's words");
+    let words = starting("New to PowerWhittle?").expect("the first tip's words");
     let tip = starting("Tip 1 of").expect("the count");
     assert!(
         words.y - tip.y > 6.0 * 18.0,

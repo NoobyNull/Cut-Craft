@@ -30,12 +30,12 @@ pub struct Options {
     #[serde(default)]
     #[schemars(title = "Performance", extend("x-section" = true))]
     pub performance: Performance,
-    /// The language Cut Craft's words are in: English, built in, or a language pack
+    /// The language PowerWhittle's words are in: English, built in, or a language pack
     /// installed from Gadgets ▸ Add-ons.
     #[serde(default)]
     #[schemars(title = "Language", extend("x-section" = true))]
     pub language: Language,
-    /// How Cut Craft starts, and what every new job starts with: the material, where X0 Y0
+    /// How PowerWhittle starts, and what every new job starts with: the material, where X0 Y0
     /// and Z zero are, the rapid heights and home (the job settings under it).
     #[serde(default)]
     #[schemars(title = "Job Defaults", extend("x-section" = true))]
@@ -87,7 +87,7 @@ pub struct Options {
     #[serde(default)]
     #[schemars(skip)]
     pub stl: fmt_export_as_stl::Settings,
-    /// What Job Setup starts a new job with, once its Set as Default is pressed; Cut Craft's
+    /// What Job Setup starts a new job with, once its Set as Default is pressed; PowerWhittle's
     /// own starting job until then. Set as Default changes only what is on its form, so the
     /// clearing kept by Clearing Settings' Use as My Default stays.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -325,7 +325,7 @@ impl Options {
     }
 
     /// [`Self::load`], and what could not be read of it: whether the advanced settings had
-    /// been changed outside Cut Craft (and so were put back to their defaults), and the
+    /// been changed outside PowerWhittle (and so were put back to their defaults), and the
     /// settings left at their defaults. A file with settings left out is first copied to
     /// `options.json.bak`, so saving the defaults over it loses nothing.
     pub fn load_checked() -> Read {
@@ -466,7 +466,7 @@ impl Options {
         if let Some(default) = defaults.get(page) {
             values[page] = default.clone();
         }
-        // the Job Defaults page shows the job new jobs start with: back to Cut Craft's own
+        // the Job Defaults page shows the job new jobs start with: back to PowerWhittle's own
         if page == JOB_DEFAULTS
             && let Some(values) = values.as_object_mut()
         {

@@ -1,4 +1,4 @@
-//! The post library: Cut Craft's own posts, provided and not edited, and the user's custom
+//! The post library: PowerWhittle's own posts, provided and not edited, and the user's custom
 //! posts, each a `.pp` file in a folder of their own (`My_PostP`). Posts are known
 //! by their `POST_NAME`, as machines name them.
 
@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 /// Where a post comes from.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Source {
-    /// One of Cut Craft's own: its text.
+    /// One of PowerWhittle's own: its text.
     BuiltIn(&'static str),
     /// A custom post's file.
     Custom(PathBuf),
@@ -20,7 +20,7 @@ pub struct Entry {
     /// Its `POST_NAME`, or its file name when it does not parse.
     pub name: String,
     /// Its file's name (`grbl_arcs_mm.pp`, or `custom/mine.pp` for a custom post, so it never
-    /// clashes with one of Cut Craft's own): what its capabilities are kept by, as its name
+    /// clashes with one of PowerWhittle's own): what its capabilities are kept by, as its name
     /// may change.
     pub key: String,
     pub source: Source,
@@ -44,7 +44,7 @@ impl Library {
         Self { custom_dir }
     }
 
-    /// The custom posts by name, then Cut Craft's own.
+    /// The custom posts by name, then PowerWhittle's own.
     pub fn entries(&self) -> Vec<Entry> {
         let mut custom: Vec<Entry> = self
             .custom_dir
@@ -72,7 +72,7 @@ impl Library {
         custom.sort_by_key(|e| e.name.to_lowercase());
         let own = BUILT_IN.iter().map(|(file, text)| Entry {
             key: (*file).to_owned(),
-            name: Post::parse(text).expect("Cut Craft's posts parse").name,
+            name: Post::parse(text).expect("PowerWhittle's posts parse").name,
             source: Source::BuiltIn(text),
             broken: None,
         });
@@ -165,7 +165,7 @@ impl Library {
 
     /// Install Post-Processor: a copy of `file` in the custom folder, once it is seen to
     /// parse; its entry. A post whose name is already listed (one installed before, or one
-    /// of Cut Craft's own) is kept beside it as a copy, named with a copy number and when it
+    /// of PowerWhittle's own) is kept beside it as a copy, named with a copy number and when it
     /// was installed: `Mine (mm) (copy 1) (11/15/26 075422) (*.nc)`.
     pub fn install(&self, file: &Path) -> Result<Entry, String> {
         self.install_at(file, chrono::Local::now().naive_local())
@@ -248,13 +248,15 @@ impl Library {
             .map_err(|e| format!("{}: {e}", path.display()))
     }
 
-    /// Delete: takes a custom post's file away (Cut Craft's own cannot be).
+    /// Delete: takes a custom post's file away (PowerWhittle's own cannot be).
     pub fn delete(entry: &Entry) -> Result<(), String> {
         match &entry.source {
             Source::Custom(path) => {
                 std::fs::remove_file(path).map_err(|e| format!("{}: {e}", path.display()))
             }
-            Source::BuiltIn(_) => Err("Cut Craft's own post-processors cannot be deleted".into()),
+            Source::BuiltIn(_) => {
+                Err("PowerWhittle's own post-processors cannot be deleted".into())
+            }
         }
     }
 }
@@ -333,11 +335,11 @@ mod tests {
         assert_eq!(own.len(), BUILT_IN.len());
         assert!(own.iter().all(|e| !e.is_custom() && e.broken.is_none()));
         let custom = lib.customize(&own[0]).unwrap();
-        assert_eq!(custom.name, "Cut Craft FluidNC ATC (mm) Custom (*.nc)");
+        assert_eq!(custom.name, "PowerWhittle FluidNC ATC (mm) Custom (*.nc)");
         assert_eq!(own[0].key, "fluidnc_atc_mm.pp");
         assert!(
             custom.key.starts_with("custom/") && custom.key != own[0].key,
-            "a custom post's key never clashes with one of Cut Craft's own: {}",
+            "a custom post's key never clashes with one of PowerWhittle's own: {}",
             custom.key
         );
         let all = lib.entries();
@@ -347,7 +349,7 @@ mod tests {
             "the copy parses under its new name"
         );
         let again = lib.customize(&own[0]).unwrap();
-        assert_eq!(again.name, "Cut Craft FluidNC ATC (mm) Custom 2 (*.nc)");
+        assert_eq!(again.name, "PowerWhittle FluidNC ATC (mm) Custom 2 (*.nc)");
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -359,7 +361,7 @@ mod tests {
             &src,
             BUILT_IN[0]
                 .1
-                .replace("Cut Craft FluidNC ATC (mm)", "Mine (mm)"),
+                .replace("PowerWhittle FluidNC ATC (mm)", "Mine (mm)"),
         )
         .unwrap();
         let entry = lib.install(&src).unwrap();
@@ -377,7 +379,7 @@ mod tests {
         assert!(lib.find("Mine (mm) (*.nc)").is_none());
         assert!(
             Library::delete(&lib.entries()[0]).is_err(),
-            "Cut Craft's own stay"
+            "PowerWhittle's own stay"
         );
         std::fs::write(&src, "not a post at all [").unwrap();
         let err = lib.install(&src).unwrap_err();
@@ -397,7 +399,7 @@ mod tests {
             &src,
             BUILT_IN[0]
                 .1
-                .replace("Cut Craft FluidNC ATC (mm)", "Mine (mm)"),
+                .replace("PowerWhittle FluidNC ATC (mm)", "Mine (mm)"),
         )
         .unwrap();
         let at = |h, m, s| {
@@ -417,7 +419,7 @@ mod tests {
         );
         let next = lib.install_at(&src, at(8, 0, 1)).unwrap();
         assert_eq!(next.name, "Mine (mm) (copy 2) (11/15/26 080001) (*.nc)");
-        // a post named like one of Cut Craft's own never takes its place
+        // a post named like one of PowerWhittle's own never takes its place
         let own = lib.entries().last().unwrap().name.clone();
         std::fs::write(&src, with_name(BUILT_IN[0].1, &own)).unwrap();
         let named = lib.install_at(&src, at(9, 0, 0)).unwrap().name;

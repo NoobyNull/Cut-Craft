@@ -4,15 +4,15 @@ see-also: addons, relief_from_photo
 ---
 
 **Open My Gadgets Folder** opens the folder where your own gadgets go, in your computer's
-file manager. Cut Craft makes the folder the first time if it is not there yet.
+file manager. PowerWhittle makes the folder the first time if it is not there yet.
 
 1. Pick **Gadgets ▸ My Gadgets ▸ Open My Gadgets Folder**.
 2. Copy the gadget's `.lua` file into the folder that opens.
-3. Restart Cut Craft. The gadget is listed in **Gadgets ▸ My Gadgets** and in the
+3. Restart PowerWhittle. The gadget is listed in **Gadgets ▸ My Gadgets** and in the
    **Gadgets** section of the tool buttons, under its file's name.
-4. Pick it. Cut Craft asks **Do you want to run this unsigned code?** Choose **Run and
+4. Pick it. PowerWhittle asks **Do you want to run this unsigned code?** Choose **Run and
    Remember** (don't ask again until the file changes), **Run This Time** (ask again after
-   Cut Craft closes) or **Don't Run**.
+   PowerWhittle closes) or **Don't Run**.
 5. Once you say yes, it takes its own name and opens its settings.
 
 A gadget you put here yourself is not official (nobody has signed it), so My Gadgets shows
@@ -21,7 +21,7 @@ read its name. If you edit the file, you are asked again. A file that is not a w
 gadget says why in the status bar when you say yes to it. See
 [Running unsigned code](help:addons) for the whole story.
 
-The folder is called `gadgets`, inside Cut Craft's settings folder:
+The folder is called `gadgets`, inside PowerWhittle's settings folder:
 
 - **Linux**: `~/.config/cut-craft/gadgets`
 - **Windows**: `%APPDATA%\cut-craft\gadgets`

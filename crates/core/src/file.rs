@@ -86,12 +86,12 @@ pub enum LoadError {
 impl fmt::Display for LoadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotAJob => f.write_str("this is not a Cut Craft job file"),
+            Self::NotAJob => f.write_str("this is not a PowerWhittle job file"),
             Self::NewerVersion(v) => {
                 write!(
                     f,
-                    "this job was saved by a newer version of Cut Craft (format {v}; this build \
-                     reads up to {VERSION}). Update Cut Craft (Help ▸ Check for Updates) to open it"
+                    "this job was saved by a newer version of PowerWhittle (format {v}; this build \
+                     reads up to {VERSION}). Update PowerWhittle (Help ▸ Check for Updates) to open it"
                 )
             }
             Self::Damaged(why) => write!(

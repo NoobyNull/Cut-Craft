@@ -5,11 +5,11 @@ see-also: settings, updates, first_time_setup, interface_layout
 
 # Backing up your settings
 
-Everything you set up in Cut Craft (your settings and window layout, your machines and post
+Everything you set up in PowerWhittle (your settings and window layout, your machines and post
 processors, the Bit Library, templates and the rest) can be saved in one **backup file**. Keep
 it somewhere safe, or take it to a new computer.
 
-Cut Craft also makes backups by itself, so you have one from just before anything big
+PowerWhittle also makes backups by itself, so you have one from just before anything big
 changes.
 
 ## Saving a backup yourself
@@ -37,28 +37,28 @@ The status bar says where the backup was saved.
 | Add-ons list | Which add-ons are installed. The add-ons themselves are downloaded again, so a backup stays small |
 | Unsigned code you allowed | The unsigned add-ons and gadgets you said may run |
 
-Never in a backup: your **recent files list**, unsaved work kept in case Cut Craft closes
-unexpectedly, logs, and pictures Cut Craft can make again.
+Never in a backup: your **recent files list**, unsaved work kept in case PowerWhittle closes
+unexpectedly, logs, and pictures PowerWhittle can make again.
 
 **The Web API access token** is left out unless you tick **Include the Web API access token**.
-Anyone with a backup that holds it could drive Cut Craft over your network, so keep that
+Anyone with a backup that holds it could drive PowerWhittle over your network, so keep that
 backup private. The key for the AI border tiles stays in your computer's password store and
 is never put in a backup.
 
-## The backups Cut Craft makes by itself
+## The backups PowerWhittle makes by itself
 
 A backup is made just before:
 
 - an **update** is installed,
 - the **window layout** changes (**File ▸ Window Layout**, or the layout question),
 - **first-time setup** is run again, which changes My Machine,
-- Cut Craft changes a library itself, as when it joined each bit's copies for different
+- PowerWhittle changes a library itself, as when it joined each bit's copies for different
   materials into one.
 
-It also makes one **every week**, when Cut Craft starts. If nothing has changed since a
+It also makes one **every week**, when PowerWhittle starts. If nothing has changed since a
 backup it already has, no new one is made.
 
-They are kept in a `backups` folder inside Cut Craft's settings folder:
+They are kept in a `backups` folder inside PowerWhittle's settings folder:
 
 | Computer | Folder |
 |---|---|
@@ -80,9 +80,9 @@ the folder.
 
 ## Restoring a backup
 
-Restoring a backup from inside Cut Craft, with a look at what would change before anything
+Restoring a backup from inside PowerWhittle, with a look at what would change before anything
 does, is coming in a later version. Until then a backup is an ordinary zip file: its
 `settings` folder holds the files as they were, and they can be copied back into the settings
-folder by hand while Cut Craft is closed.
+folder by hand while PowerWhittle is closed.
 
 See also: [Changing settings](help:settings), [Updates](help:updates).

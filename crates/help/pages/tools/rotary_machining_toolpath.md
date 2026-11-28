@@ -140,7 +140,7 @@ round blank's edge, or where the model is the blank's own surface) is skipped.
 Off centre and Indexed hold the bit away from the axis, so the rotary's
 [centre line](help:rotary_firmware) must be found first: [Rotary set up](help:check_rotary_setup)
 warns until it is. The preview shows where the tip really cuts, and the file moves your
-machine's own axis across the rotary (Y beside a rotary along X) as well as A. Cut Craft's
+machine's own axis across the rotary (Y beside a rotary along X) as well as A. PowerWhittle's
 **Rotary A** posts write it; a post of your own needs `[ACROSS]` in its move lines.
 
 ## Kept clear of the holder, chuck and tailstock

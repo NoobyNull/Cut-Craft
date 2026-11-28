@@ -43,7 +43,7 @@ or remove the add-on, use [Add-ons](help:addons).
 
 If it says the add-on **is not available to download yet**, nothing is wrong on your
 computer: it simply has not been published for your kind of computer yet. Try again after
-the next Cut Craft update.
+the next PowerWhittle update.
 
 ### High detail
 

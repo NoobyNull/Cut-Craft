@@ -1,10 +1,10 @@
-//! Help ▸ Check for Updates: finds a newer Cut Craft on GitHub, and with the user's go-ahead
-//! downloads it, checks it was signed with Cut Craft's release key (minisign) and matches
+//! Help ▸ Check for Updates: finds a newer PowerWhittle on GitHub, and with the user's go-ahead
+//! downloads it, checks it was signed with PowerWhittle's release key (minisign) and matches
 //! GitHub's checksum, and swaps it in for the running program, ready for a restart. Only
 //! GitHub is asked, never a mirror.
 //!
 //! One click does it all from the app's side: "Install Now" downloads, checks and swaps in
-//! the new version, then Cut Craft closes (asking to save unsaved work first) and
+//! the new version, then PowerWhittle closes (asking to save unsaved work first) and
 //! [`restart`] opens the new version on the same job. Self-replacing installs are the
 //! `AppImage`, the Linux `.tar.gz` and the Windows `.zip`; a package manager's copy (.deb,
 //! .rpm, AUR) and a Flatpak are told how to update instead, with the command to run.
@@ -32,7 +32,7 @@ use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-/// Where Cut Craft's releases are published, preferred first. Cut Craft is moving to the
+/// Where PowerWhittle's releases are published, preferred first. PowerWhittle is moving to the
 /// Power-Whittle organisation: for a while each release is published on both (the release
 /// workflow mirrors it), and later only on Power-Whittle. Both are read, so an update is
 /// found while the mirror is not made yet, falls behind, or once `NoobyNull`'s stops.
@@ -52,10 +52,10 @@ pub const RELEASES_PAGE: &str = "https://github.com/NoobyNull/Cut-Craft/releases
 /// The minisign public key releases are signed with (the secret key is only in the
 /// repository's Actions secrets; see `scripts/sign-release`).
 pub const RELEASE_KEY: &str = include_str!("../release-key.pub");
-/// A download larger than this is not Cut Craft.
+/// A download larger than this is not PowerWhittle.
 const MAX_DOWNLOAD: u64 = 500 * 1024 * 1024;
 
-/// This copy of Cut Craft, as the running program sees itself.
+/// This copy of PowerWhittle, as the running program sees itself.
 pub fn this_install() -> Install {
     let exe = std::env::current_exe().unwrap_or_default();
     // the real file, not a link to it in ~/.local/bin or the like
@@ -101,12 +101,12 @@ impl Found {
                     release.version
                 )),
                 Some(a) if release.signature_of(a).is_none() => Err(format!(
-                    "Version {}'s download is not signed, so Cut Craft cannot check it is a \
+                    "Version {}'s download is not signed, so PowerWhittle cannot check it is a \
                      real release. Download it from the release page instead.",
                     release.version
                 )),
                 Some(a) if a.digest.is_none() => Err(format!(
-                    "GitHub has no checksum for version {}'s download, so Cut Craft cannot \
+                    "GitHub has no checksum for version {}'s download, so PowerWhittle cannot \
                      check it arrives whole. Download it from the release page instead.",
                     release.version
                 )),
@@ -240,7 +240,7 @@ pub fn install(install: &Install, found: &Found, step: &dyn Fn(Step)) -> Result<
         ) => {
             let target = install
                 .program()
-                .ok_or("this copy of Cut Craft cannot update itself")?;
+                .ok_or("this copy of PowerWhittle cannot update itself")?;
             let asset = install
                 .asset_suffix()
                 .and_then(|s| release.asset(s))
@@ -280,7 +280,7 @@ pub fn install(install: &Install, found: &Found, step: &dyn Fn(Step)) -> Result<
                 ready: Err(why), ..
             },
         ) => Err(why.clone()),
-        (_, Found::UpToDate) => Err("Cut Craft is already up to date".to_owned()),
+        (_, Found::UpToDate) => Err("PowerWhittle is already up to date".to_owned()),
     }
 }
 
@@ -361,7 +361,7 @@ fn offline(e: &ureq::Error) -> String {
              in an hour."
                 .to_owned()
         }
-        ureq::Error::StatusCode(404) => "GitHub has no releases of Cut Craft yet".to_owned(),
+        ureq::Error::StatusCode(404) => "GitHub has no releases of PowerWhittle yet".to_owned(),
         ureq::Error::StatusCode(code) => format!("GitHub answered with error {code}"),
         _ => format!("Could not reach GitHub. Check this computer is online. ({e})"),
     }
@@ -650,7 +650,7 @@ mod tests {
             Ok(Found::Release { release, .. }) => release.tag.clone(),
             other => format!("{other:?}"),
         };
-        let no_repo = || Err("GitHub has no releases of Cut Craft yet".to_owned());
+        let no_repo = || Err("GitHub has no releases of PowerWhittle yet".to_owned());
 
         // before the mirror exists: NoobyNull answers
         let (found, asked) = both(no_repo(), Ok(listed(NN, &[("v0.7.6", &[LINUX_FILE])])));

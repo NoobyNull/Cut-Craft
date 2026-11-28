@@ -1,6 +1,6 @@
 //! Language packs: add-ons of kind `language`, each a folder of `.ftl` files with its
 //! `addon.toml` (which names the language), installed from Gadgets ▸ Add-ons like any other
-//! add-on and never with Cut Craft itself. Edit ▸ Options ▸ Language picks one; English is
+//! add-on and never with PowerWhittle itself. Edit ▸ Options ▸ Language picks one; English is
 //! built in, and any words a pack lacks show in English.
 
 use cut_craft_i18n::{Catalogue, tr};
@@ -21,7 +21,7 @@ pub struct Pack {
     /// The language it is in, such as `ru`.
     pub code: String,
     pub version: String,
-    /// Signed with Cut Craft's release key: official.
+    /// Signed with PowerWhittle's release key: official.
     pub signed: bool,
     /// The volunteers who translated it, from its `addon.toml`.
     pub translators: Vec<String>,
@@ -104,7 +104,7 @@ pub fn use_chosen(dir: Option<&Path>, chosen: &str) -> Result<(), String> {
     let Some((dir, pack)) = found else {
         cut_craft_i18n::use_language(None);
         return Err(format!(
-            "The language pack \"{chosen}\" is not installed any more, so Cut Craft is in \
+            "The language pack \"{chosen}\" is not installed any more, so PowerWhittle is in \
              English. Install it again in Gadgets ▸ Add-ons, or pick another language in Edit \
              ▸ Options ▸ Language."
         ));
@@ -120,14 +120,14 @@ pub fn use_chosen(dir: Option<&Path>, chosen: &str) -> Result<(), String> {
         Err(e) => {
             cut_craft_i18n::use_language(None);
             Err(format!(
-                "The language pack {} could not be read ({e}), so Cut Craft is in English.",
+                "The language pack {} could not be read ({e}), so PowerWhittle is in English.",
                 pack.name
             ))
         }
     }
 }
 
-/// How much of Cut Craft `pack` covers, as a whole percentage of English's words (0 when it
+/// How much of PowerWhittle `pack` covers, as a whole percentage of English's words (0 when it
 /// will not read).
 pub fn coverage(dir: &Path, pack: &Pack) -> u32 {
     load(dir, pack).map_or(0, |(catalogue, _)| {
@@ -138,7 +138,7 @@ pub fn coverage(dir: &Path, pack: &Pack) -> u32 {
 
 /// What is said about `pack` beside its name: an official pack is "Official, community
 /// supported" (checked and signed, but its words are written and kept up by volunteers),
-/// then who translated it, then how much of Cut Craft it covers once `percent` is known. One
+/// then who translated it, then how much of PowerWhittle it covers once `percent` is known. One
 /// that is not signed gets no "Official" line; it is marked not official where it shows.
 pub fn support_lines(pack: &Pack, percent: Option<u32>) -> Vec<String> {
     let mut lines = vec![];

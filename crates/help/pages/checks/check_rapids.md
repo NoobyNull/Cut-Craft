@@ -9,7 +9,7 @@ see-also: checks_before_cutting, check_air_cutting
 
 ## What it looks for
 
-Cut Craft cuts the whole job, in order, from a block of material, and watches every
+PowerWhittle cuts the whole job, in order, from a block of material, and watches every
 **rapid move** (the moves at full speed between cuts) for one that goes into material that
 is still there.
 

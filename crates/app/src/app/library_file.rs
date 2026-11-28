@@ -42,12 +42,12 @@ impl LibraryFile {
     }
 }
 
-/// What a save says when `what`'s file, at `path`, could not be read when Cut Craft started:
+/// What a save says when `what`'s file, at `path`, could not be read when PowerWhittle started:
 /// the changes are kept until it closes, but not written over that file.
 fn not_saved(what: &str, path: &Path) -> String {
     format!(
-        "{what} not saved: {} could not be read when Cut Craft started, so it is not written \
-         over. Fix or rename that file, then restart Cut Craft; your changes are kept only \
+        "{what} not saved: {} could not be read when PowerWhittle started, so it is not written \
+         over. Fix or rename that file, then restart PowerWhittle; your changes are kept only \
          until it closes",
         path.display()
     )

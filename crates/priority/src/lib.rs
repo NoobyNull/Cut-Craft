@@ -1,6 +1,6 @@
 //! Lowers the priority of the thread that calls it, so the computer's other programs (a video,
-//! the browser) and Cut Craft's own window come before a long calculation, and reads how much
-//! processor time Cut Craft has used.
+//! the browser) and PowerWhittle's own window come before a long calculation, and reads how much
+//! processor time PowerWhittle has used.
 //!
 //! A lowered thread still runs flat out when nothing else wants the processor: it only gives
 //! way while another program is waiting. Only ever lowered, never raised, so no system asks for
@@ -51,7 +51,7 @@ pub fn this_thread_is_lowered() -> bool {
     os::this_thread_is_lowered()
 }
 
-/// The processor time all of Cut Craft's threads have used since it started, both in its own
+/// The processor time all of PowerWhittle's threads have used since it started, both in its own
 /// code and in the system's on its behalf; none where the system will not say.
 pub fn process_time() -> Option<Duration> {
     os::process_time()

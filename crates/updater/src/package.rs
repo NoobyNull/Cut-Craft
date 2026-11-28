@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 pub fn verify(bytes: &[u8], digest: Option<&str>) -> Result<(), String> {
     let Some(want) = digest.and_then(|d| d.strip_prefix("sha256:")) else {
         return Err(
-            "GitHub has no checksum for this download, so Cut Craft cannot check it \
+            "GitHub has no checksum for this download, so PowerWhittle cannot check it \
                     arrived whole. Download it from the release page instead."
                 .to_owned(),
         );
@@ -46,7 +46,7 @@ pub fn verify_signature(
 ) -> Result<(), String> {
     let refused = |why: &str| {
         format!(
-            "The download's signature {why}, so it may not be a real Cut Craft release. \
+            "The download's signature {why}, so it may not be a real PowerWhittle release. \
              Nothing was installed."
         )
     };
@@ -56,7 +56,7 @@ pub fn verify_signature(
         .find(|l| !l.is_empty() && !l.starts_with("untrusted comment:"))
         .and_then(|line| minisign_verify::PublicKey::from_base64(line).ok())
         .ok_or(
-            "This copy of Cut Craft has no release key built in, so it cannot check \
+            "This copy of PowerWhittle has no release key built in, so it cannot check \
                 downloads. Download the new version from the release page instead.",
         )?;
     let signature =
@@ -146,7 +146,7 @@ pub fn replace(target: &Path, program: &[u8]) -> Result<(), String> {
     let cannot = |e: std::io::Error| {
         if e.kind() == std::io::ErrorKind::PermissionDenied {
             format!(
-                "Cut Craft is not allowed to change its own files in {}. It was probably \
+                "PowerWhittle is not allowed to change its own files in {}. It was probably \
                  installed for every user of this computer: download the new version from \
                  the release page and install it the same way.",
                 dir.display()
@@ -184,7 +184,7 @@ pub fn write_beside(dest: &Path, program: &[u8]) -> Result<(), String> {
     let cannot = |e: std::io::Error| {
         if e.kind() == std::io::ErrorKind::PermissionDenied {
             format!(
-                "Cut Craft is not allowed to add files to {}. Download the new version from \
+                "PowerWhittle is not allowed to add files to {}. Download the new version from \
                  the release page and put it there yourself.",
                 dir.display()
             )

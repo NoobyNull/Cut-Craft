@@ -6,7 +6,7 @@
 //! so its files appear there like any others; the licences feed Help ▸ Credits.
 //!
 //! Only licences that let people sell what they make are allowed (CC0, public domain,
-//! CC BY), so nothing in a pack can stop a user selling a carving (Cut Craft's own LICENSE
+//! CC BY), so nothing in a pack can stop a user selling a carving (PowerWhittle's own LICENSE
 //! still decides who may use the program commercially). Non-commercial and
 //! no-derivatives licences are refused when the pack is read.
 
@@ -118,11 +118,11 @@ pub enum PackError {
 impl fmt::Display for PackError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotAPack(why) => write!(f, "this is not a Cut Craft content pack ({why})"),
+            Self::NotAPack(why) => write!(f, "this is not a PowerWhittle content pack ({why})"),
             Self::NewerVersion(v) => write!(
                 f,
-                "this pack needs a newer Cut Craft (pack format {v}; this version reads up to \
-                 {VERSION}). Update Cut Craft from Help ▸ Check for Updates, then install it again"
+                "this pack needs a newer PowerWhittle (pack format {v}; this version reads up to \
+                 {VERSION}). Update PowerWhittle from Help ▸ Check for Updates, then install it again"
             ),
             Self::Licence(l) => write!(
                 f,
@@ -366,7 +366,7 @@ mod tests {
             "staunton-chess",
             "Staunton Chess Set",
             Licence::Cc0,
-            "Cut Craft",
+            "PowerWhittle",
         );
         pack.items
             .push(Item::new("Pieces/Pawn half.stl", "Pawn", b"pawn"));

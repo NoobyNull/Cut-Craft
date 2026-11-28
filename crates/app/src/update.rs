@@ -1,6 +1,6 @@
 //! Help ▸ Check for Updates and the check at startup: the window that offers a new version
 //! ("Download, install and relaunch?"), shows the download, and once it is installed closes
-//! Cut Craft (asking to save first) and opens the new version on the same job. The work is
+//! PowerWhittle (asking to save first) and opens the new version on the same job. The work is
 //! [`cut_craft_updater`]'s, on a thread of its own so the window keeps drawing.
 
 use cut_craft_i18n::tr;
@@ -37,7 +37,7 @@ pub enum Asked {
     Checked,
     /// Skip This Version: not offered at startup again.
     Skip(String),
-    /// Close Cut Craft (asking to save as usual) and start this program: Relaunch Now, or
+    /// Close PowerWhittle (asking to save as usual) and start this program: Relaunch Now, or
     /// Install Now's download finished.
     Restart(PathBuf),
 }
@@ -224,7 +224,7 @@ impl Updates {
         let id = egui::Id::unique("updates_window");
         let size = egui::vec2(460.0, 320.0);
         let pressed =
-            cut_craft_bug_report::dialog(ctx, id, "Cut Craft Updates", size, &mut open, |ui| {
+            cut_craft_bug_report::dialog(ctx, id, "PowerWhittle Updates", size, &mut open, |ui| {
                 ui.set_max_width(440.0);
                 self.body(ui)
             })

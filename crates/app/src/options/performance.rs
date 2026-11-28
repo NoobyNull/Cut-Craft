@@ -5,7 +5,7 @@ use super::{Deserialize, JsonSchema, Serialize};
 use super::{Detail, MovingDetail, preview_detail, target_fps, yes};
 use cut_craft_core::work::Limit;
 
-/// How hard Cut Craft works the computer: how much of it calculations may use, and how much
+/// How hard PowerWhittle works the computer: how much of it calculations may use, and how much
 /// detail the previews and the 3D view are drawn with. Toward speed or toward detail, each.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Performance {

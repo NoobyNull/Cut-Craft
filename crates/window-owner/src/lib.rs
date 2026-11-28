@@ -1,4 +1,4 @@
-//! Keeps Cut Craft's dialog windows (Did You Know?, Options, the Bit Library...) above the
+//! Keeps PowerWhittle's dialog windows (Did You Know?, Options, the Bit Library...) above the
 //! main window until they close, and makes the system's file dialogs belong to whichever window
 //! opened them.
 //!
@@ -9,7 +9,7 @@
 //!
 //! - Windows: the main window becomes the dialog's owner (an owned window always stays above
 //!   its owner, hides when it is minimised, and never covers other programs).
-//! - Linux and the BSDs on X11, which includes `XWayland`, how Cut Craft runs on a Wayland
+//! - Linux and the BSDs on X11, which includes `XWayland`, how PowerWhittle runs on a Wayland
 //!   desktop unless Options says otherwise: the dialog is marked `WM_TRANSIENT_FOR` the main
 //!   window, which the window manager keeps above it in the same way.
 //! - Wayland run directly, and macOS: no way to mark a window another's own after it is open,

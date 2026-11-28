@@ -1,4 +1,4 @@
-//! Cut Craft's help pages, kept apart from the program that shows them.
+//! PowerWhittle's help pages, kept apart from the program that shows them.
 //!
 //! Every page is a Markdown file under `pages/` (a tool's under `pages/tools/<tool id>.md`),
 //! carried into the program when it is built, so help works offline on every platform. Each

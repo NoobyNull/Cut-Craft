@@ -1,4 +1,4 @@
-//! Options ▸ Web API: a small HTTP server that lets a script, a test or Claude drive Cut Craft
+//! Options ▸ Web API: a small HTTP server that lets a script, a test or Claude drive PowerWhittle
 //! the way a person does with the mouse.
 //!
 //! The server never touches the job. Its thread checks each request (the access token, and on
@@ -7,7 +7,7 @@
 //! (one Undo step each), and answers. The server waits for that answer and sends it back.
 //!
 //! It is off until switched on in Options, listens on 127.0.0.1 unless "Allow other computers"
-//! is ticked (then 0.0.0.0), and never streams G-code to a machine: Cut Craft is not a G-code
+//! is ticked (then 0.0.0.0), and never streams G-code to a machine: PowerWhittle is not a G-code
 //! sender.
 
 use serde_json::Value;
@@ -95,7 +95,7 @@ impl ApiError {
         }
     }
 
-    /// The request was fine but Cut Craft could not do it now (the tool said why): 409.
+    /// The request was fine but PowerWhittle could not do it now (the tool said why): 409.
     pub fn refused(message: impl Into<String>) -> Self {
         Self {
             status: 409,
@@ -434,7 +434,7 @@ fn ask_app(call: Call, calls: &Sender<Pending>, wake: &impl Fn()) -> Result<Repl
         Ok(answer) => answer,
         Err(RecvTimeoutError::Timeout) => Err(ApiError {
             status: 503,
-            message: "Cut Craft did not answer in time: it may be busy, or waiting on a \
+            message: "PowerWhittle did not answer in time: it may be busy, or waiting on a \
                       question in its window. Look at the window, then try again."
                 .into(),
         }),
@@ -445,7 +445,7 @@ fn ask_app(call: Call, calls: &Sender<Pending>, wake: &impl Fn()) -> Result<Repl
 fn closing() -> ApiError {
     ApiError {
         status: 503,
-        message: "Cut Craft is closing or the Web API was switched off.".into(),
+        message: "PowerWhittle is closing or the Web API was switched off.".into(),
     }
 }
 

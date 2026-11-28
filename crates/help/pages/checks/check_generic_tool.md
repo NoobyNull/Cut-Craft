@@ -10,7 +10,7 @@ see-also: checks_before_cutting, check_makers_figures
 ## What it looks for
 
 Whether each bit comes from a **maker's catalogue** in the Bit Library (it has a
-manufacturer, such as Amana or Whiteside), or is a **generic** bit like the ones Cut Craft
+manufacturer, such as Amana or Whiteside), or is a **generic** bit like the ones PowerWhittle
 starts with. It also says when a toolpath's bit is no longer in the Bit Library at all.
 
 ## Why it matters

@@ -1,14 +1,14 @@
-+ Cut Craft's post for Mach3 (and Mach4), inches, with Mach3's tool change (T M6).
++ PowerWhittle's post for Mach3 (and Mach4), inches, with Mach3's tool change (T M6).
 + Rotary: X wrapped onto A, for a cylinder along Y; feeds in units a minute. Needs an A axis.
 + Made from this controller's Arcs post: change the two together.
 
 + History
 + Who        When       What
 + ========== ========== ==========================================
-+ Cut Craft  2026-10-27 First version: arcs, tool change with T M6
-+ Cut Craft  2026-10-31 Dwell written as G4
++ PowerWhittle  2026-10-27 First version: arcs, tool change with T M6
++ PowerWhittle  2026-10-31 Dwell written as G4
 
-POST_NAME = "Cut Craft Mach3 Rotary A, cylinder along Y (inch) (*.tap)"
+POST_NAME = "PowerWhittle Mach3 Rotary A, cylinder along Y (inch) (*.tap)"
 FILE_EXTENSION = "tap"
 UNITS = "INCHES"
 LINE_ENDING = "[10]"

@@ -32,7 +32,7 @@ pub fn find(addons: &Path) -> Option<PathBuf> {
     program.is_file().then_some(program)
 }
 
-/// The folder added to the Library for what Cut Craft makes: Documents/CutCraft, whose
+/// The folder added to the Library for what PowerWhittle makes: Documents/CutCraft, whose
 /// Generated ▸ Borders holds the borders.
 pub fn library_root() -> Option<PathBuf> {
     let home = if cfg!(windows) {
@@ -72,7 +72,7 @@ const SERVICE: &str = "Cut Craft";
 const ACCOUNT: &str = "Google AI Studio key";
 
 impl KeyStore {
-    /// The computer's password store, with a private file in Cut Craft's settings folder
+    /// The computer's password store, with a private file in PowerWhittle's settings folder
     /// if it has none.
     pub fn system() -> Self {
         Self::System {

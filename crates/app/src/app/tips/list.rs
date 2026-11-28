@@ -4,13 +4,13 @@ use super::{Area, Tip, icon, scene, tool};
 use crate::options::WindowLayout;
 
 /// Every tip, in the order startup shows them: the first few are what a beginner needs on day
-/// one, the rest make the work quicker, safer or easier to find. Each is true of Cut Craft as
+/// one, the rest make the work quicker, safer or easier to find. Each is true of PowerWhittle as
 /// it is: check a tip whenever the tool it names changes.
 pub(in super::super) const TIPS: &[Tip] = &[
     scene(
         Area::Start,
         "tips/sample_project.png",
-        "New to Cut Craft? On the blank sheet it opens with, **Try a sample project** opens a \
+        "New to PowerWhittle? On the blank sheet it opens with, **Try a sample project** opens a \
          finished sign with its toolpaths already made, so you can see the whole journey from \
          drawing to cutting file before you start your own.",
         "getting_started",
@@ -39,7 +39,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
     scene(
         Area::Start,
         "tips/design_then_toolpaths.png",
-        "Cut Craft works in two steps. **Design** is where you draw what you want. \
+        "PowerWhittle works in two steps. **Design** is where you draw what you want. \
          **Toolpaths** is where you tell the machine how to cut it.",
         "getting_started",
     ),
@@ -77,7 +77,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
         Area::Toolpaths,
         "tips/out_of_date.png",
         "Changed a shape, or the material's thickness in Job Setup, after making its toolpath? \
-         The toolpath is marked out of date, and Cut Craft offers to recalculate it. Saving or \
+         The toolpath is marked out of date, and PowerWhittle offers to recalculate it. Saving or \
          sending an out-of-date toolpath always stops to ask first.",
         "toolpaths",
     ),
@@ -176,7 +176,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
     scene(
         Area::Program,
         "tips/recovery_copy.png",
-        "Cut Craft keeps a recovery copy of unsaved work every 30 seconds. If the power goes \
+        "PowerWhittle keeps a recovery copy of unsaved work every 30 seconds. If the power goes \
          off, your work opens again next time, and the copy is kept until you save or close \
          it. **Edit ▸ Options ▸ General** sets how often.",
         "saving_jobs",
@@ -1224,13 +1224,13 @@ pub(in super::super) const TIPS: &[Tip] = &[
         Area::Program,
         "file/github_link.png",
         "An update is one click: **Install Now** downloads it, checks it is genuine, installs it \
-         and reopens Cut Craft on your job, asking you to save first.",
+         and reopens PowerWhittle on your job, asking you to save first.",
         "updates",
     ),
     icon(
         Area::Program,
         "toolpaths/recalculate_toolpath.png",
-        "**Skip This Version** stops Cut Craft offering that update when it starts. A newer one \
+        "**Skip This Version** stops PowerWhittle offering that update when it starts. A newer one \
          is still offered, and **Help ▸ Check for Updates** still finds it.",
         "updates",
     ),
@@ -1244,7 +1244,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
     icon(
         Area::Program,
         "view/interface_layout.png",
-        "**Edit ▸ Options ▸ Web API** lets a script or program drive Cut Craft. It is off until \
+        "**Edit ▸ Options ▸ Web API** lets a script or program drive PowerWhittle. It is off until \
          you turn it on, and every step it takes shows in the window and can be undone.",
         "web_api",
     ),
@@ -1272,7 +1272,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
     scene(
         Area::Program,
         "tips/four_layouts.png",
-        "Cut Craft can arrange its window four ways: **Ribbon**, **Rail**, **Canvas** or \
+        "PowerWhittle can arrange its window four ways: **Ribbon**, **Rail**, **Canvas** or \
          **Classic**. Press **Interface Layout** (under 2D View Control) to see each and pick \
          one. Every tool is in every layout.",
         "interface_layout",
@@ -1333,7 +1333,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
     icon(
         Area::Program,
         "open",
-        "Open a drawing or picture with Cut Craft from your file manager and it is brought into \
+        "Open a drawing or picture with PowerWhittle from your file manager and it is brought into \
          a new, blank job: change the material's size with **Setup Material**.",
         "saving_jobs",
     ),

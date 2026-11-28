@@ -12,7 +12,7 @@ panels-handle-base-height = Base height: drag up or down
 panels-handle-settings = Combine mode, fade, tilt and appearance
 panels-color = Color...
 panels-combine-with-other-components = Combine with other components ...
-panels-cut-craft-s-version-help = Cut Craft's version (Help ▸ About). Right-click to check for updates
+panels-cut-craft-s-version-help = PowerWhittle's version (Help ▸ About). Right-click to check for updates
 panels-drop-here-to-cut-it = Drop here to cut it last, in no group
 panels-fade = Fade
 # Setting a fade's or tilt's direction in the 3D view: two clicks on the model.
@@ -102,11 +102,11 @@ panels-group-count = { $count ->
 # The status bar while a calculation runs: how briskly it is going, and why. $cores of $all
 # cores may be used, $share percent of them.
 panels-pace-crawl = Crawl
-    .tooltip = Limiting performance: other programs are using most of the processor, so this calculation is going slowly. Click to change how much of the computer Cut Craft may use
+    .tooltip = Limiting performance: other programs are using most of the processor, so this calculation is going slowly. Click to change how much of the computer PowerWhittle may use
 panels-pace-walk = Walk
-    .tooltip = Sharing the processor with other programs, up to { $cores } of { $all } cores. Click to change how much of the computer Cut Craft may use
+    .tooltip = Sharing the processor with other programs, up to { $cores } of { $all } cores. Click to change how much of the computer PowerWhittle may use
 panels-pace-run = Run
-    .tooltip = Calculating on up to { $cores } of { $all } cores ({ $share }%), giving way to your other programs. Click to change how much of the computer Cut Craft may use
+    .tooltip = Calculating on up to { $cores } of { $all } cores ({ $share }%), giving way to your other programs. Click to change how much of the computer PowerWhittle may use
 panels-pace-sprint = Sprint
     .tooltip = No limit: calculating on all { $all } cores at full speed, so other programs may stutter meanwhile. Click to set a limit
 panels-toolpaths-changed = ⚠ { $count ->

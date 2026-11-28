@@ -358,7 +358,7 @@ fn details(ui: &mut egui::Ui, machine: &mut Machine, library: &Library, find_fir
                         )
                         .on_hover_hint(cut_craft_i18n::t!(
                             "Rotary jobs are saved through the machine's post that turns their \
-                             side into A; ticking this adds Cut Craft's for its posts"
+                             side into A; ticking this adds PowerWhittle's for its posts"
                         ))
                         .changed()
                     {
@@ -981,7 +981,7 @@ fn bit_changes(ui: &mut egui::Ui, machine: &mut Machine) {
             )
             .on_hover_hint(cut_craft_i18n::t!(
                 "How long the machine waits for the spindle to come up to speed before \
-                     cutting again; 0 keeps the post's own wait (3 s in Cut Craft's posts). \
+                     cutting again; 0 keeps the post's own wait (3 s in PowerWhittle's posts). \
                      It is written in the units the post gives its dwells"
             ));
         });

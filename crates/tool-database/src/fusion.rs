@@ -1,6 +1,6 @@
 //! Fusion 360 tool libraries (`.tools`): a zip holding `tools.json`, one entry per tool with
 //! its geometry and a preset of feeds and speeds per material. Vendors publish these too
-//! (`SpeTool`), so Cut Craft reads them into its own tool database.
+//! (`SpeTool`), so PowerWhittle reads them into its own tool database.
 //!
 //! Learned from one vendor file: `unit` is `inches` or `millimeters`, for lengths and
 //! per-minute rates; `geometry` `DC` cutting diameter, `NOF` flutes, `RE` corner radius, `TA`
@@ -22,7 +22,7 @@ const END_OF_DIRECTORY: u32 = 0x0605_4b50;
 const DIRECTORY_ENTRY: u32 = 0x0201_4b50;
 const DEFLATE: u16 = 8;
 
-/// The tools in a Fusion 360 library that Cut Craft has a shape for, one per preset (the
+/// The tools in a Fusion 360 library that PowerWhittle has a shape for, one per preset (the
 /// name says which material), grouped by Fusion's kind of tool.
 pub fn read(bytes: &[u8]) -> Result<ToolDatabase, String> {
     if let Ok(plain) = serde_json::from_slice::<Value>(bytes) {
@@ -35,7 +35,7 @@ pub fn read(bytes: &[u8]) -> Result<ToolDatabase, String> {
         .ok_or("no tools in the library")?;
     let tools: Vec<Tool> = entries.iter().filter_map(tool).collect();
     if tools.is_empty() {
-        return Err("no tools Cut Craft can use were found in the file".into());
+        return Err("no tools PowerWhittle can use were found in the file".into());
     }
     let mut db = ToolDatabase {
         tools,
@@ -66,7 +66,7 @@ fn read_plain(library: &Value) -> Result<ToolDatabase, String> {
         tools.extend(entries.into_iter().filter_map(|e| plain_tool(group, e)));
     }
     if tools.is_empty() {
-        return Err("no tools Cut Craft can use were found in the file".into());
+        return Err("no tools PowerWhittle can use were found in the file".into());
     }
     Ok(ToolDatabase {
         tools,
@@ -161,7 +161,9 @@ fn unzip(zip: &[u8], name: &str) -> Result<Vec<u8>, String> {
                         .map_err(|e| e.to_string())?;
                     Ok(out)
                 }
-                _ => Err(format!("{name} is packed in a way Cut Craft cannot read")),
+                _ => Err(format!(
+                    "{name} is packed in a way PowerWhittle cannot read"
+                )),
             };
         }
         at += 46 + name_len + extra_len + comment_len;
@@ -183,7 +185,7 @@ fn title(kind: &str) -> String {
 
 /// The tool, with each preset's feeds as its cutting data for the material the preset names
 /// (a preset named as a default, else the first, is also its default data); none for a kind
-/// Cut Craft has no shape for.
+/// PowerWhittle has no shape for.
 fn tool(entry: &Value) -> Option<Tool> {
     let g = &entry["geometry"];
     let num = |v: &Value| v.as_f64();

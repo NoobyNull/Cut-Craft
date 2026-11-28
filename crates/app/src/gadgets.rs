@@ -1,4 +1,4 @@
-//! Lua gadgets in the Gadgets menu: the ones that come with Cut Craft, and the user's own
+//! Lua gadgets in the Gadgets menu: the ones that come with PowerWhittle, and the user's own
 //! from the My Gadgets folder. Each one becomes a command with its own settings form.
 //!
 //! An unsigned gadget's code does not run, not even to read its name, until the user has
@@ -10,7 +10,7 @@ use cut_craft_scripting::{Waiting, load_gadget, waiting_gadget};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-/// The gadgets that come with Cut Craft: file name and Lua source.
+/// The gadgets that come with PowerWhittle: file name and Lua source.
 const BUILT_IN: [(&str, &str); 2] = [
     ("drill-grid.lua", include_str!("../gadgets/drill-grid.lua")),
     (
@@ -19,7 +19,7 @@ const BUILT_IN: [(&str, &str); 2] = [
     ),
 ];
 
-/// Where the user's own gadgets go: a `gadgets` folder beside Cut Craft's settings.
+/// Where the user's own gadgets go: a `gadgets` folder beside PowerWhittle's settings.
 pub fn my_gadgets_dir() -> Option<PathBuf> {
     crate::files::config_dir().map(|dir| dir.join("gadgets"))
 }
@@ -48,14 +48,14 @@ pub struct Loaded {
     pub mine: Vec<Listed>,
     /// The unsigned ones of `mine`, by command id.
     pub unsigned: std::collections::HashMap<String, Unsigned>,
-    /// From gadget add-ons signed with Cut Craft's release key.
+    /// From gadget add-ons signed with PowerWhittle's release key.
     pub signed_addons: Vec<Listed>,
     /// Gadgets that could not be loaded, each with why, worded for the user.
     pub problems: Vec<String>,
 }
 
 impl Loaded {
-    /// The gadgets the user installed (not Cut Craft's own), by name: Gadgets ▸ My Gadgets
+    /// The gadgets the user installed (not PowerWhittle's own), by name: Gadgets ▸ My Gadgets
     /// and the Gadgets toolbar section list them.
     pub fn installed(&self) -> impl Iterator<Item = &Listed> {
         let mut all: Vec<&Listed> = self.mine.iter().chain(&self.signed_addons).collect();
@@ -65,7 +65,7 @@ impl Loaded {
 }
 
 /// The folders of gadget add-ons installed in `addons` (Gadgets ▸ Add-ons), each with
-/// whether it was signed with Cut Craft's release key. Add-ons that list web hosts
+/// whether it was signed with PowerWhittle's release key. Add-ons that list web hosts
 /// (`network`) are left out: their gadgets are not job commands.
 pub fn from_addons(addons: &Path) -> Vec<(PathBuf, bool)> {
     use cut_craft_updater::addon::{MANIFEST, Manifest, installed};
@@ -91,7 +91,7 @@ pub fn from_addons(addons: &Path) -> Vec<(PathBuf, bool)> {
 /// Loads the built-in gadgets, every `.lua` file in `mine`, and those of the gadget add-ons
 /// `addons` (folder, signed) into `registry`: an unsigned add-on's with the user's own,
 /// warned about the same way. An unsigned gadget is read now only if `trust` already lets
-/// this very file run; otherwise it waits, unread. A gadget runs only Cut Craft's own
+/// this very file run; otherwise it waits, unread. A gadget runs only PowerWhittle's own
 /// commands, never another gadget.
 pub fn load(
     registry: &mut Registry,
@@ -336,7 +336,7 @@ mod tests {
         assert_eq!(
             built_in,
             ["Drill Grid", "Hole Pattern"],
-            "only Cut Craft's own"
+            "only PowerWhittle's own"
         );
         let mine: Vec<&str> = loaded.mine.iter().map(|g| g.label.as_str()).collect();
         assert_eq!(

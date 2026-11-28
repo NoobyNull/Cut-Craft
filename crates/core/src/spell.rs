@@ -126,7 +126,7 @@ impl Speller {
         s
     }
 
-    /// The first dictionary found: the user's (a `.dic` beside its `.aff` in Cut Craft's
+    /// The first dictionary found: the user's (a `.dic` beside its `.aff` in PowerWhittle's
     /// `dictionaries` folder), else the system's English one.
     #[must_use]
     pub fn find() -> Option<Self> {
@@ -138,7 +138,7 @@ impl Speller {
             .filter_map(|e| e.ok().map(|e| e.path()))
             .filter(|p| p.extension().is_some_and(|x| x == "dic"))
             .collect();
-        // ponytail: English first, as Cut Craft is in English
+        // ponytail: English first, as PowerWhittle is in English
         for folder in [
             "/usr/share/hunspell",
             "/usr/share/myspell/dicts",

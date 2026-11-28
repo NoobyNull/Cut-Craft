@@ -6,7 +6,7 @@ icon: view/zoom_selected.png
 
 # Finding help
 
-Cut Craft explains itself as you go. There are five ways to find out what something does,
+PowerWhittle explains itself as you go. There are five ways to find out what something does,
 from a quick note under the pointer to a full page with pictures.
 
 ## A short note: point at it
@@ -58,22 +58,22 @@ Craft's own name for a thing.
 
 ## Did You Know?
 
-Each time Cut Craft starts it shows one short tip, and **Tell Me More…** opens the page
+Each time PowerWhittle starts it shows one short tip, and **Tell Me More…** opens the page
 that explains it. **Help ▸ Did You Know?** shows them all, one after another, and
 [Did You Know?](help:tips) lists every tip by subject. Turn the tip at startup off in
 **Edit ▸ Options ▸ General Settings**.
 
 ## Credits and the licence
 
-Cut Craft is built with free libraries, pictures and icons made by other people.
-**Help ▸ Credits** (or **Credits…** in **Help ▸ About Cut Craft**) thanks them and shows each
+PowerWhittle is built with free libraries, pictures and icons made by other people.
+**Help ▸ Credits** (or **Credits…** in **Help ▸ About PowerWhittle**) thanks them and shows each
 one's licence in full. Type part of a name, such as *serde*, or a licence, such as *MIT*, in
 the search box to find one, and click a line to read its licence. The same credits are in the
 `credits` folder that comes with every download.
 
-**Help ▸ About Cut Craft** sums up Cut Craft's own licence: people and one-person businesses
+**Help ▸ About PowerWhittle** sums up PowerWhittle's own licence: people and one-person businesses
 may use it for anything, including making and selling things with it, but nobody may share,
-sell or change Cut Craft itself. **Read the full license** there opens the exact terms.
+sell or change PowerWhittle itself. **Read the full license** there opens the exact terms.
 
 Still stuck, or something not working as it should? Right-click where it happened and
 pick **Report a Bug Here…**: see [Reporting a bug](help:bug_reports).

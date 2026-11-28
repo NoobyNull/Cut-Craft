@@ -1,5 +1,5 @@
 //! Edit ▸ Options ▸ Language: English, built in, or one of the language packs installed from
-//! Gadgets ▸ Add-ons, each with how much of Cut Craft it covers, who translated it and
+//! Gadgets ▸ Add-ons, each with how much of PowerWhittle it covers, who translated it and
 //! whether it is official (official packs are community supported: wording goes to their
 //! translators).
 //! Like every Options page, the choice is used once Apply is pressed.

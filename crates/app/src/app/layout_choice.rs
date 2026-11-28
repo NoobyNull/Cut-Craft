@@ -1,5 +1,5 @@
 //! Choosing the window layout: the same choices, each with a picture, wherever it is
-//! asked. First-time setup asks it, installs that had Cut Craft before ask it once after
+//! asked. First-time setup asks it, installs that had PowerWhittle before ask it once after
 //! updating, and the Interface Layout button (under 2D View Control) opens it any time
 //! (`docs/superpowers/specs/2026-11-24-shared-tool-model-design.md`).
 
@@ -16,7 +16,7 @@ pub(super) struct LayoutQuestion {
     pub after_update: bool,
 }
 
-/// Whether to ask once after updating: an install that had Cut Craft before (first-time
+/// Whether to ask once after updating: an install that had PowerWhittle before (first-time
 /// setup, which asks it, is not wanted) and has not answered or closed it yet.
 pub(super) fn asks_after_update(options: &Options, first_run: bool) -> bool {
     !first_run && !options.layout_asked

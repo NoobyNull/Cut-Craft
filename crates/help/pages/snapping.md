@@ -6,7 +6,7 @@ icon: snapping/grid_snapping_on.png
 
 # Snapping
 
-When you draw or drag a point near something worth lining up with, Cut Craft pulls the
+When you draw or drag a point near something worth lining up with, PowerWhittle pulls the
 point onto it: the end of a line, the middle of a line, the centre of a circle, a corner of
 the material, a [guide line](help:guide_lines) or the grid. That pull is **snapping**. It
 makes shapes meet exactly, with no tiny gaps that spoil a toolpath.

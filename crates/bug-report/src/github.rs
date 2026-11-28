@@ -149,7 +149,7 @@ pub fn compose(report: &Report, pictures: &[(String, String)]) -> String {
             let _ = writeln!(body, "![{name}]({url}?raw=true)");
         }
     }
-    body.push_str("\n_Sent from Cut Craft's Report a Bug._\n");
+    body.push_str("\n_Sent from PowerWhittle's Report a Bug._\n");
     body
 }
 

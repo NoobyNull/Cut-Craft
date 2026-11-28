@@ -34,7 +34,7 @@ fn other_json_is_not_a_job() {
     assert_eq!(load_job(b"not json at all"), Err(LoadError::NotAJob));
     assert_eq!(
         LoadError::NotAJob.to_string(),
-        "this is not a Cut Craft job file"
+        "this is not a PowerWhittle job file"
     );
 }
 
@@ -45,8 +45,8 @@ fn jobs_from_a_newer_version_are_refused_with_a_reason() {
     assert_eq!(err, LoadError::NewerVersion(99));
     assert_eq!(
         err.to_string(),
-        "this job was saved by a newer version of Cut Craft (format 99; this build reads up \
-         to 1). Update Cut Craft (Help ▸ Check for Updates) to open it"
+        "this job was saved by a newer version of PowerWhittle (format 99; this build reads up \
+         to 1). Update PowerWhittle (Help ▸ Check for Updates) to open it"
     );
 }
 

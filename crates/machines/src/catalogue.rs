@@ -70,7 +70,7 @@ impl Controller {
         }
     }
 
-    /// The word Cut Craft's own posts for this controller are named with.
+    /// The word PowerWhittle's own posts for this controller are named with.
     fn post_word(self) -> &'static str {
         match self {
             Self::Grbl | Self::Other => "GRBL",
@@ -79,10 +79,10 @@ impl Controller {
         }
     }
 
-    /// Cut Craft's flat (not rotary) posts for this controller, those in the machine's units
+    /// PowerWhittle's flat (not rotary) posts for this controller, those in the machine's units
     /// first, and which one saves toolpaths: the arcs post in its units.
     pub fn posts(self, inches: bool) -> (Vec<String>, String) {
-        let prefix = format!("Cut Craft {} ", self.post_word());
+        let prefix = format!("PowerWhittle {} ", self.post_word());
         let units = if inches { "(inch)" } else { "(mm)" };
         let mut posts: Vec<String> = Library::new(None)
             .entries()
@@ -129,19 +129,19 @@ mod tests {
     #[test]
     fn a_controller_not_listed_gets_its_posts_in_the_chosen_units_first() {
         let (posts, default) = Controller::Grbl.posts(true);
-        assert_eq!(default, "Cut Craft GRBL Arcs (inch) (*.nc)");
+        assert_eq!(default, "PowerWhittle GRBL Arcs (inch) (*.nc)");
         assert!(posts[0].contains("(inch)") && posts.iter().any(|p| p.contains("(mm)")));
         assert!(posts.iter().all(|p| !p.contains("Rotary A")), "{posts:?}");
         let (_, mach3) = Controller::Mach3.posts(false);
-        assert_eq!(mach3, "Cut Craft Mach3 Arcs (mm) (*.tap)");
+        assert_eq!(mach3, "PowerWhittle Mach3 Arcs (mm) (*.tap)");
         let (_, fluid) = Controller::FluidNc.posts(false);
         assert!(
-            fluid.starts_with("Cut Craft FluidNC") && fluid.contains("(mm)"),
+            fluid.starts_with("PowerWhittle FluidNC") && fluid.contains("(mm)"),
             "{fluid}"
         );
         assert_eq!(
             Controller::Other.posts(false).1,
-            "Cut Craft GRBL Arcs (mm) (*.nc)"
+            "PowerWhittle GRBL Arcs (mm) (*.nc)"
         );
     }
 }

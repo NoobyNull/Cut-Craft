@@ -109,7 +109,7 @@ Sides, and back again with its Undo (and over with Redo); a side not previewed y
 up uncut, with the side that was up kept underneath.
 
 When you save toolpaths, the post processor writes them as G-code for your machine. A post
-with arcs (the Cut Craft GRBL Arcs, Mach3 Arcs and FluidNC ATC Arcs posts) turns runs of
+with arcs (the PowerWhittle GRBL Arcs, Mach3 Arcs and FluidNC ATC Arcs posts) turns runs of
 short lines that follow a curve into single G2 (clockwise) and G3 (anticlockwise) arc
 moves, so the file is smaller and the machine keeps its speed round curves. Each arc's two
 ends are kept the same distance from its centre to well within 0.005 mm, once rounded to
@@ -151,7 +151,7 @@ A bit renamed in the Bit Library keeps its tool changer slot: this job's toolpat
 the new name at once, and a job saved before the rename takes it when it opens (Undo puts
 the old name back), so the file still gives the bit its slot's bit number.
 If the Bit Library's or Materials Library's file (tools.json, materials.json) cannot be
-read when Cut Craft starts, it is left as it is: changes are kept until Cut Craft closes but
+read when PowerWhittle starts, it is left as it is: changes are kept until PowerWhittle closes but
 not saved, and each OK says "not saved". Fix or rename that file, then restart. The bits'
 feeds edited in the Materials Library live in tools.json, so they are still saved when only
 materials.json could not be read.
@@ -252,7 +252,7 @@ across the axis: the **Rotary A** posts do.
 ## Previewing a rotary job
 
 On a rotary job the animated preview plays your toolpaths the way the machine will run
-them. Cut Craft writes each toolpath through the machine's own post processor (the one Save
+them. PowerWhittle writes each toolpath through the machine's own post processor (the one Save
 Toolpaths uses), reads the file back move by move, and cuts the material
 [Job Setup](help:job_setup) describes (round, square or a flat board) with exactly those
 moves. The 3D view shows the material turning with A while the bit moves along, across and
@@ -262,7 +262,7 @@ up and down over it, as on the machine, so what you see cut is what the file cut
 
 1. Set the job up as rotary in Job Setup, with the material's shape.
 2. Pick a machine with a 4th axis (A) and a Rotary A post in Machine Configuration (see
-   [The 4th axis and your firmware](help:rotary_firmware)). With no machine picked, Cut Craft's
+   [The 4th axis and your firmware](help:rotary_firmware)). With no machine picked, PowerWhittle's
    own rotary post is used.
 3. Turn on Animate Preview (Toolpaths menu ▸ Toolpath Drawing) and preview the toolpaths.
 4. Run, Pause, Single Step and the Progress slider move the turning material too: drag
@@ -291,7 +291,7 @@ for the collet nut, spindle or shank hitting wood beside a deep cut.
 The checks cut every toolpath in order, so a big 3D finish (millions of tiny moves with a
 small ball nose) takes a little while: a few seconds on a fast computer, longer on a slow
 one. They run in the background with a progress window that says which step they are on,
-and Cut Craft keeps drawing while they work. Cancel (or Esc) stops them; the tab then says
+and PowerWhittle keeps drawing while they work. Cancel (or Esc) stops them; the tab then says
 nothing has been checked yet, with a Check Again button, and Save Toolpaths and Send to
 Machine wait until the checks have run. Each ⚠ the checks find is ticked to say you have
 read it; Save Toolpaths and Send to Machine wait, greyed, until every one is ticked, and the

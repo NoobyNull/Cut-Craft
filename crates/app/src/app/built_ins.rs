@@ -210,7 +210,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
         .run(|a, _| a.lock_guides(true)),
     act("unlock_all_existing_guides", "Unlock All Existing Guides", "Unlock All Existing Guides: lets the guide lines be dragged again")
         .run(|a, _| a.lock_guides(false)),
-    act("options", "Options", "Options: Cut Craft's settings, such as units, colours and where files are kept")
+    act("options", "Options", "Options: PowerWhittle's settings, such as units, colours and where files are kept")
         .run(CutCraftApp::open_options),
     act("segment_3d_model_file", "Segment 3D Model", "Segment 3D Model File: splits a 3D model file into pieces thin enough for your material, to carve in layers").window()
         .run(|a, _| a.segment_model_file()),
@@ -264,34 +264,34 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
     act("copy", "Copy", "Copy: puts a copy of the selected objects on the clipboard, to paste").keys("Ctrl+C")
         .when(|a| !a.doc.selection.is_empty() || !a.doc.selected_components.is_empty(), "actions-why-select-to-copy")
         .run(|a, ctx| a.copy_selection(ctx, false)),
-    act("paste", "Paste", "Paste: adds the objects on the clipboard to the job exactly where they were copied from, on their own layer (in another job, on the current layer); a copied group or word of text pastes as a group of its own, still text (a dimension stays a dimension). Lines lying on top of their original show red. Ctrl+V of a copy made in another Cut Craft window brings its vectors only: 3D components paste only in the window they were copied in").keys("Ctrl+V")
+    act("paste", "Paste", "Paste: adds the objects on the clipboard to the job exactly where they were copied from, on their own layer (in another job, on the current layer); a copied group or word of text pastes as a group of its own, still text (a dimension stays a dimension). Lines lying on top of their original show red. Ctrl+V of a copy made in another PowerWhittle window brings its vectors only: 3D components paste only in the window they were copied in").keys("Ctrl+V")
         .when(|a| !a.clipboard.is_empty() || !a.clipboard_components.is_empty(), "actions-why-nothing-copied")
         .run(|a, _| a.paste_clipboard()),
     act("increment_and_save", "Increment and Save", "Increment and Save: saves the job as a new copy with the next number on its name (sign_1, sign_2), keeping the earlier versions. A year or date on the end of the name stays as it is (Smith-2024 becomes Smith-2024_1, order_2024-11-15 becomes order_2024-11-15_1)").keys("Ctrl+Alt+S")
         .when(CutCraftApp::job_open, "actions-why-job-first")
         .run(|a, _| a.increment_and_save()),
-    act("open_application_data_folder", "Open Application Data Folder", "Open Application Data Folder: opens the folder where Cut Craft keeps your settings, bits and machines")
+    act("open_application_data_folder", "Open Application Data Folder", "Open Application Data Folder: opens the folder where PowerWhittle keeps your settings, bits and machines")
         .run(|a, _| a.open_application_data_folder()),
     act("keyboard_shortcuts", "Keyboard Shortcuts", "Keyboard Shortcuts: lists the keys that run each tool, so you can work without the menus")
         .run(|a, _| a.info = Some(Info::Shortcuts)),
-    act("help_contents", "Help Contents", "Help Contents: opens Cut Craft's help, with a page for every tool and a search box")
+    act("help_contents", "Help Contents", "Help Contents: opens PowerWhittle's help, with a page for every tool and a search box")
         .run(|a, _| a.info = Some(Info::Help("contents"))),
-    act("did_you_know", "Did You Know?", "Did You Know?: short tips for getting more out of Cut Craft, one at a time").window()
+    act("did_you_know", "Did You Know?", "Did You Know?: short tips for getting more out of PowerWhittle, one at a time").window()
         .run(|a, _| a.open_unseen_tip()),
     act("announcements", "Announcements", "Announcements: news and notes from the team, such as a new name or a holiday message")
         .window()
         .run(CutCraftApp::open_announcements),
-    act("credits", "Credits", "Credits: the libraries, pictures and icons Cut Craft is built with, and their licences")
+    act("credits", "Credits", "Credits: the libraries, pictures and icons PowerWhittle is built with, and their licences")
         .run(|a, _| a.info = Some(Info::Credits)),
-    act("about_cut_craft", "About Cut Craft", "About Cut Craft: its version, its licence and the people who made it")
+    act("about_cut_craft", "About PowerWhittle", "About PowerWhittle: its version, its licence and the people who made it")
         .run(|a, _| a.info = Some(Info::About)),
     act("back_up_settings", "Back Up Settings", "Back Up Settings: saves your settings, machines, bits and own files in one backup file, to keep safe or take to another computer").window()
         .run(|a, _| a.open_back_up_window()),
-    act("check_for_updates", "Check for Updates", "Check for Updates: asks straight away whether there is a newer version of Cut Craft").window()
+    act("check_for_updates", "Check for Updates", "Check for Updates: asks straight away whether there is a newer version of PowerWhittle").window()
         .run(CutCraftApp::check_for_updates),
-    act("addons", "Add-ons", "Add-ons: installs, turns on and removes add-ons that bring new tools into Cut Craft. An add-on from GitHub never replaces Cut Craft's own add-ons or one installed from another repository. Remove asks first; a removed gadget leaves the Gadgets menu when Cut Craft restarts").window()
+    act("addons", "Add-ons", "Add-ons: installs, turns on and removes add-ons that bring new tools into PowerWhittle. An add-on from GitHub never replaces PowerWhittle's own add-ons or one installed from another repository. Remove asks first; a removed gadget leaves the Gadgets menu when PowerWhittle restarts").window()
         .run(|a, ctx| a.addons.show(ctx)),
-    act("open_gadgets_folder", "Open Gadgets Folder", "Open My Gadgets Folder: opens the folder where your own .lua gadget files go. Each one shows up in Gadgets ▸ My Gadgets when Cut Craft starts")
+    act("open_gadgets_folder", "Open Gadgets Folder", "Open My Gadgets Folder: opens the folder where your own .lua gadget files go. Each one shows up in Gadgets ▸ My Gadgets when PowerWhittle starts")
         .run(|a, _| a.open_gadgets_folder()),
     act("undo", "Undo", "Undo: takes back the last change").keys("Ctrl+Z")
         .when(|a| a.history.can_undo(), "actions-why-nothing-to-undo")
@@ -299,7 +299,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
     act("redo", "Redo", "Redo: puts back the change you just undid").keys("Ctrl+Y")
         .when(|a| a.history.can_redo(), "actions-why-nothing-to-redo")
         .run(|a, _| a.redo()),
-    act("exit", "Exit", "Exit: closes Cut Craft, offering to save your work first")
+    act("exit", "Exit", "Exit: closes PowerWhittle, offering to save your work first")
         .run(|_, ctx| ctx.send_viewport_cmd(egui::ViewportCommand::Close)),
     act("new", "New", "New: starts a new job, asking the size and thickness of your material first").keys("Ctrl+N")
         .run(|a, _| a.new_job()),
@@ -333,7 +333,7 @@ pub(crate) const BUILT_INS: &[BuiltIn] = &[
     act("view_gcode", "View G-code", "View G-code: reads the G-code saving would write, through the machine's post-processor, without saving a file. Copy it from there if you need it").window()
         .when(|a| !a.doc.toolpaths.is_empty(), "actions-why-no-toolpaths")
         .run(|a, _| a.view_gcode(a.default_save_form())),
-    act("install_post_processor", "Install Post-Processor", "Install Post Processor: adds a post processor file for a machine Cut Craft does not list yet. One with a name already listed is kept beside it as a copy, named with a copy number and the date and time").window()
+    act("install_post_processor", "Install Post-Processor", "Install Post Processor: adds a post processor file for a machine PowerWhittle does not list yet. One with a name already listed is kept beside it as a copy, named with a copy number and the date and time").window()
         .run(|a, _| a.install_post_picked()),
     act("close", "Close", "Close: closes the job you have open, offering to save it first")
         .when(|a| a.screen != Screen::Start, "actions-why-no-job")

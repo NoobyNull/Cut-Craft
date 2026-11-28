@@ -1,7 +1,7 @@
-//! Help ▸ Back Up Settings: what the user has set up in Cut Craft, in one `.ccbackup` file.
+//! Help ▸ Back Up Settings: what the user has set up in PowerWhittle, in one `.ccbackup` file.
 //!
 //! A backup is an ordinary zip, so it can still be opened by hand. It holds `manifest.json`
-//! (the Cut Craft version, the computer's system, when and why it was made, its parts, and a
+//! (the PowerWhittle version, the computer's system, when and why it was made, its parts, and a
 //! checksum of every file) and the files themselves under `settings/`, by their place in the
 //! settings folder. What goes in is chosen by [`Part`]: settings, machines, bits and the
 //! user's own files. Never the recent files list, crash recovery copies, logs or caches, and
@@ -43,7 +43,7 @@ const FILES: &str = "settings/";
 /// [`Choice::secrets`] is set. Each is a file and the path of keys to the value.
 pub const SECRETS: [(&str, &[&str]); 1] = [("options.json", &["web_api", "token"])];
 
-/// A part of what Cut Craft keeps, ticked or not when backing up.
+/// A part of what PowerWhittle keeps, ticked or not when backing up.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Part {
@@ -165,7 +165,7 @@ pub enum Reason {
     BeforeLayoutChange,
     /// First-time setup run again, which rewrites the machine.
     BeforeSetup,
-    /// Cut Craft rewriting a library itself, as joining one bit per material did.
+    /// PowerWhittle rewriting a library itself, as joining one bit per material did.
     BeforeLibraryChange,
     Weekly,
 }
@@ -201,7 +201,7 @@ impl Reason {
 pub struct Manifest {
     pub format: String,
     pub version: u32,
-    /// The Cut Craft that made it.
+    /// The PowerWhittle that made it.
     pub app_version: String,
     /// The system it was made on (`linux`, `windows`, `macos`) and its processor: folders
     /// in it are that system's.
@@ -231,9 +231,9 @@ pub struct Entry {
 pub enum Error {
     /// A file could not be read or written.
     File(PathBuf, std::io::Error),
-    /// Not a Cut Craft backup, or damaged.
+    /// Not a PowerWhittle backup, or damaged.
     NotABackup(PathBuf),
-    /// Made by a newer Cut Craft, in a shape this one cannot read.
+    /// Made by a newer PowerWhittle, in a shape this one cannot read.
     NewerVersion(u32),
 }
 
@@ -241,8 +241,8 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::File(path, e) => write!(f, "{}: {e}", path.display()),
-            Self::NotABackup(path) => write!(f, "{}: not a Cut Craft backup", path.display()),
-            Self::NewerVersion(v) => write!(f, "made by a newer Cut Craft (backup format {v})"),
+            Self::NotABackup(path) => write!(f, "{}: not a PowerWhittle backup", path.display()),
+            Self::NewerVersion(v) => write!(f, "made by a newer PowerWhittle (backup format {v})"),
         }
     }
 }
@@ -491,7 +491,7 @@ pub struct Kept {
     pub size: u64,
 }
 
-/// The backups Cut Craft makes by itself, into the settings folder's [`FOLDER`].
+/// The backups PowerWhittle makes by itself, into the settings folder's [`FOLDER`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Automatic {
     /// The settings folder.

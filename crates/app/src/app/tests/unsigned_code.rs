@@ -1,4 +1,4 @@
-//! Unsigned code: a gadget not signed with Cut Craft's release key runs only once the user
+//! Unsigned code: a gadget not signed with PowerWhittle's release key runs only once the user
 //! has said yes to it, from the menus, its form or a script alike (`crate::trust`).
 
 use super::web_api::{call, switched_on};
@@ -33,7 +33,7 @@ fn an_unsigned_gadget_waits_by_its_file_name_until_the_user_says_yes() {
     h.invoke(id);
     assert_eq!(h.form_id(), Some(id));
     assert_eq!(h.my_gadgets(), ["Star Burst \u{26a0} (not official)"]);
-    // not asked again while Cut Craft runs
+    // not asked again while PowerWhittle runs
     h.close_form();
     h.answer_unsigned_with(|_| panic!("asked twice"));
     h.invoke(id);
@@ -67,7 +67,7 @@ fn scripts_cannot_run_an_unsigned_gadget_until_the_user_says_yes_in_the_window()
     let (mut h, at) = switched_on();
     let id = h.given_unsigned_gadget("star-burst.lua", STAR);
     // a script never brings up the question: it is refused, saying how to allow it
-    h.answer_unsigned_with(|_| panic!("a script made Cut Craft ask"));
+    h.answer_unsigned_with(|_| panic!("a script made PowerWhittle ask"));
     let run = json!({ "command": id, "params": { "radius": 4 } });
     let (status, e) = call(&mut h, at, "POST", "run", Some(run.clone()));
     assert_eq!(status, 409, "{e}");

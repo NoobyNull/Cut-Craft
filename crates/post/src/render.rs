@@ -268,7 +268,7 @@ impl Post {
         {
             return Err(format!(
                 "\"{}\" holds the bit off the turning axis, and this post can't move the bit \
-                 across: pick one of Cut Craft's Rotary A posts",
+                 across: pick one of PowerWhittle's Rotary A posts",
                 t.name
             ));
         }
@@ -638,7 +638,7 @@ impl Post {
             ),
             (
                 "PRODUCT",
-                Some(concat!("Cut Craft ", env!("CARGO_PKG_VERSION")).into()),
+                Some(concat!("PowerWhittle ", env!("CARGO_PKG_VERSION")).into()),
             ),
             ("POST_NAME", Some(self.name.clone())),
             // one line, so a note can never break out of the comment it is printed in

@@ -1,7 +1,7 @@
 //! Which post a job's toolpaths are saved through on a machine: the one picked, else the
 //! machine's default when it suits the job, else its first post that does (a flat post for
 //! a flat job, one wrapping the side that goes round for a rotary job), told the machine's
-//! rotary settings. Without a machine (or one with no posts), Cut Craft's own post for this
+//! rotary settings. Without a machine (or one with no posts), PowerWhittle's own post for this
 //! kind of job.
 
 use crate::{Library, Machine, NO_A_AXIS};
@@ -74,7 +74,7 @@ fn no_4th_axis(machine: Option<&Machine>, job: &Job) -> Option<String> {
 }
 
 /// The machine's posts that suit `job` (flat, or wrapping its side), for Save Toolpaths to
-/// choose from; none without a machine (Cut Craft's own is used).
+/// choose from; none without a machine (PowerWhittle's own is used).
 pub fn post_choices(machine: Option<&Machine>, job: &Job, library: &Library) -> Vec<String> {
     let wraps = wraps_for(job);
     machine.map_or_else(Vec::new, |machine| {
@@ -150,9 +150,9 @@ mod tests {
     use crate::Firmware;
     use cut_craft_core::document::Rotary;
 
-    const FLAT: &str = "Cut Craft GRBL Arcs (mm) (*.nc)";
-    const ROUND_X: &str = "Cut Craft grblHAL Rotary A, cylinder along X (mm) (*.nc)";
-    const ROUND_Y: &str = "Cut Craft grblHAL Rotary A, cylinder along Y (mm) (*.nc)";
+    const FLAT: &str = "PowerWhittle GRBL Arcs (mm) (*.nc)";
+    const ROUND_X: &str = "PowerWhittle grblHAL Rotary A, cylinder along X (mm) (*.nc)";
+    const ROUND_Y: &str = "PowerWhittle grblHAL Rotary A, cylinder along Y (mm) (*.nc)";
 
     fn library() -> Library {
         Library::new(None)

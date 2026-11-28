@@ -1,4 +1,4 @@
-//! Puts the commit Cut Craft is built from into bug reports (`CUT_CRAFT_COMMIT`), lists
+//! Puts the commit PowerWhittle is built from into bug reports (`CUT_CRAFT_COMMIT`), lists
 //! every icon under `assets/icons` for `include_bytes!`, so the program carries its icons, and
 //! gathers what each command does (the first sentence of its crate's docs) for the status
 //! bar. On Windows it also builds the app icon and name into `cut-craft.exe`.
@@ -72,8 +72,8 @@ fn windows_resources() {
     let mut resources = winresource::WindowsResource::new();
     resources
         .set_icon(&ico.to_string_lossy())
-        .set("ProductName", "Cut Craft")
-        .set("FileDescription", "Cut Craft")
+        .set("ProductName", "PowerWhittle")
+        .set("FileDescription", "PowerWhittle")
         .set("OriginalFilename", "cut-craft.exe")
         .set("InternalName", "cut-craft");
     resources

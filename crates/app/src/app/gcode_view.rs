@@ -1,8 +1,8 @@
 //! View G-code: the file Save Toolpaths would write, shown in a window without saving it, to
 //! read or copy (a 0.6.11 user: "Sometimes just need to quickly look at gcode and not need to
 //! save it"). Also Save Toolpaths' question when the checks before cutting found something,
-//! asked over the window: a system message box can open behind Cut Craft's window (on Linux
-//! it is a window of another program, not kept above Cut Craft's).
+//! asked over the window: a system message box can open behind PowerWhittle's window (on Linux
+//! it is a window of another program, not kept above PowerWhittle's).
 
 use super::{CutCraftApp, SaveForm};
 use cut_craft_bug_report::hint::HoverHint;

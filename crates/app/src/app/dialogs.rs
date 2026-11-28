@@ -2,7 +2,7 @@
 
 use super::{APP_NAME, Dialog, files};
 
-/// Job templates, starting in Cut Craft's `templates` folder.
+/// Job templates, starting in PowerWhittle's `templates` folder.
 /// A file dialog opening in one of the user's settings folders (made if need be).
 pub(super) fn settings_dialog(which: Dialog<'_>, folder: &str) -> rfd::FileDialog {
     let dialog = filtered_dialog(which, &cut_craft_core::Registry::default());
@@ -108,7 +108,7 @@ pub(super) fn saving_path(
     replace.then_some(named)
 }
 
-/// Cut Craft's window, kept up to date each frame: the system's dialogs open as its own,
+/// PowerWhittle's window, kept up to date each frame: the system's dialogs open as its own,
 /// kept above it and brought forward with it, rather than as windows of their own.
 pub(super) static DIALOG_PARENT: std::sync::Mutex<Option<std::sync::Arc<dyn Window>>> =
     std::sync::Mutex::new(None);
@@ -125,7 +125,7 @@ impl<W: raw_window_handle::HasWindowHandle + raw_window_handle::HasDisplayHandle
 }
 
 /// The window a file dialog or message box opened now belongs to: the dialog window that has
-/// the keyboard (its button opened it), otherwise Cut Craft's main window. A file dialog that
+/// the keyboard (its button opened it), otherwise PowerWhittle's main window. A file dialog that
 /// belonged to the main window could open behind a dialog window kept above it.
 pub(super) fn dialog_parent() -> Option<std::sync::Arc<dyn Window>> {
     if let Some(dialog) = cut_craft_window_owner::focused_dialog() {

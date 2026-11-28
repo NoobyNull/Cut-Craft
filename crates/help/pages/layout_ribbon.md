@@ -5,7 +5,7 @@ see-also: interface_layout, layout_rail, layout_canvas, layout_classic, favourit
 
 # Ribbon layout
 
-The layout Cut Craft starts in. Tabs across the top hold the tools in the order you use
+The layout PowerWhittle starts in. Tabs across the top hold the tools in the order you use
 them: draw on **Design**, shape 3D parts on **Model**, then make and save cuts on
 **Toolpaths**.
 

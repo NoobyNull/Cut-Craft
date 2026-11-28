@@ -668,8 +668,8 @@ fn changes_make_the_session_dirty_until_saved() {
     history.apply(&mut doc, change).unwrap();
     assert!(session.is_dirty(&history));
     assert_eq!(
-        session.title("Cut Craft", &history),
-        "Untitled* - Cut Craft"
+        session.title("PowerWhittle", &history),
+        "Untitled* - PowerWhittle"
     );
     let mut discarded = Session::default();
     discarded.discard_changes(&history);
@@ -680,8 +680,8 @@ fn changes_make_the_session_dirty_until_saved() {
     session.save(&doc, &history, &path).unwrap();
     assert!(!session.is_dirty(&history));
     assert_eq!(
-        session.title("Cut Craft", &history),
-        "dirty.ccjob - Cut Craft"
+        session.title("PowerWhittle", &history),
+        "dirty.ccjob - PowerWhittle"
     );
 }
 
@@ -690,7 +690,7 @@ fn opening_something_that_is_not_a_job_explains_why() {
     let path = temp("not-a-job.ccjob");
     fs::write(&path, b"{}").unwrap();
     let err = Session::default().open(&path).unwrap_err();
-    assert!(err.contains("not a Cut Craft job"), "{err}");
+    assert!(err.contains("not a PowerWhittle job"), "{err}");
     assert!(
         Session::default()
             .open(&temp("missing.ccjob"))

@@ -6,9 +6,9 @@ icon: diagrams/size_wh.svg
 
 # Number fields
 
-Every size, depth, speed and count in Cut Craft is typed into a number field: a box with
+Every size, depth, speed and count in PowerWhittle is typed into a number field: a box with
 the value in it and small up and down arrows on its right. You can type a number, nudge it
-with the arrows, drag it, or type a sum and let Cut Craft work it out.
+with the arrows, drag it, or type a sum and let PowerWhittle work it out.
 
 ## Nudging with the arrows
 

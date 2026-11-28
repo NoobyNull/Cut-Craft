@@ -7,7 +7,7 @@ see-also: post_processor_management, job_setup, save_toolpaths, check_rotary_set
 
 A **4th axis** (A) is a rotary that turns the material while the bit cuts. Your machine can only
 use one if the **firmware** on its controller can drive a 4th motor together with X, Y and Z.
-Cut Craft asks which firmware you have, so it never writes a file your machine will refuse
+PowerWhittle asks which firmware you have, so it never writes a file your machine will refuse
 part-way through a job.
 
 | Firmware | A axis? |
@@ -23,7 +23,7 @@ part-way through a job.
 ![Machine Configuration on standard GRBL: no 4th axis to tick](pictures/concepts/rotary_firmware.png)
 
 1. Open **Machine ▸ Machine Configuration** and pick your machine.
-2. Choose its **Firmware**. Until you choose, Cut Craft reads it from the **Controller** box
+2. Choose its **Firmware**. Until you choose, PowerWhittle reads it from the **Controller** box
    (for example "grblHAL" or "FluidNC"). If that names none, it takes **standard GRBL**,
    which has no A axis.
 3. Tick **4th axis**. On standard GRBL there is no **4th axis** to tick at all: standard GRBL
@@ -31,7 +31,7 @@ part-way through a job.
    own firmware, and choose it under **Firmware**.
 4. Press **Apply**.
 
-Ticking **4th axis** adds Cut Craft's rotary posts for your machine, named **Rotary A, cylinder
+Ticking **4th axis** adds PowerWhittle's rotary posts for your machine, named **Rotary A, cylinder
 along X** and **along Y**. GRBL's are named **grblHAL**, since standard GRBL can't run them.
 It also brings the rotary toolpaths (4-Axis Rotary Machining and Rotary Lathe) onto the
 Toolpaths page: they show only for a machine with a 4th axis its firmware can drive.

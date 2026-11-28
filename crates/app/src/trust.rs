@@ -1,10 +1,10 @@
 //! One check before unsigned code runs: gadgets from the My Gadgets folder or an unsigned
 //! add-on, and the programs of unsigned tool add-ons.
 //!
-//! Signed code (from Cut Craft's own builds and official add-ons) always runs. Any other
+//! Signed code (from PowerWhittle's own builds and official add-ons) always runs. Any other
 //! code runs only once the user has been told it is unsigned and said yes: "Run and
 //! remember" until the code changes (an update, an edit, another file in its place), or "Run
-//! this time" until Cut Craft closes. Every way of running code asks here, so the menus,
+//! this time" until PowerWhittle closes. Every way of running code asks here, so the menus,
 //! forms and the Web API all follow the same rule; the Web API never asks, it refuses until
 //! the user has said yes in the window.
 
@@ -32,7 +32,7 @@ pub struct Code {
     /// Its name as the user knows it.
     pub name: String,
     pub kind: Kind,
-    /// Signed with Cut Craft's release key: it runs without asking.
+    /// Signed with PowerWhittle's release key: it runs without asking.
     pub signed: bool,
     /// The code's own fingerprint: when it changes, the user is asked again.
     pub fingerprint: String,
@@ -83,7 +83,7 @@ pub fn fingerprint(bytes: &[u8]) -> String {
 pub enum Answer {
     /// Run it, and don't ask again until the code changes.
     RunAndRemember,
-    /// Run it, and ask again once Cut Craft has closed.
+    /// Run it, and ask again once PowerWhittle has closed.
     RunThisTime,
     /// Don't run it; ask again next time. A "no" is never remembered, so nothing is left
     /// that silently does nothing.
@@ -97,12 +97,12 @@ pub const DONT_RUN: &str = "Don't Run";
 
 /// The answers the user gave, and how to ask.
 pub struct Trust {
-    /// Where "Run and remember" answers are kept; `None` keeps them only until Cut Craft
+    /// Where "Run and remember" answers are kept; `None` keeps them only until PowerWhittle
     /// closes (tests, and no settings folder).
     path: Option<PathBuf>,
     /// Remembered: key → the fingerprint of the code the user said yes to.
     remembered: BTreeMap<String, String>,
-    /// Said yes to until Cut Craft closes: key and fingerprint.
+    /// Said yes to until PowerWhittle closes: key and fingerprint.
     this_time: HashSet<(String, String)>,
     /// Asks the user (a dialog; tests answer).
     pub ask: fn(&Code) -> Answer,
@@ -181,14 +181,14 @@ impl Trust {
             .map_or(Ok(()), std::fs::create_dir_all)
             .and_then(|()| std::fs::write(path, text));
         if let Err(e) = saved {
-            // still allowed until Cut Craft closes; asked again next time
+            // still allowed until PowerWhittle closes; asked again next time
             log::warn!("could not keep the answer in {}: {e}", path.display());
         }
     }
 }
 
 /// What every unsigned-code question says about who is responsible.
-pub const NOT_RESPONSIBLE: &str = "Cut Craft and its author are not responsible for what \
+pub const NOT_RESPONSIBLE: &str = "PowerWhittle and its author are not responsible for what \
     unsigned code does or can do, including anything harmful or malicious.";
 
 /// The question asked before unsigned `code` runs.
@@ -205,10 +205,10 @@ pub fn warning(code: &Code) -> String {
         ),
     };
     format!(
-        "\u{201c}{}\u{201d} is not an official Cut Craft {what}: it is not signed, so nobody \
+        "\u{201c}{}\u{201d} is not an official PowerWhittle {what}: it is not signed, so nobody \
          has checked what it does.\n\n{NOT_RESPONSIBLE} {can}\n\n\
          {RUN_AND_REMEMBER} runs it now and from now on, until the {what} changes. \
-         {RUN_THIS_TIME} asks again after Cut Craft closes.\n\n\
+         {RUN_THIS_TIME} asks again after PowerWhittle closes.\n\n\
          Do you want to run this unsigned code?",
         code.name
     )
@@ -218,7 +218,7 @@ pub fn warning(code: &Code) -> String {
 pub fn refusal(code: &Code) -> String {
     format!(
         "\u{201c}{}\u{201d} is unsigned code that has not been allowed to run. Run it once \
-         in the Cut Craft window and answer {RUN_AND_REMEMBER} (or {RUN_THIS_TIME}); \
+         in the PowerWhittle window and answer {RUN_AND_REMEMBER} (or {RUN_THIS_TIME}); \
          scripts can use it after that.",
         code.name
     )
@@ -288,7 +288,7 @@ mod tests {
             Answer::RunAndRemember
         };
         assert!(trust.may_run(&star("a")));
-        // Cut Craft closes and starts again: still allowed, not asked
+        // PowerWhittle closes and starts again: still allowed, not asked
         let mut again = Trust::new(Some(path.clone()));
         again.ask = |_| panic!("asked again about the same code");
         assert!(again.allowed(&star("a")));

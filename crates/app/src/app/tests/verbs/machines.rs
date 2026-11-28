@@ -24,7 +24,7 @@ impl Harness {
         self.app.machines.active()
     }
 
-    /// Every machine Cut Craft keeps.
+    /// Every machine PowerWhittle keeps.
     pub(in super::super) fn machines(&self) -> &[cut_craft_machines::Machine] {
         &self.app.machines.machines
     }
@@ -78,7 +78,7 @@ impl Harness {
         self.app.posts = cut_craft_machines::Library::new(Some(folder));
     }
 
-    /// The post processors Cut Craft has: its own and the ones installed.
+    /// The post processors PowerWhittle has: its own and the ones installed.
     pub(in super::super) fn posts(&self) -> &cut_craft_machines::Library {
         &self.app.posts
     }

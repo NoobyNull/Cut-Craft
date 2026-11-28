@@ -1,4 +1,4 @@
-//! Every number box in Cut Craft: a value to type in, with small up and down buttons on its
+//! Every number box in PowerWhittle: a value to type in, with small up and down buttons on its
 //! right that nudge it a step at a time (held down, they keep going). Dragging sideways on
 //! the value still changes it too. Kept here, the one egui crate every window shares, so each
 //! form's numbers look and work the same.

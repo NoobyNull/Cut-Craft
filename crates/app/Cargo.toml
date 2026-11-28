@@ -24,7 +24,7 @@ cut-craft-machines = { path = "../machines" }
 cut-craft-post = { path = "../post" }
 cut-craft-rotary.workspace = true
 cut-craft-scripting = { path = "../scripting" }
-# Options ▸ Web API: the local HTTP server scripts drive Cut Craft through
+# Options ▸ Web API: the local HTTP server scripts drive PowerWhittle through
 cut-craft-web-api = { path = "../web-api" }
 eframe.workspace = true
 egui.workspace = true
@@ -43,10 +43,10 @@ log = "0.4"
 rfd.workspace = true
 # keeps dialog windows above the main window, and file dialogs with the window that opened them
 cut-craft-window-owner.workspace = true
-# Cut Craft's window handed to rfd, so its dialogs open as the window's own
+# PowerWhittle's window handed to rfd, so its dialogs open as the window's own
 raw-window-handle = "0.6"
 schemars.workspace = true
-# Options ▸ Advanced: the check that shows they were edited outside Cut Craft
+# Options ▸ Advanced: the check that shows they were edited outside PowerWhittle
 hmac = "0.12"
 sha2 = "0.10"
 serde.workspace = true

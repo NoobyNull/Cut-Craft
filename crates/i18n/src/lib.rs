@@ -1,4 +1,4 @@
-//! Cut Craft's words in every language, with English wherever a language has no word yet.
+//! PowerWhittle's words in every language, with English wherever a language has no word yet.
 //!
 //! Every word the program shows lives in a Fluent file (`.ftl`) under a key:
 //!
@@ -67,7 +67,7 @@ impl Catalogue {
         let lang: LanguageIdentifier = id.parse().unwrap_or_default();
         let mut bundle = FluentBundle::new_concurrent(vec![lang]);
         // no invisible direction marks around { $values }: they draw as boxes, and every
-        // language Cut Craft ships reads left to right
+        // language PowerWhittle ships reads left to right
         bundle.set_use_isolating(false);
         let mut keys = Vec::new();
         // every message's name, with or without words of its own: a name given twice

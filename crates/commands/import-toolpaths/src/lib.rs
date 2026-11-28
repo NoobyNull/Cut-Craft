@@ -1,4 +1,4 @@
-//! Import Toolpaths: a G-code file (as a post-processor writes it, from Cut Craft or another
+//! Import Toolpaths: a G-code file (as a post-processor writes it, from PowerWhittle or another
 //! program) read back as toolpaths, one for each bit it uses, to preview, check and save
 //! again through another post.
 //!
@@ -214,7 +214,7 @@ impl Part {
         Some(format!(
             "the file turns the rotary axis {named}, which Import Toolpaths cannot read yet: \
              its turns are left out, so the preview is flat and saving it again would cut it \
-             flat. Make rotary toolpaths in Cut Craft from the drawing instead"
+             flat. Make rotary toolpaths in PowerWhittle from the drawing instead"
         ))
     }
 
@@ -802,7 +802,7 @@ mod tests {
 
     #[test]
     fn a_pause_for_a_tool_changed_by_hand_starts_a_part_named_from_its_comment() {
-        // as Cut Craft's grbl posts write a bit change
+        // as PowerWhittle's grbl posts write a bit change
         let text = "(First tool T1: 6mm End Mill, fitted and zeroed before starting)\n\
                     G0 X0 Y0 Z5\nG1 Z-1 F500\nM5\n\
                     (Change to T4: 60 V-Bit, zero it, then resume)\nM0\nG0 X5 Y5\nG1 Z-1\n";

@@ -539,7 +539,7 @@ fn right_clicking_anywhere_offers_a_bug_report_saying_where() {
     assert!(h.text_at("Report a Bug").is_some());
     let state = h.bug_state();
     assert!(
-        state.contains("Cut Craft") && state.contains("1 vectors"),
+        state.contains("PowerWhittle") && state.contains("1 vectors"),
         "{state}"
     );
 }

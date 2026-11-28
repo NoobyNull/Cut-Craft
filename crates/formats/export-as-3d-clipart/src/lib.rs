@@ -1,4 +1,4 @@
-//! Cut Craft's own 3D clipart (`.ccclip`): Model ▸ Export as 3D Clipart saves the selected
+//! PowerWhittle's own 3D clipart (`.ccclip`): Model ▸ Export as 3D Clipart saves the selected
 //! components, baked into one with their shaping, as a component whose grid starts at the
 //! origin; Import Component / 3D Model puts one back, centred on the job, on the first
 //! level. (`.3dclip` files are encrypted, so they are not read; see `re/SPEC.md`.)
@@ -21,7 +21,7 @@ struct Clip {
 const FORMAT_NAME: &str = "cut-craft-clipart";
 const VERSION: u32 = 1;
 const CLIPART: FileFormat = FileFormat {
-    label: "Cut Craft 3D clipart",
+    label: "PowerWhittle 3D clipart",
     extensions: &["ccclip"],
 };
 
@@ -45,10 +45,10 @@ pub fn clip_bytes(k: &Component) -> Result<Vec<u8>, CommandError> {
 /// The component a clipart file holds, its grid at the origin as saved.
 pub fn read_clip(bytes: &[u8]) -> Result<Component, CommandError> {
     let clip: Clip = serde_json::from_slice(bytes)
-        .map_err(|e| CommandError::Failed(format!("not a Cut Craft clipart file: {e}")))?;
+        .map_err(|e| CommandError::Failed(format!("not a PowerWhittle clipart file: {e}")))?;
     if clip.format != FORMAT_NAME || clip.version > VERSION {
         return Err(CommandError::Failed(
-            "not a clipart file this version of Cut Craft reads".into(),
+            "not a clipart file this version of PowerWhittle reads".into(),
         ));
     }
     let k = clip.component;

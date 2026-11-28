@@ -47,9 +47,9 @@ Group by bit saves bit changes, but it can cut a part free before the work insid
   give (from the job's X0 Y0), out of the way, before it stops. Z is the height above the
   material, and it is never lower than the safe Z. Off, the bit only lifts to the safe Z.
 - **Spindle spin-up after a pause**: how many seconds the spindle gets to reach speed once
-  you resume. 0 keeps the post's own wait (3 seconds in Cut Craft's posts). The wait (`G4`)
+  you resume. 0 keeps the post's own wait (3 seconds in PowerWhittle's posts). The wait (`G4`)
   is written the way the post writes its other dwells, with a note above it giving the
-  seconds. Cut Craft's posts write seconds, which GRBL, FluidNC and Mach3 read by default.
+  seconds. PowerWhittle's posts write seconds, which GRBL, FluidNC and Mach3 read by default.
   If your controller reads `G4 P` in milliseconds (Mach3 with "dwell in ms" ticked, for
   example), give the post's `DWELL_TIME` a multiplier of 1000 in Post-Processor Management.
   The spin-up then follows it too, so 3 seconds never becomes 3 milliseconds.

@@ -180,7 +180,7 @@ fn the_import_form_lifts_aligns_and_follows_a_drag_as_it_goes() {
 #[test]
 fn the_window_is_titled_cut_craft() {
     let h = Harness::new();
-    assert_eq!(h.window_title(), "Untitled - Cut Craft");
+    assert_eq!(h.window_title(), "Untitled - PowerWhittle");
 }
 
 #[test]

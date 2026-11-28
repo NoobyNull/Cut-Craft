@@ -1,6 +1,6 @@
 //! Reading Vectric `.vfont` files: an OLE compound file whose streams hold MFC-serialized
-//! glyphs (see `re/SPEC.md`, Fonts). Users point Cut Craft at the fonts their own Vectric
-//! install has; none ship with Cut Craft.
+//! glyphs (see `re/SPEC.md`, Fonts). Users point PowerWhittle at the fonts their own Vectric
+//! install has; none ship with PowerWhittle.
 
 use crate::font::{Font, Glyph};
 use crate::geometry::{Path, Point, Segment};

@@ -81,7 +81,7 @@ fn licence_file_keeps_the_polyform_text_word_for_word() {
     // a Windows checkout may turn line ends into CR LF
     let polyform = licence[start..].replace('\r', "");
     // the official text, from github.com/polyformproject/polyform-licenses at tag 1.0.0:
-    // Cut Craft's own terms go above it, never into it
+    // PowerWhittle's own terms go above it, never into it
     assert_eq!(polyform.len(), 3_593, "the PolyForm text was changed");
     assert_eq!(
         fnv1a(&polyform),
@@ -100,7 +100,7 @@ fn licence_file_is_polyform_strict_with_the_credit_line_and_the_extra_permission
         "Required Notice: Copyright 2026 Matthew (NoobyNull) (https://github.com/NoobyNull/Cut-Craft)\n"
     ));
     // the permission only adds to Strict's permitted purposes: any purpose for people and
-    // one-person businesses, never sharing, selling or changing Cut Craft itself
+    // one-person businesses, never sharing, selling or changing PowerWhittle itself
     for words in [
         "# Cut Craft Additional Permission",
         "in addition to the PolyForm Strict License 1.0.0 terms below",
@@ -154,7 +154,7 @@ fn the_credits_window_thanks_lists_and_searches_every_credit() {
     assert!(
         h.texts()
             .iter()
-            .any(|t| t.starts_with("Cut Craft is built with free libraries"))
+            .any(|t| t.starts_with("PowerWhittle is built with free libraries"))
     );
     assert!(
         h.text_at(&format!("Showing {total} of {total}")).is_some(),
@@ -956,7 +956,7 @@ fn the_status_bar_keeps_its_hint_while_the_pointer_is_on_it() {
 fn the_community_links_are_in_help_not_on_the_start_page() {
     let h = Harness::at_start();
     assert!(h.text_at("Facebook").is_none());
-    assert!(h.text_at("Cut Craft on GitHub").is_some());
+    assert!(h.text_at("PowerWhittle on GitHub").is_some());
     let help = h
         .menu_bar()
         .menus

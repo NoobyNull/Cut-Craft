@@ -48,7 +48,7 @@ deletes the selection.
   [Snapping Options](help:snapping).
 - **Ctrl+Q** starts Quick Engrave, except on a Mac, where **⌘Q** quits: set it another key
   if you use it.
-- Using Cut Craft by keyboard alone, or with a screen reader (Narrator, NVDA, Orca,
+- Using PowerWhittle by keyboard alone, or with a screen reader (Narrator, NVDA, Orca,
   VoiceOver)? See [Screen readers](help:screen_readers).
 
 ## Changing a shortcut
@@ -57,11 +57,11 @@ deletes the selection.
 2. Type part of an action's name (or a key, such as Ctrl+Z) in **Find** to find its row.
 3. Press **Add** beside it, then press the key you want, with Ctrl, Alt or Shift if you
    like. A mouse button works too: the wheel click, or a thumb button (Back and Forward).
-4. If that key already runs something else, Cut Craft says so: **Move it here** takes it
+4. If that key already runs something else, PowerWhittle says so: **Move it here** takes it
    from the other action, and **Pick another** waits for a different key.
 5. Press **Apply** at the foot of Options. Until then the old shortcut still runs.
 
-Press **×** on a shortcut to take it away, and **Reset** to go back to Cut Craft's own.
+Press **×** on a shortcut to take it away, and **Reset** to go back to PowerWhittle's own.
 **Pan (hold and drag)**, at the top of the list, is the mouse button that moves the view
 when held and dragged: the wheel to start with. Ctrl+C, Ctrl+X and Ctrl+V only ever copy,
 cut and paste. See [Changing settings](help:settings) for Apply, Cancel and Close.

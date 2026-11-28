@@ -1,4 +1,4 @@
-//! Starting Cut Craft: the window, the graphics and each frame handed to the app.
+//! Starting PowerWhittle: the window, the graphics and each frame handed to the app.
 
 use super::{
     APP_ID, CutCraftApp, DIALOG_FOLDER, DIALOG_PARENT, app_icon, egui, files, help_pictures, mac,
@@ -24,7 +24,7 @@ impl eframe::App for CutCraftApp {
     }
 }
 
-/// The main window's frame: the desktop's title bar or Cut Craft's own (`system_title_bar`);
+/// The main window's frame: the desktop's title bar or PowerWhittle's own (`system_title_bar`);
 /// a Mac's window always keeps its traffic lights ([`mac::viewport`]).
 pub(super) fn window_frame(
     builder: egui::ViewportBuilder,
@@ -58,7 +58,7 @@ impl CutCraftApp {
     }
 }
 
-/// Tells bug reports which graphics card draws Cut Craft, and how; `info` back.
+/// Tells bug reports which graphics card draws PowerWhittle, and how; `info` back.
 pub(super) fn graphics_for_bug_reports(
     info: eframe::wgpu::AdapterInfo,
 ) -> eframe::wgpu::AdapterInfo {
@@ -95,7 +95,7 @@ pub(super) fn main_viewport(
 /// instead and quits. `open` is a file named on the command line, opened once the window is up.
 pub fn run(title: &str, shots: Option<Pictures>, open: Option<&std::path::Path>) {
     // winit 0.29 delivered dropped files only on X11; 0.30 should on Wayland too, but until that
-    // is tried by hand a Wayland desktop runs Cut Craft through XWayland unless Options says to
+    // is tried by hand a Wayland desktop runs PowerWhittle through XWayland unless Options says to
     // use Wayland directly
     let settings = crate::options::Options::load();
     let (wayland, theme) = (settings.advanced.wayland_native, settings.appearance.theme);
@@ -134,7 +134,7 @@ pub fn run(title: &str, shots: Option<Pictures>, open: Option<&std::path::Path>)
     };
     let samples = options.multisampling;
     // the pictures' run keeps its egui state apart from the user's
-    let name = shots.as_ref().map_or(title, |_| "Cut Craft screenshots");
+    let name = shots.as_ref().map_or(title, |_| "PowerWhittle screenshots");
     eframe::run_native(
         name,
         options,

@@ -1,14 +1,14 @@
 # Gadgets ▸ Add-ons.
 
-# Language packs: each language downloaded and installed on its own, never with Cut Craft.
+# Language packs: each language downloaded and installed on its own, never with PowerWhittle.
 addons-languages = Languages
-addons-languages-about = Cut Craft in another language. Each is installed on its own; pick it in Edit ▸ Options ▸ Language. Words a pack lacks show in English.
+addons-languages-about = PowerWhittle in another language. Each is installed on its own; pick it in Edit ▸ Options ▸ Language. Words a pack lacks show in English.
 addons-languages-asking = Asking GitHub which languages there are...
 addons-install = Install
-addons-a-gadget-or-other-add = A gadget or other add-on published on GitHub: type its repository, such as owner/name, or paste its link. Cut Craft installs its newest release.
+addons-a-gadget-or-other-add = A gadget or other add-on published on GitHub: type its repository, such as owner/name, or paste its link. PowerWhittle installs its newest release.
 addons-cancel = Cancel
-addons-cut-craft-add-ons = Cut Craft add-ons
-addons-extra-tools-that-are-too = Extra tools that are too big to come with Cut Craft. Each shows up as an ordinary tool once it is installed.
+addons-cut-craft-add-ons = PowerWhittle add-ons
+addons-extra-tools-that-are-too = Extra tools that are too big to come with PowerWhittle. Each shows up as an ordinary tool once it is installed.
 addons-install-anyway = Install Anyway
 addons-install-from-github = Install from GitHub
 addons-installed-from-github = Installed from GitHub

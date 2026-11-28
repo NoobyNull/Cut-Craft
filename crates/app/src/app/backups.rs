@@ -7,7 +7,7 @@ use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
 use std::path::PathBuf;
 
-/// The backups' state while Cut Craft runs.
+/// The backups' state while PowerWhittle runs.
 #[derive(Default)]
 pub(super) struct Backups {
     /// The settings folder backed up; `None` in tests, which back up nothing unless they say

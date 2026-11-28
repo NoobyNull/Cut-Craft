@@ -233,7 +233,7 @@ impl Font {
     }
 }
 
-/// Where Cut Craft looks for Vectric `.vfont` single-line fonts: `fonts` in its settings
+/// Where PowerWhittle looks for Vectric `.vfont` single-line fonts: `fonts` in its settings
 /// folder. Point it at a Vectric install's `Fonts` folder (a link will do).
 pub fn vfont_dir() -> Option<PathBuf> {
     crate::file::config_dir().map(|d| d.join("fonts"))

@@ -150,11 +150,14 @@ pub fn filters(dialog: Dialog<'_>, registry: &Registry) -> Vec<Filter> {
         Dialog::OpenJob => vec![Filter::new("Cut Craft job", &JOB_EXTENSIONS)],
         Dialog::SaveJob => {
             vec![Filter::new(
-                "Cut Craft job",
+                "PowerWhittle job",
                 &[JOB_EXTENSION, OLD_JOB_EXTENSION],
             )]
         }
-        Dialog::JobTemplate => vec![Filter::new("Cut Craft job template", &[TEMPLATE_EXTENSION])],
+        Dialog::JobTemplate => vec![Filter::new(
+            "PowerWhittle job template",
+            &[TEMPLATE_EXTENSION],
+        )],
         Dialog::ImportVectorsOrPicture => {
             let ids: Vec<_> = VECTOR_IMPORTERS
                 .iter()
@@ -186,7 +189,7 @@ pub fn filters(dialog: Dialog<'_>, registry: &Registry) -> Vec<Filter> {
             "Bit libraries",
             &crate::files::TOOL_FILE_EXTENSIONS,
         )],
-        Dialog::SaveToolDatabase => vec![Filter::new("Cut Craft bit library", &["json"])],
+        Dialog::SaveToolDatabase => vec![Filter::new("PowerWhittle bit library", &["json"])],
         Dialog::SaveShadedImage => vec![Filter::new("PNG image", &["png"])],
         Dialog::SculptingBrush => vec![Filter::new("Sculpting brush", &["ccclip"])],
         Dialog::Texture => vec![Filter::new(
@@ -219,7 +222,7 @@ pub fn filters(dialog: Dialog<'_>, registry: &Registry) -> Vec<Filter> {
             Filter::new("All files", &["*"]),
         ],
         Dialog::SaveBackup => vec![Filter::new(
-            "Cut Craft backup",
+            "PowerWhittle backup",
             &[cut_craft_backup::EXTENSION],
         )],
     }

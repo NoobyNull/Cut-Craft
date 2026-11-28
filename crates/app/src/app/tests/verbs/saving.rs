@@ -219,7 +219,7 @@ impl Harness {
         );
     }
 
-    /// First-time setup's Start using Cut Craft, without its window's frame.
+    /// First-time setup's Start using PowerWhittle, without its window's frame.
     pub(in super::super) fn finish_first_run(&mut self) {
         let setup = self.app.first_run.take().expect("first-time setup is open");
         self.app.finish_first_run(&setup);

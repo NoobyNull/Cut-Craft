@@ -6,7 +6,7 @@ icon: file/setup_material.png
 
 # First-Time Setup
 
-The first time Cut Craft starts, it asks five quick questions so your first job matches
+The first time PowerWhittle starts, it asks five quick questions so your first job matches
 your machine. **Help ▸ Run First-Time Setup Again** asks them again: for a new machine,
 or if you set it up wrong the first time.
 
@@ -23,20 +23,20 @@ or if you set it up wrong the first time.
 3. **What size material do you usually cut?** Its **Width (X)**, **Length (Y)** and
    **Thickness**. New jobs start this size; each job can still be changed with
    [Setup Material](help:setup_material).
-4. **If Cut Craft crashes, may it send a crash report to help fix it?** **Yes**, **Ask me
-   each time** or **No**. A crash report says what Cut Craft was doing when it closed;
+4. **If PowerWhittle crashes, may it send a crash report to help fix it?** **Yes**, **Ask me
+   each time** or **No**. A crash report says what PowerWhittle was doing when it closed;
    your user name, folders and file names are left out of it. See
    [Reporting a bug](help:bug_reports).
 5. **How should the window be laid out?** Click **Ribbon**, **Rail** or **Classic**. Each
    shows a picture of it. Ribbon is picked to start with and suits most people. Change it
    any time with [Interface Layout](help:interface_layout).
 
-Press **Start using Cut Craft**. It adds the machine and makes it the one you use, sets
+Press **Start using PowerWhittle**. It adds the machine and makes it the one you use, sets
 the job every new file starts with, and puts the starter bits in your units at the top of
 the Bit Library, and arranges the window as picked. The status bar says what was set
 up.
 
-**Skip for now** starts with Cut Craft's usual 600 × 400 × 20 mm job and no machine, and
+**Skip for now** starts with PowerWhittle's usual 600 × 400 × 20 mm job and no machine, and
 keeps the layout already in use (Ribbon on a new install).
 
 ## Asking again
@@ -52,7 +52,7 @@ answers from before, so change only what is wrong:
 - **The material and units** become the job every new file starts with (the same as
   [Job Defaults](help:settings) in Edit ▸ Options).
 
-Run again, setup changes My Machine and the layout, so Cut Craft
+Run again, setup changes My Machine and the layout, so PowerWhittle
 [backs up your settings](help:backups) first.
 
 Every answer can also be changed on its own later: the machine in **Machine ▸ Machine

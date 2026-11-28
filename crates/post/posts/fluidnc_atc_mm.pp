@@ -1,14 +1,14 @@
-+ Cut Craft's default post: grbl / FluidNC, millimetres, automatic tool changer.
-+ Written for Cut Craft from the documented .pp format (re/SPEC.md).
++ PowerWhittle's default post: grbl / FluidNC, millimetres, automatic tool changer.
++ Written for PowerWhittle from the documented .pp format (re/SPEC.md).
 
 + History
 + Who        When       What
 + ========== ========== ==========================================
-+ Cut Craft  2026-10-24 First version: automatic tool changer
-+ Cut Craft  2026-10-27 Arcs; inch and straight-line variants
-+ Cut Craft  2026-10-31 Dwell written as G4
++ PowerWhittle  2026-10-24 First version: automatic tool changer
++ PowerWhittle  2026-10-27 Arcs; inch and straight-line variants
++ PowerWhittle  2026-10-31 Dwell written as G4
 
-POST_NAME = "Cut Craft FluidNC ATC (mm) (*.nc)"
+POST_NAME = "PowerWhittle FluidNC ATC (mm) (*.nc)"
 FILE_EXTENSION = "nc"
 UNITS = "MM"
 LINE_ENDING = "[10]"

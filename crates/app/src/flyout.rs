@@ -4,7 +4,7 @@
 //! arrow in its corner, or press Down while it has the keyboard focus, and the rest open beside
 //! it, each with its name.
 //!
-//! Rather than a row of loose icons, Cut Craft names each group so a beginner
+//! Rather than a row of loose icons, PowerWhittle names each group so a beginner
 //! sees what the choices are (`re/SPEC.md`, Toolbox tool groups). Find Tool, the Rail layout's
 //! lists and Favourites name every tool on its own either way.
 

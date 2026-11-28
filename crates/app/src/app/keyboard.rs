@@ -187,7 +187,7 @@ impl CutCraftApp {
     /// Ctrl+X, Ctrl+C and Ctrl+V, which egui gives as clipboard events rather than keys.
     fn clipboard_keys(&mut self, ctx: &egui::Context) {
         // Ctrl+X, Ctrl+C and Ctrl+V reach egui as clipboard events, never as keys; the system
-        // clipboard carries what Copy took, so another Cut Craft window pastes it too
+        // clipboard carries what Copy took, so another PowerWhittle window pastes it too
         let (cut, copy, pasted) = ctx.input(|i| {
             i.raw
                 .events

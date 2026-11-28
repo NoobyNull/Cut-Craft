@@ -570,7 +570,7 @@ error-the-cut-list-is-empty-256301 = The cut list is empty.
 error-the-cut-list-has-no-a3d745 = The cut list has no parts in it (every quantity is 0, or no rows).
 
 ## formats/export-as-3d-clipart/src/lib.rs
-error-not-a-clipart-file-this-d7672e = not a clipart file this version of Cut Craft reads
+error-not-a-clipart-file-this-3f98e8 = not a clipart file this version of PowerWhittle reads
 error-the-clipart-file-is-damaged-d6ef42 = the clipart file is damaged
 error-there-is-no-component-to-efe33c = there is no component to export: create one first
 

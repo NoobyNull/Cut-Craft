@@ -1,4 +1,4 @@
-//! Cut Craft: a free, source-available app for 2D/3D design and CNC toolpaths.
+//! PowerWhittle: a free, source-available app for 2D/3D design and CNC toolpaths.
 
 // release builds on Windows open no console window behind the app
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
@@ -79,7 +79,7 @@ fn main() {
         cut_craft_updater::clean_up(program);
     }
     app::run(
-        concat!("Cut Craft v", env!("CARGO_PKG_VERSION")),
+        concat!("PowerWhittle v", env!("CARGO_PKG_VERSION")),
         shots,
         open.as_deref(),
     );

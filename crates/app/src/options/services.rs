@@ -1,21 +1,21 @@
-//! The settings for the services Cut Craft talks to: updates, the web API and bug reports.
+//! The settings for the services PowerWhittle talks to: updates, the web API and bug reports.
 
 use super::{Deserialize, JsonSchema, Serialize, on, yes};
 
 /// Help ▸ Check for Updates, and the check at startup.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Updates {
-    /// Every time Cut Craft starts, ask GitHub whether there is a new version,
+    /// Every time PowerWhittle starts, ask GitHub whether there is a new version,
     /// and say so if there is. Nothing is downloaded or installed until you choose Install Now
     #[serde(default = "on")]
-    #[schemars(title = "Check for updates when Cut Craft starts")]
+    #[schemars(title = "Check for updates when PowerWhittle starts")]
     pub check_at_startup: bool,
     /// Open a short announcement from the team at the first start of a day it is meant for,
     /// such as news of the program or a holiday note, until you tick Don't show this again.
-    /// Cut Craft looks on GitHub for new ones as it starts; turning this off stops that too.
+    /// PowerWhittle looks on GitHub for new ones as it starts; turning this off stops that too.
     /// Help ▸ Announcements shows the current ones whenever you like
     #[serde(default = "on")]
-    #[schemars(title = "Show announcements when Cut Craft starts")]
+    #[schemars(title = "Show announcements when PowerWhittle starts")]
     pub show_announcements: bool,
     /// When GitHub was last asked, in seconds since 1970: a record only (every start asks),
     /// kept to tell when an update was last looked for.
@@ -39,11 +39,11 @@ impl Default for Updates {
     }
 }
 
-/// Options ▸ Web API: lets a script, a test or Claude drive Cut Craft over HTTP, the way you
+/// Options ▸ Web API: lets a script, a test or Claude drive PowerWhittle over HTTP, the way you
 /// do with the mouse. Off until switched on.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct WebApi {
-    /// Let programs on this computer drive Cut Craft: select vectors, run tools, press any
+    /// Let programs on this computer drive PowerWhittle: select vectors, run tools, press any
     /// button. Calls from this computer need nothing more; other computers need the access
     /// token. The status bar shows WEB API Running in green while it is listening, or in red if
     /// it could not start and why
@@ -95,15 +95,15 @@ impl WebApi {
     }
 }
 
-/// Bug reports, and what happens after Cut Craft closes because of an error.
+/// Bug reports, and what happens after PowerWhittle closes because of an error.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct BugReports {
-    /// If Cut Craft closes because of an error, it keeps a crash log saying what it was
+    /// If PowerWhittle closes because of an error, it keeps a crash log saying what it was
     /// doing. The next time it starts it can open a bug report with that log, for you to
     /// read and send. Your user name and home folder are left out of it, and nothing is sent
     /// until you press Submit.
     #[serde(default)]
-    #[schemars(title = "If Cut Craft crashes")]
+    #[schemars(title = "If PowerWhittle crashes")]
     pub crash_logs: CrashLogs,
     /// Send which system and version this computer runs (Windows 11 23H2, macOS 14 Sonoma,
     /// Ubuntu 24.04...), its processor (Intel/AMD or ARM) and graphics card with crash and
@@ -133,7 +133,7 @@ impl Default for BugReports {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CrashLogs {
-    /// Send the crash log to Cut Craft's crash-report service by itself (your user name,
+    /// Send the crash log to PowerWhittle's crash-report service by itself (your user name,
     /// folders and file names left out). Where that can't be done, open a bug report with it ticked
     #[schemars(title = "Send the crash log")]
     Send,
@@ -141,18 +141,18 @@ pub enum CrashLogs {
     #[default]
     #[schemars(title = "Ask me each time")]
     Ask,
-    /// Don't open a report: the crash log is kept in Cut Craft's settings folder
+    /// Don't open a report: the crash log is kept in PowerWhittle's settings folder
     #[schemars(title = "Don't send crash logs")]
     DontSend,
 }
 
-/// Options ▸ Backups: the backups Cut Craft makes by itself. Help ▸ Back Up Settings makes one
+/// Options ▸ Backups: the backups PowerWhittle makes by itself. Help ▸ Back Up Settings makes one
 /// any time.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Backups {
-    /// Also back up once a week, when Cut Craft starts. A backup is always made before an
+    /// Also back up once a week, when PowerWhittle starts. A backup is always made before an
     /// update is installed, before the window layout changes, before first-time setup is run
-    /// again, and before Cut Craft rewrites a library itself
+    /// again, and before PowerWhittle rewrites a library itself
     #[serde(default = "on")]
     #[schemars(title = "Back up every week")]
     pub weekly: bool,

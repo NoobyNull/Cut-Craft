@@ -18,7 +18,7 @@ const MM_PER_INCH: f64 = 25.4;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Measured {
     /// Its width (X), length (Y) and thickness (Z) as saved, in mm; and how many
-    /// triangles its surface is made of (a Cut Craft clipart file is a grid, not triangles).
+    /// triangles its surface is made of (a PowerWhittle clipart file is a grid, not triangles).
     Model {
         size: [f64; 3],
         triangles: Option<usize>,

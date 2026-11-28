@@ -136,7 +136,7 @@ fn each_tool_gets_its_own_file_unless_the_tool_changer_changes_them() {
     assert!(split_for(&separate, &post));
     // a tool changer that can change tools puts them all in one file
     f.machine = Some(Machine {
-        posts: vec!["Cut Craft FluidNC ATC (mm) (*.nc)".into()],
+        posts: vec!["PowerWhittle FluidNC ATC (mm) (*.nc)".into()],
         slots: vec![Some("End Mill".into()), Some("V-Bit".into())],
         firmware: Some(cut_craft_machines::Firmware::FluidNc),
         ..Machine::default()
@@ -264,18 +264,18 @@ fn files_saved_past_errors_say_so_at_the_top() {
     let errors = ["Drill would crash into Clamp 1".to_owned()];
     let semicolons = vec![(
         PathBuf::from("a.nc"),
-        "; Made by Cut Craft\n; Job: sign\nG21\nG0 X0 Y0\nM30\n".to_owned(),
+        "; Made by PowerWhittle\n; Job: sign\nG21\nG0 X0 Y0\nM30\n".to_owned(),
     )];
     let marked_text = &marked(semicolons.clone(), &errors, None)[0].1;
     let lines: Vec<&str> = marked_text.lines().collect();
-    assert_eq!(lines[..2], ["; Made by Cut Craft", "; Job: sign"]);
+    assert_eq!(lines[..2], ["; Made by PowerWhittle", "; Job: sign"]);
     assert!(lines[2].starts_with("; SAVED WITH ERRORS"), "{marked_text}");
     assert_eq!(lines[3], "; Drill would crash into Clamp 1");
     assert_eq!(lines[4], "G21", "before the first command");
     // brackets where the post comments in brackets
     let brackets = vec![(
         PathBuf::from("a.nc"),
-        "(Made by Cut Craft)\nG21\n".to_owned(),
+        "(Made by PowerWhittle)\nG21\n".to_owned(),
     )];
     let text = &marked(brackets, &errors, None)[0].1;
     assert!(

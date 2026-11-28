@@ -1,10 +1,10 @@
-//! Advanced settings: how hard Cut Craft works, sealed so a hand edit is noticed.
+//! Advanced settings: how hard PowerWhittle works, sealed so a hand edit is noticed.
 
 use super::{Deserialize, JsonSchema, Options, Serialize};
 
-/// Settings that change how hard Cut Craft works the computer, or how exactly it cuts: listed
+/// Settings that change how hard PowerWhittle works the computer, or how exactly it cuts: listed
 /// only once Show advanced settings is ticked, and put back to their defaults when the file
-/// was changed outside Cut Craft.
+/// was changed outside PowerWhittle.
 // ponytail: wayland_native moved here from General; one saved there before starts off again
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Advanced {
@@ -54,7 +54,7 @@ pub struct Advanced {
         range(min = 1000, max = 10_000_000)
     )]
     pub library_most_files: u32,
-    /// Saved Library previews not used for this long are deleted when Cut Craft starts. Longer
+    /// Saved Library previews not used for this long are deleted when PowerWhittle starts. Longer
     /// keeps more of them on disk, so folders open faster (from the next start)
     #[serde(
         default = "preview_cache_days",
@@ -138,7 +138,7 @@ pub struct Advanced {
     #[schemars(title = "Nesting: most filler parts", range(min = 1, max = 100_000))]
     pub nest_most_fillers: u32,
     /// How much work a gadget may do, in millions of Lua steps, before it is stopped as
-    /// stuck. Higher lets big gadgets finish; a gadget caught in a loop then freezes Cut Craft
+    /// stuck. Higher lets big gadgets finish; a gadget caught in a loop then freezes PowerWhittle
     /// for longer before it is stopped
     #[serde(
         default = "gadget_million_instructions",
@@ -348,7 +348,7 @@ impl Advanced {
     }
 
     /// The check saved beside these settings: a keyed hash of them, so an edit made outside
-    /// Cut Craft shows. The key ships in the app, so it stops a hand edit, not a determined
+    /// PowerWhittle shows. The key ships in the app, so it stops a hand edit, not a determined
     /// one; that is all it is for.
     pub(super) fn seal(&self) -> String {
         seal_of(&serde_json::to_vec(self).expect("settings serialise"))
@@ -390,13 +390,13 @@ pub(super) const SEAL_KEY: &[u8] = b"Cut Craft advanced settings, v1";
 pub(super) const SEAL: &str = "advanced_check";
 
 /// The warning above the advanced settings, and what it goes on to say.
-pub const WARNING: &str = "⚠ Changing these can freeze Cut Craft or spoil a cut.";
-pub const WARNING_MORE: &str = "They set how hard Cut Craft works your computer and how exactly \
+pub const WARNING: &str = "⚠ Changing these can freeze PowerWhittle or spoil a cut.";
+pub const WARNING_MORE: &str = "They set how hard PowerWhittle works your computer and how exactly \
     it cuts. Leave them alone unless you know why you are changing one; Reset to defaults puts \
     them all back.";
 
 /// What reading the options file found: the options, whether the advanced ones were
-/// changed outside Cut Craft, and the settings that could not be read.
+/// changed outside PowerWhittle, and the settings that could not be read.
 #[derive(Debug, Default)]
 pub struct Read {
     pub options: Options,
@@ -416,8 +416,8 @@ pub fn unread_message(unread: &[String]) -> String {
     )
 }
 
-/// What the status bar says when the advanced settings were changed outside Cut Craft.
-pub const TAMPERED: &str = "Advanced settings were changed outside Cut Craft, so they were put \
+/// What the status bar says when the advanced settings were changed outside PowerWhittle.
+pub const TAMPERED: &str = "Advanced settings were changed outside PowerWhittle, so they were put \
     back to their safe defaults. Change them in Edit ▸ Options ▸ Advanced.";
 
 /// What the status bar says after the options are read: what could not be read, and that

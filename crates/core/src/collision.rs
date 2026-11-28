@@ -8,7 +8,7 @@
 //! The holder (collet nut and spindle) is the machine's, as Machine Configuration has it.
 //! With Machine Configuration's Holder per bit ticked (a tool changer, its bits each in a
 //! holder of their own) a bit can carry its own ([`Tool::holder`]). How far the bit sticks
-//! out of the nut is the bit's ([`Tool::stickout`]). These checks are Cut Craft's own.
+//! out of the nut is the bit's ([`Tool::stickout`]). These checks are PowerWhittle's own.
 
 use crate::document::{Job, Units};
 use crate::geometry::Point;

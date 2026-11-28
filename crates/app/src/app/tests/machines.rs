@@ -41,7 +41,7 @@ fn a_drill_bank_toolpath_drills_with_the_machines_bank_and_says_when_there_is_no
         h.form_value("bank")["horizontal"].as_array().unwrap().len(),
         2
     );
-    // Cut Craft's own posts have no drill bank blocks: saving says so
+    // PowerWhittle's own posts have no drill bank blocks: saving says so
     let post = h.output_post().unwrap();
     let out = std::env::temp_dir().join(format!("cut-craft-bank-{}.nc", std::process::id()));
     let err = h.save_through(&post, &out).unwrap_err();
@@ -121,7 +121,7 @@ fn an_installed_post_is_kept_and_the_machine_saves_through_it() {
     std::fs::create_dir_all(&dir).unwrap();
     let text = cut_craft_post::BUILT_IN[0]
         .1
-        .replace("Cut Craft FluidNC ATC (mm)", "My Router (mm)");
+        .replace("PowerWhittle FluidNC ATC (mm)", "My Router (mm)");
     std::fs::write(&file, text).unwrap();
     h.install_post(&file);
     assert_eq!(h.machines().len(), 1, "a machine to use it");
@@ -162,12 +162,12 @@ fn toolpaths_save_through_the_default_fluidnc_post_until_one_is_installed() {
     let mut h = Harness::new();
     assert_eq!(
         h.output_post().unwrap().name,
-        "Cut Craft FluidNC ATC (mm) (*.nc)"
+        "PowerWhittle FluidNC ATC (mm) (*.nc)"
     );
     h.given_document(|d| d.job = Job::rotary(300.0, 50.0, Along::X));
     assert_eq!(
         h.output_post().unwrap().name,
-        "Cut Craft FluidNC ATC Rotary A, G93 (mm) (*.nc)"
+        "PowerWhittle FluidNC ATC Rotary A, G93 (mm) (*.nc)"
     );
 }
 
@@ -280,7 +280,7 @@ fn a_crash_is_not_offered_when_crash_logs_are_not_to_be_sent() {
     assert!(!h.bug_report_open(), "no report");
     assert!(
         h.status_message()
-            .starts_with("Cut Craft closed with an error last time."),
+            .starts_with("PowerWhittle closed with an error last time."),
         "{}",
         h.status_message()
     );
@@ -650,7 +650,7 @@ fn a_rotary_job_s_z_zero_reads_turning_axis_not_machine_bed() {
     }
 }
 
-/// #511: Machine has no "Update Post-Processor Database" (it only ran Cut Craft's own update
+/// #511: Machine has no "Update Post-Processor Database" (it only ran PowerWhittle's own update
 /// check), and File has one print item that says it opens a PDF, not Print and Print Preview
 /// doing the same thing.
 #[test]

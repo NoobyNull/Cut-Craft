@@ -5,7 +5,7 @@ see-also: web_api, contents, settings, backups
 
 # Updates
 
-Cut Craft keeps itself up to date in one click. Every time it starts, it asks
+PowerWhittle keeps itself up to date in one click. Every time it starts, it asks
 GitHub whether there is a new version. If there is, it asks you:
 
 **A new version (0.6.14) is available. Download, install and relaunch?**
@@ -13,8 +13,8 @@ GitHub whether there is a new version. If there is, it asks you:
 ![The Updates window offering a new version, with Install Now, Later and Skip This Version](pictures/update-offer.png)
 
 - **Install Now** does the whole update for you (see below).
-- **Later** keeps the version you have. You are asked again next time Cut Craft starts.
-- **Skip This Version** stops Cut Craft offering that version when it starts. A newer one
+- **Later** keeps the version you have. You are asked again next time PowerWhittle starts.
+- **Skip This Version** stops PowerWhittle offering that version when it starts. A newer one
   is still offered, and **Help ▸ Check for Updates** still finds it.
 
 **Help ▸ Check for Updates** asks GitHub straight away, whenever you like. So does the
@@ -26,7 +26,7 @@ version number in the bottom-right corner of the window: right-click it (for exa
 ### Why a friend was offered a version before you
 
 Each new version is built separately for Linux, Windows and Mac, and each is added to the
-release page as soon as it is ready. Cut Craft only offers you a version once the download
+release page as soon as it is ready. PowerWhittle only offers you a version once the download
 for **your** kind of computer is there and signed. So for a little while after a release,
 a Linux computer may be offered it while a Windows computer or a Mac still says it is up to
 date. Check again later and it will be there. You are never offered a version you cannot
@@ -39,17 +39,17 @@ numbers. That is expected: each is offered the newest version made for it.
 
 ## What Install Now does
 
-![Install Now: downloading, checking the download, then Cut Craft reopening on the same job](pictures/update-steps.gif)
+![Install Now: downloading, checking the download, then PowerWhittle reopening on the same job](pictures/update-steps.gif)
 
 1. **Downloads** the new version from GitHub, with a bar showing how far it has got. You can
    close the window and keep working while it downloads.
-2. **Checks** the download is a genuine Cut Craft release, signed by its maker, and that it
+2. **Checks** the download is a genuine PowerWhittle release, signed by its maker, and that it
    arrived whole. A download that fails either check is thrown away.
 3. **Installs** it in place of the version you are running.
 4. **Backs up your settings** before the new version starts, in case it changes them. See
    [Backing up your settings](help:backups).
-5. **Closes and reopens Cut Craft, keeping your work.** You are not asked to save first.
-   Changes you have not saved yet are kept in a copy in Cut Craft's settings folder, and
+5. **Closes and reopens PowerWhittle, keeping your work.** You are not asked to save first.
+   Changes you have not saved yet are kept in a copy in PowerWhittle's settings folder, and
    the new version opens them just as you left them: the same job name, still marked as
    not saved (the **\*** in the title). A job you never saved comes back as **Untitled**.
    Your job's own file is not changed until you press **Save**. A job with nothing unsaved
@@ -63,9 +63,9 @@ so if anything goes wrong while the new version starts, the next start opens it 
 **Relaunch Now** keeps your work the same way.
 
 If the copy can't be written (a full disk, for example), you are asked whether to save
-first, as when you close Cut Craft yourself. If you press **Cancel** there, Cut Craft stays
+first, as when you close PowerWhittle yourself. If you press **Cancel** there, PowerWhittle stays
 open and the Updates window offers **Relaunch Now** (when you are ready) or **Relaunch
-Later** (the new version starts next time you open Cut Craft).
+Later** (the new version starts next time you open PowerWhittle).
 
 Keeping your work without asking is done by the version you are updating **from**, so it
 starts with updates made from version 0.7.6 or later. Updating from an older version still
@@ -82,7 +82,7 @@ as it was and the window says what happened. Most of the time the fix is one of 
 - **Could not reach GitHub**: check this computer is online, then press **Try Again**.
 - **GitHub is not answering for a while**: GitHub limits how often one computer can ask.
   Wait an hour and try again.
-- **Not allowed to change its own files**: Cut Craft was installed for every user of the
+- **Not allowed to change its own files**: PowerWhittle was installed for every user of the
   computer, in a folder only an administrator can change. Press **Open the Download Page**
   and install the new version the same way you installed this one.
 - **The signature or checksum does not match**: the download was damaged on the way.
@@ -94,16 +94,16 @@ as it was and the window says what happened. Most of the time the fix is one of 
 
 ## Where updates come from
 
-Cut Craft's releases are on GitHub, and they are moving to the Power-Whittle organisation's
+PowerWhittle's releases are on GitHub, and they are moving to the Power-Whittle organisation's
 page, `github.com/Power-Whittle/PowerWhittle`. While they move, each release goes on both
-pages. Cut Craft looks at both and offers you the newest one built for your computer,
+pages. PowerWhittle looks at both and offers you the newest one built for your computer,
 whichever page has it first, so there is nothing to change on your side. Every download
-is still checked against Cut Craft's own signature before anything is installed, whichever
+is still checked against PowerWhittle's own signature before anything is installed, whichever
 page it comes from.
 
 ## Copies that update another way
 
-Some copies of Cut Craft are looked after by something else, which owns their files. For
+Some copies of PowerWhittle are looked after by something else, which owns their files. For
 these the window says how to update instead, and each command has a **Copy** button so you
 can paste it into a terminal:
 
@@ -115,8 +115,8 @@ can paste it into a terminal:
   offers new versions itself.
 - **Flatpak**: download the new `.flatpak` file from the release page, then open it, or run
   `flatpak install --user` with its name in the folder you saved it to.
-- **Mac**: Cut Craft tells you when a new version's `.dmg` is ready. Download it and drag
-  Cut Craft to Applications again.
+- **Mac**: PowerWhittle tells you when a new version's `.dmg` is ready. Download it and drag
+  PowerWhittle to Applications again.
 - **Built from the source code**: `git pull`, then `cargo build --release`.
 
 The AppImage, the Linux `.tar.gz` and the Windows `.zip` replace themselves. An AppImage
@@ -126,11 +126,11 @@ the new one.
 
 ## Turning the check off
 
-Turn off **Edit ▸ Options ▸ Updates ▸ Check for updates when Cut Craft starts** to stop the
+Turn off **Edit ▸ Options ▸ Updates ▸ Check for updates when PowerWhittle starts** to stop the
 startup check. **Help ▸ Check for Updates** still works.
 
-**Edit ▸ Options ▸ Updates ▸ Show announcements when Cut Craft starts** opens the team's
+**Edit ▸ Options ▸ Updates ▸ Show announcements when PowerWhittle starts** opens the team's
 [Announcements](help:announcements) at the first start of a day they are meant for. Turning it
-off also stops Cut Craft reading them from GitHub.
+off also stops PowerWhittle reading them from GitHub.
 
 See also: [Help Contents](help:contents)

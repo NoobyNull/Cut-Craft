@@ -20,7 +20,7 @@
 //! ```
 //!
 //! `date:` sets `from` and `until` to one day. A note with `lang: ru` and another note's id
-//! is that note in Russian, shown instead of it when Cut Craft is in Russian. `support: yes`
+//! is that note in Russian, shown instead of it when PowerWhittle is in Russian. `support: yes`
 //! adds the "Support us on GitHub" row. Dates are the computer's own calendar day. Text
 //! before the first header (the file's own explanation) is skipped.
 

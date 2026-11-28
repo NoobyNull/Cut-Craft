@@ -287,7 +287,7 @@ fn job_defaults_start_blank_and_reset_puts_back_cut_crafts_own_job() {
     });
     let back = o.reset(JOB_DEFAULTS);
     assert!(!back.job_defaults.classic_startup);
-    assert_eq!(back.default_job, None, "Cut Craft's own new job again");
+    assert_eq!(back.default_job, None, "PowerWhittle's own new job again");
     // another page's reset leaves them be
     let kept = o.reset("general");
     assert_eq!(kept.default_job, o.default_job);
@@ -479,7 +479,7 @@ fn advanced_settings_edited_outside_cut_craft_go_back_to_their_defaults() {
 
 #[test]
 fn a_seal_made_before_dxf_curve_detail_still_passes_and_the_detail_is_sealed() {
-    // the seal an older Cut Craft wrote over { wayland_native, cores } alone
+    // the seal an older PowerWhittle wrote over { wayland_native, cores } alone
     #[derive(Serialize)]
     struct Before {
         wayland_native: bool,
@@ -497,7 +497,7 @@ fn a_seal_made_before_dxf_curve_detail_still_passes_and_the_detail_is_sealed() {
     assert!(!tampered, "an upgrade is not an edit");
     assert_eq!(back.advanced.cores, 2);
     assert_eq!(back.advanced.dxf_spline_detail, 32);
-    // changed in Cut Craft it loads back; changed by hand it goes back to 32
+    // changed in PowerWhittle it loads back; changed by hand it goes back to 32
     let mut o = Options::default();
     o.advanced.dxf_spline_detail = 64;
     let (back, tampered) = Options::from_bytes(&saved(&o));
@@ -542,7 +542,7 @@ fn library_limits_reach_the_library_and_are_sealed() {
         Advanced::default().library_limits(),
         (5, crate::clipart::MOST, 60, 400)
     );
-    // saved by Cut Craft they load back; edited by hand they go back to the defaults
+    // saved by PowerWhittle they load back; edited by hand they go back to the defaults
     let mut o = Options::default();
     o.advanced.previews_on_card = 100;
     let (back, tampered) = Options::from_bytes(&saved(&o));
@@ -580,7 +580,7 @@ fn gadget_limits_reach_gadgets_and_are_sealed() {
     // out of range in the file: kept to the range
     o.advanced.gadget_memory_mb = 1;
     assert_eq!(o.advanced.gadget_limits().memory, 8 << 20);
-    // saved by Cut Craft they load back; edited by hand they go back to the defaults
+    // saved by PowerWhittle they load back; edited by hand they go back to the defaults
     let mut o = Options::default();
     o.advanced.gadget_most_commands = 50_000;
     let (back, tampered) = Options::from_bytes(&saved(&o));

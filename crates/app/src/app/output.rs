@@ -20,7 +20,7 @@ pub(super) type Plan = Vec<Vec<EntityId>>;
 pub(super) struct Output<'a> {
     /// The job as it is (its toolpaths not yet thinned to their tolerances).
     pub doc: &'a Document,
-    /// The active machine; `None` before one is set up (Cut Craft's own post is used).
+    /// The active machine; `None` before one is set up (PowerWhittle's own post is used).
     pub machine: Option<&'a Machine>,
     pub posts: &'a Library,
     /// The toolpath and group picked in the toolpath list, for Save Selected.

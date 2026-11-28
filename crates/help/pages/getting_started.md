@@ -6,14 +6,14 @@ icon: file/new.png
 
 # Your first job
 
-New to Cut Craft? This page shows the whole journey once, from a blank sheet to a file
+New to PowerWhittle? This page shows the whole journey once, from a blank sheet to a file
 your machine can cut.
 
 ## Try the sample project first
 
-![The blank sheet Cut Craft opens with, and Try a sample project in its middle](pictures/basics/empty-sheet.png)
+![The blank sheet PowerWhittle opens with, and Try a sample project in its middle](pictures/basics/empty-sheet.png)
 
-Cut Craft opens on a blank sheet of material. In its middle, **Try a sample project**
+PowerWhittle opens on a blank sheet of material. In its middle, **Try a sample project**
 opens a small finished sign: the word HELLO with a rounded border, its toolpaths already
 made. Press **Preview All Toolpaths** on the Toolpaths page and watch it cut, before you
 start your own.
@@ -24,14 +24,14 @@ The sample is a new, unsaved job: change anything you like, it harms nothing.
 
 ## Two steps: Design, then Toolpaths
 
-Cut Craft works in two steps:
+PowerWhittle works in two steps:
 
 1. **Design** is where you draw **what** you want: shapes, text and 3D models. See
    [Design page](help:design).
 2. **Toolpaths** is where you tell the machine **how** to cut it: which bit, how deep, and
    which side of the line. See [Toolpaths page](help:toolpaths).
 
-In the [Ribbon layout](help:layout_ribbon) Cut Craft starts in, these are the **Design** and
+In the [Ribbon layout](help:layout_ribbon) PowerWhittle starts in, these are the **Design** and
 **Toolpaths** tabs across the top, with **Model** between them for 3D parts. The
 [Rail](help:layout_rail), [Canvas](help:layout_canvas) and [Classic](help:layout_classic) layouts group the same tools
 differently, but the two steps are the same.
@@ -49,7 +49,7 @@ differently, but the two steps are the same.
    [Profile Toolpath](help:profile_toolpath) with [tabs](help:tabs) to cut it free.
 4. **Preview.** Watch it cut on screen, and fix anything that looks wrong.
 5. **Save the toolpaths** for your machine with [Save Toolpaths](help:save_toolpaths).
-   Cut Craft runs its [checks before cutting](help:checks_before_cutting) first.
+   PowerWhittle runs its [checks before cutting](help:checks_before_cutting) first.
 6. **Save the job** too, so you can change it later: see
    [Saving and opening jobs](help:saving_jobs).
 

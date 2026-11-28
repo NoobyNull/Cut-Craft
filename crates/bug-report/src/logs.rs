@@ -243,6 +243,14 @@ pub fn recent() -> String {
         .map_or_default(|lines| lines.iter().cloned().collect::<Vec<_>>().join("\n"))
 }
 
+/// What follows the app's name at the start of a crash log's first line (`PowerWhittle 0.7.10
+/// on linux crashed: …`). A log written before the rename, and sent after the update, starts
+/// with `Cut Craft` instead.
+pub fn after_app_name(line: &str) -> Option<&str> {
+    line.strip_prefix("PowerWhittle ")
+        .or_else(|| line.strip_prefix("Cut Craft "))
+}
+
 /// What a crash log says: the version and system, the panic and where, what was running
 /// then, how it got there, and the log up to it.
 fn crash_text(panic: &str) -> String {
@@ -272,7 +280,7 @@ fn crash_text(panic: &str) -> String {
         format!("{system}\n\n")
     };
     format!(
-        "Cut Craft {} on {os} crashed: {panic}\n\n{doing}Backtrace:\n{}\n\n{system}Log:\n{}\n",
+        "PowerWhittle {} on {os} crashed: {panic}\n\n{doing}Backtrace:\n{}\n\n{system}Log:\n{}\n",
         env!("CARGO_PKG_VERSION"),
         std::backtrace::Backtrace::force_capture(),
         recent()
@@ -309,7 +317,7 @@ mod tests {
         let short = crate::system::this().short();
         assert!(
             text.starts_with(&format!(
-                "Cut Craft {} on {short} crashed: ",
+                "PowerWhittle {} on {short} crashed: ",
                 env!("CARGO_PKG_VERSION")
             )),
             "the system, short, where the service looks: {text}"
@@ -355,5 +363,18 @@ mod tests {
             !running().iter().any(|r| r == "Previewing for the test"),
             "over once dropped, however it ends"
         );
+    }
+
+    #[test]
+    fn a_crash_log_starts_with_the_app_s_name_old_or_new() {
+        assert_eq!(
+            after_app_name("PowerWhittle 0.7.10 on linux"),
+            Some("0.7.10 on linux")
+        );
+        assert_eq!(
+            after_app_name("Cut Craft 0.7.9 on linux"),
+            Some("0.7.9 on linux")
+        );
+        assert_eq!(after_app_name("Something 1.0 on linux"), None);
     }
 }

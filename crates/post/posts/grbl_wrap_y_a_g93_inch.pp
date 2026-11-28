@@ -1,4 +1,4 @@
-+ Cut Craft's post for hobby routers on grbl (grbl 1.1, grblHAL), inches, tools changed
++ PowerWhittle's post for hobby routers on grbl (grbl 1.1, grblHAL), inches, tools changed
 + by hand: grbl refuses M6, so a tool change stops the spindle and pauses (M0) for the
 + new tool, to be resumed from the sender once it is in and zeroed.
 + Rotary: Y wrapped onto A, for a cylinder along X; feeds in inverse time (G93). Needs an A axis (grblHAL built with 4 or more axes; standard GRBL 1.1 has none).
@@ -7,10 +7,10 @@
 + History
 + Who        When       What
 + ========== ========== ==========================================
-+ Cut Craft  2026-10-27 First version: arcs, tool change by hand (M0)
-+ Cut Craft  2026-10-31 Dwell written as G4
++ PowerWhittle  2026-10-27 First version: arcs, tool change by hand (M0)
++ PowerWhittle  2026-10-31 Dwell written as G4
 
-POST_NAME = "Cut Craft grblHAL Rotary A, cylinder along X, G93 (inch) (*.nc)"
+POST_NAME = "PowerWhittle grblHAL Rotary A, cylinder along X, G93 (inch) (*.nc)"
 FILE_EXTENSION = "nc"
 UNITS = "INCHES"
 LINE_ENDING = "[10]"

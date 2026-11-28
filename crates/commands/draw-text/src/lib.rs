@@ -74,7 +74,7 @@ pub struct Params {
     /// Each line of text is a line of the block
     #[schemars(extend("x-widget" = "multiline"))]
     pub text: String,
-    /// Single-line fonts (Vectric font `.vfont` files in Cut Craft's fonts folder) come first,
+    /// Single-line fonts (Vectric font `.vfont` files in PowerWhittle's fonts folder) come first,
     /// then the system's TrueType fonts
     #[schemars(schema_with = "font_choices")]
     pub font: String,

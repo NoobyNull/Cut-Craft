@@ -36,7 +36,7 @@ pub(super) const TOURS: &[Tour] = &[
         tool: "setup_material",
         steps: &[
             Step {
-                caption: "Cut Craft opens with a blank job, made with your Job Defaults. To \
+                caption: "PowerWhittle opens with a blank job, made with your Job Defaults. To \
                           change this job's material, press **Setup Material** (under File \
                           Operations, at the top of the Design page).",
                 setup: |app, ctx| {

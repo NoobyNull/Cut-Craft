@@ -261,7 +261,7 @@ mod tests {
         }
     }
 
-    /// Words that name another company or its programs. Cut Craft's own text says what a
+    /// Words that name another company or its programs. PowerWhittle's own text says what a
     /// tool does in its own words; Vectric is thanked once, in Help ▸ About.
     const OTHER_PROGRAMS: &[&str] = &["vectric", "vetric", "aspire", "v&co", "vcarve", "cut2d"];
 

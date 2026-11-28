@@ -42,7 +42,7 @@ pub struct Steps {
 }
 
 impl Steps {
-    /// Cut Craft's own: 22.5° with Shift, 1° with Ctrl.
+    /// PowerWhittle's own: 22.5° with Shift, 1° with Ctrl.
     pub const STANDARD: Self = Self {
         shift: ROTATE_STEP,
         fine: FINE_ROTATE_STEP,

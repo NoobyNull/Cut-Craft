@@ -236,7 +236,7 @@ fn bare_names(line: &str) -> String {
 }
 
 /// A crash report's title, in plain words: what went wrong when it is a known kind of
-/// failure, else what Cut Craft was doing, else the panic's own message without the source
+/// failure, else what PowerWhittle was doing, else the panic's own message without the source
 /// path it was raised at.
 pub fn crash_title(crash: &str) -> String {
     let lower = crash.to_ascii_lowercase();
@@ -284,13 +284,13 @@ fn panic_message(crash: &str) -> String {
     };
     let message = message.trim();
     if message.is_empty() {
-        "Cut Craft closed with an error".to_owned()
+        "PowerWhittle closed with an error".to_owned()
     } else {
         message.to_owned()
     }
 }
 
-/// What the crash log says Cut Craft was doing when it crashed (the latest, when several).
+/// What the crash log says PowerWhittle was doing when it crashed (the latest, when several).
 pub fn doing_at_crash(crash: &str) -> Option<String> {
     let (_, rest) = crash.split_once(crate::logs::DOING_HEADING)?;
     rest.lines()
@@ -366,7 +366,7 @@ mod tests {
 
     #[test]
     fn a_known_crash_is_titled_in_plain_words_with_what_was_running() {
-        let crash = "Cut Craft 0.6.3 on linux crashed: panicked at /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wgpu-27.0.1/src/backend/wgpu_core.rs:1:1:\nwgpu error: Validation Error\n\nCaused by:\n  In Device::create_buffer, label = 'egui_vertex_buffer'\n\n\
+        let crash = "PowerWhittle 0.6.3 on linux crashed: panicked at /home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wgpu-27.0.1/src/backend/wgpu_core.rs:1:1:\nwgpu error: Validation Error\n\nCaused by:\n  In Device::create_buffer, label = 'egui_vertex_buffer'\n\n\
             Doing when it crashed:\n- Previewing 3D Finishing 1 — now: Cutting\n\nBacktrace:\n";
         assert_eq!(
             crash_title(crash),
@@ -376,7 +376,7 @@ mod tests {
 
     #[test]
     fn an_unknown_crash_keeps_its_message_but_not_its_source_path() {
-        let crash = "Cut Craft 0.3.0 on linux crashed: panicked at crates/app/src/view3d.rs:9:9:\nindex out of bounds\n\nBacktrace:\n...";
+        let crash = "PowerWhittle 0.3.0 on linux crashed: panicked at crates/app/src/view3d.rs:9:9:\nindex out of bounds\n\nBacktrace:\n...";
         assert_eq!(crash_title(crash), "Crash: index out of bounds");
         let doing =
             format!("{crash}\n\nDoing when it crashed:\n- Calculating Pocket Toolpath\n\nLog:\n");
@@ -385,7 +385,7 @@ mod tests {
             "Crash: while calculating Pocket Toolpath: index out of bounds"
         );
         let long = format!(
-            "Cut Craft crashed: panicked at a.rs:1:1:\n{}",
+            "PowerWhittle crashed: panicked at a.rs:1:1:\n{}",
             "x ".repeat(200)
         );
         assert!(crash_title(&long).ends_with('…'));
@@ -421,8 +421,8 @@ mod tests {
             "source paths are the build machine's"
         );
         assert_eq!(
-            hide_files("Cut Craft 0.6.3 on linux crashed: version 0.6.3"),
-            "Cut Craft 0.6.3 on linux crashed: version 0.6.3"
+            hide_files("PowerWhittle 0.6.3 on linux crashed: version 0.6.3"),
+            "PowerWhittle 0.6.3 on linux crashed: version 0.6.3"
         );
         assert_eq!(
             hide_files("see https://x.dev/a and C:"),

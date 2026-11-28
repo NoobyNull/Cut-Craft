@@ -2,7 +2,7 @@
 
 use super::{Deserialize, JsonSchema, Serialize, egui};
 
-/// What the 3D view draws when Cut Craft starts.
+/// What the 3D view draws when PowerWhittle starts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -300,7 +300,7 @@ impl Rotation {
     }
 }
 
-/// The mouse in the 2D and 3D views, and the shortcuts set in place of Cut Craft's own.
+/// The mouse in the 2D and 3D views, and the shortcuts set in place of PowerWhittle's own.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -338,7 +338,7 @@ pub struct Controls {
     #[serde(default)]
     #[schemars(title = "Invert two-finger pan", extend("x-enable-when" = {"trackpad": true}))]
     pub invert_pan: bool,
-    /// The shortcuts changed from Cut Craft's own, by action, written as the menus write
+    /// The shortcuts changed from PowerWhittle's own, by action, written as the menus write
     /// them (`Ctrl+K`, `Mouse Back`); an empty list takes an action's shortcuts away. Set on
     /// this page's shortcut list, below its settings.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]

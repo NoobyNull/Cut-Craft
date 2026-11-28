@@ -1,4 +1,4 @@
-//! How this copy of Cut Craft was installed, which decides how it is updated.
+//! How this copy of PowerWhittle was installed, which decides how it is updated.
 
 use std::path::{Path, PathBuf};
 
@@ -43,7 +43,7 @@ pub enum Install {
 const ARCH: &str = "x86_64";
 
 /// Said to a package manager's copy when its package left no note of its own.
-const PACKAGED: &str = "This copy of Cut Craft was installed by your system's package manager, \
+const PACKAGED: &str = "This copy of PowerWhittle was installed by your system's package manager, \
                         so update it there: for example `sudo apt update && sudo apt upgrade`, \
                         `sudo dnf upgrade`, or your AUR helper (`paru -Syu`, `yay -Syu`).";
 
@@ -95,18 +95,18 @@ impl Install {
             },
             ("linux" | "windows", _) => Self::Elsewhere {
                 why: format!(
-                    "Cut Craft's downloads are for 64-bit Intel and AMD processors, and this \
+                    "PowerWhittle's downloads are for 64-bit Intel and AMD processors, and this \
                      computer has a {} processor. Build the new version from its source code.",
                     p.arch
                 ),
             },
             ("macos", _) => Self::Elsewhere {
-                why: "On a Mac, download the new .dmg from the release page and drag Cut Craft \
+                why: "On a Mac, download the new .dmg from the release page and drag PowerWhittle \
                       to Applications again."
                     .to_owned(),
             },
             (os, _) => Self::Elsewhere {
-                why: format!("Cut Craft cannot update itself on {os}."),
+                why: format!("PowerWhittle cannot update itself on {os}."),
             },
         }
     }
@@ -126,14 +126,14 @@ impl Install {
     pub fn flatpak_steps(version: &semver::Version) -> String {
         let bundle = format!("cut-craft-{version}-x86_64.flatpak");
         format!(
-            "This copy of Cut Craft is a Flatpak, which cannot replace itself. Download \
+            "This copy of PowerWhittle is a Flatpak, which cannot replace itself. Download \
              {bundle} from the release page, then open it in your software centre, or run \
              `flatpak install --user {bundle}` in the folder you saved it to. Your jobs and \
              settings are kept."
         )
     }
 
-    /// Whether Cut Craft asks GitHub about new versions when it starts. A package manager
+    /// Whether PowerWhittle asks GitHub about new versions when it starts. A package manager
     /// offers its own updates, often a little after GitHub has them, so its copy only checks
     /// when asked (Help ▸ Check for Updates).
     pub fn checks_at_startup(&self) -> bool {
@@ -162,7 +162,7 @@ fn source_checkout(exe: &Path, exists: &dyn Fn(&Path) -> bool) -> Option<Install
     let root = target.parent()?;
     (exists(&root.join("Cargo.toml")) && exists(&root.join(".git"))).then(|| Install::Elsewhere {
         why: format!(
-            "This copy of Cut Craft was built from the source code in {}. Update it there with \
+            "This copy of PowerWhittle was built from the source code in {}. Update it there with \
              `git pull` and `cargo build --release`, or install a download from the release \
              page instead.",
             root.display()

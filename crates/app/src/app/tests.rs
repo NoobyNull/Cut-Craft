@@ -614,7 +614,7 @@ fn click_button(h: &mut Harness, label: &str) {
     h.frame(vec![]);
 }
 
-const CRASH: &str = "Cut Craft 0.3.0 on linux crashed: panicked at crates/app/src/view3d.rs:9:9:\n\
+const CRASH: &str = "PowerWhittle 0.3.0 on linux crashed: panicked at crates/app/src/view3d.rs:9:9:\n\
                      index out of bounds\n\nBacktrace:\n...";
 
 /// How wide each docked page was drawn over `frames` frames, Design then Toolpaths.

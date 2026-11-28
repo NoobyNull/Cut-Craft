@@ -20,7 +20,7 @@ impl Harness {
         self.app.session.path = Some(path);
     }
 
-    /// Starts Cut Craft with no file to open, as a plain launch does.
+    /// Starts PowerWhittle with no file to open, as a plain launch does.
     pub(in super::super) fn start_up(&mut self) {
         self.app.open_at_start(None);
     }

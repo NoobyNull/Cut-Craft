@@ -70,7 +70,7 @@ Craft.
 
 - The slider on the Preview tab is the detail **now**. It doesn't change the default.
 - **Edit ▸ Options ▸ Performance ▸ Preview detail** holds the **default**: what the slider
-  starts at when Cut Craft opens. Changing it waits for **Apply**, as all
+  starts at when PowerWhittle opens. Changing it waits for **Apply**, as all
   [settings](help:settings) do.
 - **Reset Preview** puts the slider back to the default.
 - **Toolpaths ▸ Preview Simulation Quality** has quick picks that move the slider:

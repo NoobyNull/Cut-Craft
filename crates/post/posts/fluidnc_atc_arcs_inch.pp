@@ -1,15 +1,15 @@
-+ Cut Craft's post for FluidNC with an automatic tool changer (M6), inches.
++ PowerWhittle's post for FluidNC with an automatic tool changer (M6), inches.
 + Arcs: G2 / G3 with I J from the arc's start.
 + Made from this controller's Arcs post: change the two together.
 
 + History
 + Who        When       What
 + ========== ========== ==========================================
-+ Cut Craft  2026-10-24 First version: automatic tool changer
-+ Cut Craft  2026-10-27 Arcs; inch and straight-line variants
-+ Cut Craft  2026-10-31 Dwell written as G4
++ PowerWhittle  2026-10-24 First version: automatic tool changer
++ PowerWhittle  2026-10-27 Arcs; inch and straight-line variants
++ PowerWhittle  2026-10-31 Dwell written as G4
 
-POST_NAME = "Cut Craft FluidNC ATC Arcs (inch) (*.nc)"
+POST_NAME = "PowerWhittle FluidNC ATC Arcs (inch) (*.nc)"
 FILE_EXTENSION = "nc"
 UNITS = "INCHES"
 LINE_ENDING = "[10]"

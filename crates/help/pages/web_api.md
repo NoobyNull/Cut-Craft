@@ -5,12 +5,12 @@ see-also: updates, smooth_selected_components, component_properties, addons, pro
 
 # Web API
 
-The Web API lets a program drive Cut Craft the way you do with the mouse: pick vectors, run
+The Web API lets a program drive PowerWhittle the way you do with the mouse: pick vectors, run
 any tool with the settings you choose, and press any button or menu item. Use it for scripts
-that repeat a job, for tests, or to let an assistant such as Claude work in Cut Craft while
+that repeat a job, for tests, or to let an assistant such as Claude work in PowerWhittle while
 you watch. Everything it does shows in the window and can be undone, one step per call.
 
-It is **off** until you switch it on, and it never sends anything to your machine: Cut Craft
+It is **off** until you switch it on, and it never sends anything to your machine: PowerWhittle
 saves files for your machine, it does not drive it.
 
 ## Switching it on
@@ -27,15 +27,15 @@ That is all for programs on this computer: they need no password.
 ## Letting other computers in
 
 Tick **Allow other computers on my network** to let another computer (a workshop PC, a
-laptop) drive Cut Craft. Then every call, from any computer, must send the **access token**:
+laptop) drive PowerWhittle. Then every call, from any computer, must send the **access token**:
 
 1. Press **Copy** beside the access token.
-2. Give it to the program that will call Cut Craft, on the other computer.
+2. Give it to the program that will call PowerWhittle, on the other computer.
 
 ![The Web API page with other computers allowed, showing the access token](pictures/web-api-network.png)
 
 - Calls are not encrypted, so only allow other computers on a home or workshop network you
-  trust. On Windows, the first time, Windows asks whether to let Cut Craft through its
+  trust. On Windows, the first time, Windows asks whether to let PowerWhittle through its
   firewall: allow it on private networks only.
 - **Port** is the number programs call, as in `http://localhost:7340`. Pick another if a
   different program already uses it.
@@ -46,14 +46,14 @@ laptop) drive Cut Craft. Then every call, from any computer, must send the **acc
 
 A script can't say yes to unsigned code for you. Calling a gadget that is **not official**
 (see [Add-ons](help:addons)) is refused, with a message saying what to do, until you have
-said yes to it in the Cut Craft window:
+said yes to it in the PowerWhittle window:
 
-1. In Cut Craft, pick the gadget in **Gadgets ▸ My Gadgets**.
+1. In PowerWhittle, pick the gadget in **Gadgets ▸ My Gadgets**.
 2. Choose **Run and Remember** (scripts can use it from then on, until it changes) or **Run
-   This Time** (until Cut Craft closes).
+   This Time** (until PowerWhittle closes).
 3. Run your script again.
 
-Cut Craft's own gadgets, and signed ones, need no answer.
+PowerWhittle's own gadgets, and signed ones, need no answer.
 
 ## The status bar
 
@@ -71,7 +71,7 @@ fix that (most often by picking another port), then press **Try Again** in Optio
 ## Trying it
 
 **Copy Command** under **Try it** copies a command (with your token in it, when other
-computers are allowed) to paste in a terminal (on Windows, in PowerShell use `curl.exe`). Cut Craft answers with its version and
+computers are allowed) to paste in a terminal (on Windows, in PowerShell use `curl.exe`). PowerWhittle answers with its version and
 what it is doing. **Open Docs Page** opens the docs page (below).
 
 ## The docs page
@@ -85,10 +85,10 @@ web browser. While the Web API is running, press **Open Docs Page** in Options, 
 1. Click a call, such as **POST /run**, to open it.
 2. Under **Examples**, pick a tool (or, under **POST /invoke**, a menu item): its settings
    fill in, ready to change.
-3. Press **Execute**. Cut Craft does it in the window, and the page shows its answer, and
+3. Press **Execute**. PowerWhittle does it in the window, and the page shows its answer, and
    the `curl` command that does the same from a terminal or script.
 
-The page always shows what this copy of Cut Craft has, add-ons included. While other computers
+The page always shows what this copy of PowerWhittle has, add-ons included. While other computers
 are allowed, press **Authorize** first and paste the access token: the page itself opens
 without it, but every call tried from it needs it. The page works without the internet.
 
@@ -128,10 +128,10 @@ the header `Authorization: Bearer <token>`. Calls that send settings use POST wi
   component.
 - **POST invoke** `{"action": "undo"}`: presses a button or menu item. A greyed-out one is
   refused. Exit cannot be pressed from the Web API. An item that opens a file window waits
-  for you to pick a file in Cut Craft.
+  for you to pick a file in PowerWhittle.
 
 A call that cannot be done changes nothing and answers with `{"error": "..."}` saying why
-and what to do. While Cut Craft is busy (a toolpath calculating), calls wait their turn.
+and what to do. While PowerWhittle is busy (a toolpath calculating), calls wait their turn.
 
 ## Seeing the job, and making its G-code
 
@@ -167,7 +167,7 @@ Toolpaths page's buttons, each with its progress window as usual.
   (`"fraction"`, 0 to 1), how long it has run (`"seconds"`), and the time left worked out
   just as the progress window does ([Long jobs and the time left](help:progress)):
   `"seconds_left"` once it can judge, and `"time_left"` in words ("about 2 minutes left").
-  It is answered straight away, even while Cut Craft is busy.
+  It is answered straight away, even while PowerWhittle is busy.
   **POST cancel** presses **Cancel** on the progress window: nothing changes.
 
   **POST calculate** and **POST preview** answer once they are done. Send `"wait": false`

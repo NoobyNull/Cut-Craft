@@ -9,12 +9,12 @@
       "height": 400,
       "inches": false,
       "posts": [
-        "Cut Craft GRBL Arcs (mm) (*.nc)",
-        "Cut Craft GRBL Straight (mm) (*.nc)",
-        "Cut Craft GRBL Arcs (inch) (*.nc)",
-        "Cut Craft GRBL Straight (inch) (*.nc)"
+        "PowerWhittle GRBL Arcs (mm) (*.nc)",
+        "PowerWhittle GRBL Straight (mm) (*.nc)",
+        "PowerWhittle GRBL Arcs (inch) (*.nc)",
+        "PowerWhittle GRBL Straight (inch) (*.nc)"
       ],
-      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+      "default_post": "PowerWhittle GRBL Arcs (mm) (*.nc)"
     },
     {
       "name": "FoxAlien 4040-XE",
@@ -25,12 +25,12 @@
       "height": 400,
       "inches": false,
       "posts": [
-        "Cut Craft GRBL Arcs (mm) (*.nc)",
-        "Cut Craft GRBL Straight (mm) (*.nc)",
-        "Cut Craft GRBL Arcs (inch) (*.nc)",
-        "Cut Craft GRBL Straight (inch) (*.nc)"
+        "PowerWhittle GRBL Arcs (mm) (*.nc)",
+        "PowerWhittle GRBL Straight (mm) (*.nc)",
+        "PowerWhittle GRBL Arcs (inch) (*.nc)",
+        "PowerWhittle GRBL Straight (inch) (*.nc)"
       ],
-      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+      "default_post": "PowerWhittle GRBL Arcs (mm) (*.nc)"
     },
     {
       "name": "FoxAlien XE-Ultra 8080",
@@ -41,12 +41,12 @@
       "height": 800,
       "inches": false,
       "posts": [
-        "Cut Craft GRBL Arcs (mm) (*.nc)",
-        "Cut Craft GRBL Straight (mm) (*.nc)",
-        "Cut Craft GRBL Arcs (inch) (*.nc)",
-        "Cut Craft GRBL Straight (inch) (*.nc)"
+        "PowerWhittle GRBL Arcs (mm) (*.nc)",
+        "PowerWhittle GRBL Straight (mm) (*.nc)",
+        "PowerWhittle GRBL Arcs (inch) (*.nc)",
+        "PowerWhittle GRBL Straight (inch) (*.nc)"
       ],
-      "default_post": "Cut Craft GRBL Arcs (mm) (*.nc)"
+      "default_post": "PowerWhittle GRBL Arcs (mm) (*.nc)"
     }
   ]
 }

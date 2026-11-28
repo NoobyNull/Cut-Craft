@@ -1,4 +1,4 @@
-//! Toolpath settings, the questions Cut Craft asks, job defaults, General and Import.
+//! Toolpath settings, the questions PowerWhittle asks, job defaults, General and Import.
 
 use cmd_vcarve_engrave_toolpath::{
     Direction as VcarveDirection, Order as VcarveOrder, Style as VcarveStyle,
@@ -269,12 +269,12 @@ pub enum IntersectionCheck {
     DontCheck,
 }
 
-/// How Cut Craft starts. What new jobs start with is kept in `default_job`; the Job
+/// How PowerWhittle starts. What new jobs start with is kept in `default_job`; the Job
 /// Defaults page shows its settings under these.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct JobDefaults {
     /// Start with the start page (recent files, the sample project) and fill in every job
-    /// setting before a new job opens, as Cut Craft used to. Off opens a blank job straight
+    /// setting before a new job opens, as PowerWhittle used to. Off opens a blank job straight
     /// away, made with the settings below; Setup Material changes its size any time
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     #[schemars(title = "Classic Startup Flow")]
@@ -376,10 +376,10 @@ pub struct General {
     #[serde(default)]
     #[schemars(title = "Add to menus")]
     pub add_to_menus: AddToMenus,
-    /// Open a short Did You Know? tip each time Cut Craft starts, a different one each
+    /// Open a short Did You Know? tip each time PowerWhittle starts, a different one each
     /// time. Help ▸ Did You Know? shows them whenever you like
     #[serde(default = "on")]
-    #[schemars(title = "Show a tip when Cut Craft starts")]
+    #[schemars(title = "Show a tip when PowerWhittle starts")]
     pub show_tips_at_startup: bool,
 }
 

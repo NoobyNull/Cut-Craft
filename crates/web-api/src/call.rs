@@ -4,7 +4,7 @@ use crate::ApiError;
 use serde::Deserialize;
 use serde_json::Value;
 
-/// One thing a caller asks Cut Craft to do or tell.
+/// One thing a caller asks PowerWhittle to do or tell.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Call {
     /// `GET openapi.json`: the description of every call, which the docs page shows.

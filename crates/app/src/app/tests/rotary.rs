@@ -310,7 +310,7 @@ fn an_old_job_s_rotary_machining_opens_as_the_new_toolpaths_and_recalculates() {
     let mut c = Change::builder(&doc);
     c.add_new_component(model);
     doc.apply(&c.finish()).unwrap();
-    // three toolpaths an older Cut Craft made: Radial, Off centre and Indexed
+    // three toolpaths an older PowerWhittle made: Radial, Off centre and Indexed
     for strategy in [
         cmd_rotary_machining_toolpath::Strategy::Radial,
         cmd_rotary_machining_toolpath::Strategy::OffCentre,

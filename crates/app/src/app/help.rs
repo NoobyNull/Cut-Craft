@@ -80,7 +80,7 @@ impl CutCraftApp {
         let mut step = None;
         let (mut open, cache, search) = (true, &mut self.help.cache, &mut self.help.search);
         let (id, size) = (egui::Id::unique("help"), dialog_size(ctx));
-        cut_craft_bug_report::dialog(ctx, id, "Cut Craft Help", size, &mut open, |ui| {
+        cut_craft_bug_report::dialog(ctx, id, "PowerWhittle Help", size, &mut open, |ui| {
             let (stepped, top) = top_bar(ui, search, can_back, can_forward);
             step = stepped.or(step);
             picked = top.or(picked);
@@ -519,6 +519,9 @@ fn top_bar(
 /// The side bar's lists, each under its heading: a tool's icon beside its name. Gives the
 /// page clicked.
 fn sidebar_ui(ui: &mut egui::Ui, lists: &SidebarLists) -> Option<&'static str> {
+    // a title wider than the bar wraps: one that ran on would widen the window, and with it
+    // the page beside, a little more every frame
+    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
     let mut picked = None;
     for (heading, rows) in lists {
         ui.label(egui::RichText::new(*heading).strong());

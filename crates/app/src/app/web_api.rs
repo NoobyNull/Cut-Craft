@@ -15,7 +15,7 @@ pub(super) const RUNNING: &str = "WEB API Running";
 /// What it says, in red, while the Web API is switched on but not listening.
 pub(super) const NOT_RUNNING: &str = "WEB API Not Running";
 
-/// Actions a call may not press: closing Cut Craft would end the very API that asked.
+/// Actions a call may not press: closing PowerWhittle would end the very API that asked.
 const NOT_FROM_THE_API: &[&str] = &["exit"];
 
 /// The Web API's state kept by the app.
@@ -247,7 +247,7 @@ impl CutCraftApp {
             Ok(())
         } else {
             Err(ApiError::refused(
-                "No job is open. Open or start one in Cut Craft's window first.",
+                "No job is open. Open or start one in PowerWhittle's window first.",
             ))
         }
     }
@@ -315,7 +315,7 @@ impl CutCraftApp {
         }
         if NOT_FROM_THE_API.contains(&action) {
             return Err(ApiError::refused(format!(
-                "\"{action}\" cannot be pressed from the Web API: it would close Cut Craft."
+                "\"{action}\" cannot be pressed from the Web API: it would close PowerWhittle."
             )));
         }
         let known = self.registry.get(action).is_some()
@@ -428,7 +428,7 @@ impl CutCraftApp {
                 RUNNING,
                 RUNNING_GREEN,
                 format!(
-                    "Programs can drive Cut Craft at http://{at}{}. Click here for its settings \
+                    "Programs can drive PowerWhittle at http://{at}{}. Click here for its settings \
                      and access token.",
                     cut_craft_web_api::PREFIX
                 ),

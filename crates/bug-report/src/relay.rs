@@ -1,4 +1,4 @@
-//! Sending a crash's log to Cut Craft's crash-report service, for people who said yes to
+//! Sending a crash's log to PowerWhittle's crash-report service, for people who said yes to
 //! sending crash logs: no GitHub account needed and nothing to press. What goes is only
 //! what [`payload`] makes: the version and system, a plain title, a signature that groups
 //! crashes with the same cause, a random number for this install (so one install can't
@@ -66,11 +66,10 @@ pub fn send(url: &str, crash: &str, install: &str, bits: u32, post: Post) -> Res
     post(url, &payload(crash, install, &today, bits).to_string())
 }
 
-/// The version the crash log says crashed (its first line, `Cut Craft <version> on …`): the
+/// The version the crash log says crashed (its first line, `PowerWhittle <version> on …`): the
 /// service wants the two the same, and a log the last version left is sent by this one.
 fn version_of(crash: &str) -> String {
-    crash
-        .strip_prefix("Cut Craft ")
+    crate::logs::after_app_name(crash)
         .and_then(|rest| rest.split_once(" on "))
         .map(|(version, _)| version)
         .filter(|v| !v.is_empty() && !v.contains(char::is_whitespace))
@@ -78,13 +77,13 @@ fn version_of(crash: &str) -> String {
         .to_owned()
 }
 
-/// The system the crash log says crashed (its first line, `Cut Craft <version> on <system>
+/// The system the crash log says crashed (its first line, `PowerWhittle <version> on <system>
 /// crashed: …`), else this one's: the service groups crashes by it.
 fn os_of(crash: &str) -> String {
     crash
         .lines()
         .next()
-        .and_then(|first| first.strip_prefix("Cut Craft "))
+        .and_then(crate::logs::after_app_name)
         .and_then(|rest| rest.split_once(" on "))
         .and_then(|(_, rest)| rest.split_once(" crashed:"))
         .map(|(os, _)| os.trim())
@@ -289,7 +288,7 @@ mod tests {
     use super::*;
     use std::cell::RefCell;
 
-    const CRASH: &str = "Cut Craft 0.6.1 on linux crashed: panicked at crates/app/src/view2d.rs:9:9:\nindex 12 out of bounds\n\nDoing when it crashed:\n- Previewing Pocket 1\n\nBacktrace:\n  at /home/sam/src/a.rs\n\nLog:\nopened /home/sam/Jobs/sign.ccjob\n";
+    const CRASH: &str = "PowerWhittle 0.6.1 on linux crashed: panicked at crates/app/src/view2d.rs:9:9:\nindex 12 out of bounds\n\nDoing when it crashed:\n- Previewing Pocket 1\n\nBacktrace:\n  at /home/sam/src/a.rs\n\nLog:\nopened /home/sam/Jobs/sign.ccjob\n";
 
     #[test]
     fn what_is_sent_is_scrubbed_titled_and_grouped() {
@@ -322,7 +321,7 @@ mod tests {
         assert!(log.contains("opened <file>.ccjob"), "{log}");
         assert!(
             log.starts_with(
-                "Cut Craft 0.6.1 on linux crashed: panicked at crates/app/src/view2d.rs:9:9:\n"
+                "PowerWhittle 0.6.1 on linux crashed: panicked at crates/app/src/view2d.rs:9:9:\n"
             ),
             "the layout the service checks for: {log}"
         );
@@ -364,7 +363,9 @@ mod tests {
             "a log from before systems were named"
         );
         assert_eq!(
-            os_of("Cut Craft 0.6.16 on Windows 11 23H2 x86_64 crashed: panicked at a.rs:1:1:\nx"),
+            os_of(
+                "PowerWhittle 0.6.16 on Windows 11 23H2 x86_64 crashed: panicked at a.rs:1:1:\nx"
+            ),
             "Windows 11 23H2 x86_64"
         );
         assert_eq!(os_of("garbled"), crate::system::this().short());
@@ -414,7 +415,7 @@ mod tests {
         );
         let short = cut(&long);
         assert!(short.len() <= MOST_LOG_BYTES, "{}", short.len());
-        assert!(short.starts_with("Cut Craft 0.6.1 on linux crashed: "));
+        assert!(short.starts_with("PowerWhittle 0.6.1 on linux crashed: "));
         assert!(short.contains("\n\nBacktrace:\n"));
         assert!(short.contains("earlier lines left out"));
         assert!(

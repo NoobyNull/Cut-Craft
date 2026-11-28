@@ -92,7 +92,7 @@ impl WebDav {
 fn refused(what: &str, status: u16) -> String {
     match status {
         401 | 403 => format!(
-            "{what}: the machine asks for a password, which Cut Craft can't give it yet. Use \
+            "{what}: the machine asks for a password, which PowerWhittle can't give it yet. Use \
              its card through a shared folder instead"
         ),
         404 => format!("{what}: it is not on the machine any more. Refresh the list"),

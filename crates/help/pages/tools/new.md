@@ -24,6 +24,6 @@ every new job starts that way. The job that is open is never changed by them.
 Nothing to save yet: a blank job you have not drawn on closes without asking, so opening a
 file over it, or pressing New again, just replaces it.
 
-If you would rather fill in every setting before a job opens, as Cut Craft used to, tick
-**Classic Startup Flow** on the Job Defaults page. Cut Craft then starts on its start page,
+If you would rather fill in every setting before a job opens, as PowerWhittle used to, tick
+**Classic Startup Flow** on the Job Defaults page. PowerWhittle then starts on its start page,
 and New opens [Job Setup](help:job_setup) first.

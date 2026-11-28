@@ -79,7 +79,7 @@ pub struct Machine {
     /// above the top of the material, mm; `None` lifts straight up to the safe Z.
     pub change_position: Option<ChangePosition>,
     /// How long the spindle is given to come up to speed after a pause, seconds; 0 keeps
-    /// the post's own wait (3 seconds in Cut Craft's posts).
+    /// the post's own wait (3 seconds in PowerWhittle's posts).
     pub spin_up: f64,
     /// Group by bit: toolpaths using the same bit are cut together, saving bit changes,
     /// though the order they are listed in changes. Off: always cut in list order.
@@ -159,7 +159,7 @@ impl Firmware {
             }
             Self::FluidNc => "For ESP32 boards, often WiFi; an A axis is added in its config file",
             Self::Mach => "Mach3 or Mach4 on a PC, with up to 6 axes",
-            Self::Other => "Another firmware; Cut Craft takes it to have the axes you use",
+            Self::Other => "Another firmware; PowerWhittle takes it to have the axes you use",
         }
     }
 
@@ -300,7 +300,7 @@ impl Machine {
         }
     }
 
-    /// Ticking the 4th axis: for each of Cut Craft's flat posts the machine has, its rotary
+    /// Ticking the 4th axis: for each of PowerWhittle's flat posts the machine has, its rotary
     /// twins in `library` (`… Rotary A, cylinder along X, G93 (units)` and the same along
     /// Y), so both directions of cylinder can be cut. GRBL's twins are grblHAL's: standard
     /// GRBL has no A axis. Custom posts have no twins to find.
@@ -309,7 +309,7 @@ impl Machine {
         for post in &self.posts {
             let base = post.replace(" Arcs (", " (").replace(" Straight (", " (");
             let Some(at) = base.find(" (") else { continue };
-            let controller = base[..at].replace("Cut Craft GRBL", "Cut Craft grblHAL");
+            let controller = base[..at].replace("PowerWhittle GRBL", "PowerWhittle grblHAL");
             for along in ["X", "Y"] {
                 let twin = format!(
                     "{controller} Rotary A, cylinder along {along}, G93{}",
@@ -324,7 +324,7 @@ impl Machine {
         self.posts.extend(twins);
     }
 
-    /// Its posts named as Cut Craft's own rotary posts were before they were renamed
+    /// Its posts named as PowerWhittle's own rotary posts were before they were renamed
     /// ("… Wrap Y to A …"), given their names now.
     pub fn rename_old_posts(&mut self) {
         for name in self.posts.iter_mut().chain(&mut self.default_post) {
@@ -353,7 +353,7 @@ pub struct Machines {
 
 impl Machines {
     /// The machines kept at `path`; none when there is no file yet. A file that cannot be
-    /// read or understood (half written, edited by hand, or from a newer Cut Craft) is an
+    /// read or understood (half written, edited by hand, or from a newer PowerWhittle) is an
     /// error naming it, so it is never taken for no machines and saved over.
     pub fn load(path: &Path) -> Result<Self, String> {
         let bytes = match std::fs::read(path) {
@@ -604,15 +604,15 @@ mod packages {
         assert_eq!(
             added,
             [
-                "Cut Craft grblHAL Rotary A, cylinder along X, G93 (mm) (*.nc)",
-                "Cut Craft grblHAL Rotary A, cylinder along Y, G93 (mm) (*.nc)",
-                "Cut Craft grblHAL Rotary A, cylinder along X, G93 (inch) (*.nc)",
-                "Cut Craft grblHAL Rotary A, cylinder along Y, G93 (inch) (*.nc)",
+                "PowerWhittle grblHAL Rotary A, cylinder along X, G93 (mm) (*.nc)",
+                "PowerWhittle grblHAL Rotary A, cylinder along Y, G93 (mm) (*.nc)",
+                "PowerWhittle grblHAL Rotary A, cylinder along X, G93 (inch) (*.nc)",
+                "PowerWhittle grblHAL Rotary A, cylinder along Y, G93 (inch) (*.nc)",
             ],
             "both directions in both units, once; a custom post has none"
         );
         let mut atc = Machine {
-            posts: vec!["Cut Craft FluidNC ATC (mm) (*.nc)".into()],
+            posts: vec!["PowerWhittle FluidNC ATC (mm) (*.nc)".into()],
             ..Machine::default()
         };
         atc.add_rotary_posts(&library);
@@ -678,7 +678,7 @@ mod packages {
         let old = "Cut Craft GRBL Wrap Y to A G93 (mm) (*.nc)";
         let machines = Machines {
             machines: vec![Machine {
-                posts: vec!["Cut Craft GRBL Arcs (mm) (*.nc)".into(), old.into()],
+                posts: vec!["PowerWhittle GRBL Arcs (mm) (*.nc)".into(), old.into()],
                 default_post: Some(old.into()),
                 ..Machine::default()
             }],
@@ -687,10 +687,10 @@ mod packages {
         machines.save(&path).unwrap();
         let loaded = Machines::load(&path).unwrap();
         std::fs::remove_file(&path).ok();
-        let new = "Cut Craft grblHAL Rotary A, cylinder along X, G93 (mm) (*.nc)";
+        let new = "PowerWhittle grblHAL Rotary A, cylinder along X, G93 (mm) (*.nc)";
         assert_eq!(
             loaded.machines[0].posts,
-            ["Cut Craft GRBL Arcs (mm) (*.nc)", new]
+            ["PowerWhittle GRBL Arcs (mm) (*.nc)", new]
         );
         assert_eq!(loaded.machines[0].default_post.as_deref(), Some(new));
         let mut mine = Machines::default();
@@ -735,7 +735,7 @@ mod packages {
                     "{file}: {}",
                     m.name
                 );
-                // metric and SAE, arcs and straight, each a post Cut Craft has
+                // metric and SAE, arcs and straight, each a post PowerWhittle has
                 assert_eq!(m.posts.len(), 4, "{file}: {}", m.name);
                 assert!(
                     m.posts.iter().all(|p| posts.contains(p)),

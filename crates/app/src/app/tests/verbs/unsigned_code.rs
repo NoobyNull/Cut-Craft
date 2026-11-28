@@ -5,7 +5,7 @@ use super::super::*;
 impl Harness {
     // ---- unsigned code ----
 
-    /// The answer the user gives whenever Cut Craft asks whether to run unsigned code.
+    /// The answer the user gives whenever PowerWhittle asks whether to run unsigned code.
     pub(in super::super) fn answer_unsigned_with(
         &mut self,
         answer: fn(&crate::trust::Code) -> crate::trust::Answer,
@@ -13,7 +13,7 @@ impl Harness {
         self.app.trust.ask = answer;
     }
 
-    /// Puts the unsigned gadget `source`, from the file `file`, in My Gadgets as Cut Craft
+    /// Puts the unsigned gadget `source`, from the file `file`, in My Gadgets as PowerWhittle
     /// finds it on starting: unread, by its file's name. Its command id.
     pub(in super::super) fn given_unsigned_gadget(
         &mut self,

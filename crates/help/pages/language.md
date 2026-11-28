@@ -3,11 +3,11 @@ reviewed: 2026-11-25
 see-also: settings, addons, bug_reports
 ---
 
-# Using Cut Craft in another language
+# Using PowerWhittle in another language
 
-Cut Craft is written in English, and English is always built in. Other languages come as
+PowerWhittle is written in English, and English is always built in. Other languages come as
 **language packs**: small downloads, each one language, installed only if you ask for one.
-A pack never comes with Cut Craft itself.
+A pack never comes with PowerWhittle itself.
 
 ## Install a language
 
@@ -22,24 +22,24 @@ as **Translated by Ivan · 92% translated**.
 
 ## Official, community supported
 
-- **Official**: Cut Craft checked the pack and signed it with its release key. A pack holds
+- **Official**: PowerWhittle checked the pack and signed it with its release key. A pack holds
   only words, so it can't run anything or change your files.
 - **Community supported**: volunteers write the words and keep them up to date, not Cut
-  Craft's author. So a pack can have the odd wrong word, and new parts of Cut Craft show in
+  Craft's author. So a pack can have the odd wrong word, and new parts of PowerWhittle show in
   English until its translators catch up.
 
-**Igpay Atinlay (test)** is a pack for testing: it shows Cut Craft in Pig Latin, the tools'
+**Igpay Atinlay (test)** is a pack for testing: it shows PowerWhittle in Pig Latin, the tools'
 forms and settings too. Any word still in plain English while it is picked has no
 translation key yet, so no pack can translate it. A name put into a sentence, such as a file
 name, a tool's name or an error, stays as it is in every language: only the words around it
-show in Pig Latin. Right-click it and choose **Report a Bug Here…** to tell Cut Craft.
+show in Pig Latin. Right-click it and choose **Report a Bug Here…** to tell PowerWhittle.
 
 A pack that isn't signed still works, but it is marked **⚠ not official**, the same as any
 other [add-on](help:addons).
 
 ## Report a wrong or missing word
 
-Tell the pack's translators, not Cut Craft:
+Tell the pack's translators, not PowerWhittle:
 
 - In **Edit ▸ Options ▸ Language**, with the pack picked, press **Report a wrong or missing
   word**. It opens the pack's page on GitHub, where you can describe it.
@@ -73,7 +73,7 @@ layers list, Machine Configuration, the Bit Library and the Report a Bug form, a
 tool says when it cannot run, too. When a newer pack is published, **Gadgets ▸ Add-ons**
 offers to update it.
 
-If a pack you picked is removed, Cut Craft goes back to English the next time it starts
+If a pack you picked is removed, PowerWhittle goes back to English the next time it starts
 and says so in the status bar.
 
 ## Test language
@@ -81,12 +81,12 @@ and says so in the status bar.
 With **Show advanced settings** ticked, the Language page also offers a **Test language**.
 It's English with every word accented and stretched about 40% longer, in brackets. It's for
 checking that longer languages fit, because German or French text can run that much longer.
-Any word that shows without brackets is still written straight into Cut Craft's code
+Any word that shows without brackets is still written straight into PowerWhittle's code
 instead of coming from a language file.
 
 ## Making a pack
 
-Anyone can translate Cut Craft. See **docs/translating.md** in Cut Craft's source on
+Anyone can translate PowerWhittle. See **docs/translating.md** in PowerWhittle's source on
 GitHub. It shows how to copy the English files, translate them, test your pack, and put
 your name on it. A pack that passes the automatic checks is signed and published without
 anyone reading it first.

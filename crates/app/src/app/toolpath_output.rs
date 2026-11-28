@@ -142,7 +142,7 @@ impl CutCraftApp {
     }
 
     /// The posts of the active machine that suit this job (flat, or wrapping its side), for
-    /// Save Toolpaths to choose from; none without a machine (Cut Craft's own is used).
+    /// Save Toolpaths to choose from; none without a machine (PowerWhittle's own is used).
     pub(super) fn post_choices(&self) -> Vec<String> {
         cut_craft_machines::post_choices(self.machines.active(), &self.doc.job, &self.posts)
     }
