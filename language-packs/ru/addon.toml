@@ -6,6 +6,6 @@ id = "language-ru"
 name = "Русский"
 kind = "language"
 language = "ru"
-version = "1.0.0"
+version = "1.0.1"
 needs_cutcraft = ">=0.7.0"
 translators = ["Сообщество PowerWhittle", "Claude (черновик)"]
