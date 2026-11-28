@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-28
 see-also: checks_before_cutting, check_machine_speeds
 ---
 
 # Spindle speeds the spindle can turn
 
-![A spindle speed outside the spindle's range](pictures/checks/spindle-range.png)
+![A spindle speed outside the spindle's range](pictures/checks/spindle-range.svg)
 
 ## What it looks for
 

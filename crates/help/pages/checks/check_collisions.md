@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-28
 see-also: checks_before_cutting, collisions, check_reach
 ---
 
 # Collet and spindle clear of the material
 
-![The collet nut running into the wood beside a deep slot](pictures/collet-hits.png)
+![The collet nut running into the wood beside a deep slot](pictures/collet-hits.svg)
 
 ## What it looks for
 

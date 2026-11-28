@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-28
 see-also: checks_before_cutting, protect_the_machine
 ---
 
 # Keeps out of keep-out zones
 
-![A cut running into a clamp's keep-out zone](pictures/checks/keep-out.png)
+![A cut running into a clamp's keep-out zone](pictures/checks/keep-out.svg)
 
 ## What it looks for
 

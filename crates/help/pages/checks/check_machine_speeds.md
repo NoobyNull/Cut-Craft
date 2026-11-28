@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-28
 see-also: checks_before_cutting, check_spindle_range, check_makers_figures
 ---
 
 # Feeds the machine can reach
 
-![A feed rate faster than the machine moves](pictures/checks/machine-speeds.png)
+![A feed rate faster than the machine moves](pictures/checks/machine-speeds.svg)
 
 ## What it looks for
 

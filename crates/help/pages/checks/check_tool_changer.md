@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-22
+reviewed: 2026-11-28
 see-also: checks_before_cutting, check_tool_numbers
 ---
 
 # Bits loaded in the tool changer
 
-![The tool changer's slots in Machine Configuration](pictures/checks/tool-changer.png)
+![The tool changer's slots in Machine Configuration](pictures/checks/tool-changer.svg)
 
 ## What it looks for
 

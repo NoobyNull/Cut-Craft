@@ -1214,14 +1214,14 @@ fn the_collision_help_explains_the_sizes_with_a_picture() {
         "This question cannot be switched",
         "Clamp Height",
         "(help:keep_out_zones)",
-        "pictures/collet-hits.png",
+        "pictures/collet-hits.svg",
     ] {
         assert!(page.contains(words), "{words}");
     }
     assert!(
         cut_craft_help::PICTURES
             .iter()
-            .any(|(name, bytes)| *name == "collet-hits.png" && bytes.starts_with(b"\x89PNG")),
+            .any(|(name, bytes)| *name == "collet-hits.svg" && bytes.starts_with(b"<svg")),
         "its picture goes with the app"
     );
 }

@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-28
 see-also: checks_before_cutting, check_spoilboard
 ---
 
 # Bit long enough for the depth
 
-![Flutes shorter than the cut](pictures/checks/reach.png)
+![Flutes shorter than the cut](pictures/checks/reach.svg)
 
 ## What it looks for
 

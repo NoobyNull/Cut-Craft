@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-28
 see-also: post_processor_management, job_setup, save_toolpaths, check_rotary_setup, rotary_machining_toolpath
 ---
 
@@ -101,7 +101,7 @@ Material on the rotary needs room all the way round as it turns: a board's edges
 much further than its top. Three settings at the foot of **Rotary (4th axis)** say how much
 room there is. Measure them once, with the rotary on the machine:
 
-![A board on the rotary: the axis height above the spoilboard, the spoilboard, and the room above up to the bit lifted all the way](pictures/concepts/rotary_room.png)
+![A board on the rotary: the axis height above the spoilboard, the spoilboard, and the room above up to the bit lifted all the way](pictures/concepts/rotary_room.svg)
 
 1. **Axis height**: from the top of the spoilboard up to the turning axis (the middle of the
    chuck). Material can swing out no further than this below the axis. As a rule of thumb, it

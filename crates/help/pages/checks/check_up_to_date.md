@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-28
 see-also: checks_before_cutting
 ---
 
 # Toolpaths up to date
 
-![A toolpath marked out of date in the list](pictures/checks/up-to-date.png)
+![A toolpath marked out of date in the list](pictures/checks/up-to-date.svg)
 
 ## What it looks for
 

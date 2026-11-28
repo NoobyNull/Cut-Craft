@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-28
 see-also: rotary_roughing_toolpath, rotary_finishing_toolpath, rotary_locked_angles_toolpath, rotary_lathe_toolpath, rounding_toolpath, 3d_finishing_toolpath, rotary_firmware, check_rotary_setup, collisions, job_setup, save_toolpaths, tool_database, web_api, performance
 ---
 
@@ -102,7 +102,7 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
 
 ## Four ways round
 
-![Radial, Off centre and Indexed, seen down the turning axis](pictures/rotary_machining_toolpath/strategies.png)
+![Radial, Off centre and Indexed, seen down the turning axis](pictures/rotary_machining_toolpath/strategies.svg)
 
 - **Radial** is the one to start with: the bit points straight at the axis, so it reaches
   everything a round part shows from outside.
@@ -125,7 +125,7 @@ When it looks right, [save it for your machine](help:save_toolpaths) through a *
      the most of what is left, up to **Tilts** of them, or you type them in **Tilt angles**.
      At every angle A holds still while the bit cuts, so the machine moves only X, Y and Z.
 
-  ![The bulk cleared from the top, then the other side, then locked tilts for the details](pictures/rotary_machining_toolpath/sides-then-details.png)
+  ![The bulk cleared from the top, then the other side, then locked tilts for the details](pictures/rotary_machining_toolpath/sides-then-details.svg)
 
   It knows where the material is the whole way through: the blank you set in
   [Job Setup](help:job_setup) (round, square or a board), less what each pass has already cut.

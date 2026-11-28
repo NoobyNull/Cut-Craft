@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-28
 see-also: checks_before_cutting, rotary_firmware, job_setup, rotary_machining_toolpath
 ---
 
 # Rotary set up
 
-![Seen from the chuck end: the bit right over the turning axis, and the bit off to one side](pictures/checks/rotary-setup.png)
+![Seen from the chuck end: the bit right over the turning axis, and the bit off to one side](pictures/checks/rotary-setup.svg)
 
 ## What it looks for
 

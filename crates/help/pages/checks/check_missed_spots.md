@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-28
 see-also: checks_before_cutting, check_reach
 ---
 
 # Bit fits every corner
 
-![The corners a round bit cannot get into](pictures/checks/missed-spots.png)
+![The corners a round bit cannot get into](pictures/checks/missed-spots.svg)
 
 ## What it looks for
 

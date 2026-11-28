@@ -1,11 +1,11 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-28
 see-also: checks_before_cutting, check_air_cutting
 ---
 
 # Rapid moves clear of the material
 
-![A rapid move through material that is still there](pictures/checks/rapids.png)
+![A rapid move through material that is still there](pictures/checks/rapids.svg)
 
 ## What it looks for
 

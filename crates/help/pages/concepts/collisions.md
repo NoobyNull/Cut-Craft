@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-17
+reviewed: 2026-11-28
 see-also: tool_database, save_toolpaths, keep_out_zones, toolpaths, check_collisions
 ---
 
@@ -14,7 +14,7 @@ PowerWhittle checks for this for you. It cuts every toolpath in order on the sam
 the preview, so wood that an earlier toolpath already cleared away does not count, and
 wood left standing does.
 
-![Left: the collet nut sinks into the wood beside a deep, narrow cut and the wood in its way is red. Right: the same cut with the wood round it cleared first, so nothing hits](pictures/collet-hits.png)
+![Left: the collet nut sinks into the wood beside a deep, narrow cut and the wood in its way is red. Right: the same cut with the wood round it cleared first, so nothing hits](pictures/collet-hits.svg)
 
 ## What you see
 
