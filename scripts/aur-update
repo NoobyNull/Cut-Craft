@@ -10,14 +10,14 @@ cd "$(dirname "$0")/.."
 version=${1:-$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)}
 version=${version#v}
 pkgbuild=packaging/aur/cut-craft-bin/PKGBUILD
-repo=https://github.com/NoobyNull/Cut-Craft
+repo=https://github.com/Power-Whittle/PowerWhittle
 tarball=cut-craft-$version-linux-x86_64.tar.gz
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 urls=("$repo/releases/download/v$version/$tarball"
       "$repo/releases/download/v$version/$tarball.minisig"
-      "https://raw.githubusercontent.com/NoobyNull/Cut-Craft/v$version/packaging/linux/family.yax.CutCraft.desktop"
-      "https://raw.githubusercontent.com/NoobyNull/Cut-Craft/v$version/assets/cut-craft.svg")
+      "https://raw.githubusercontent.com/Power-Whittle/PowerWhittle/v$version/packaging/linux/family.yax.CutCraft.desktop"
+      "https://raw.githubusercontent.com/Power-Whittle/PowerWhittle/v$version/assets/cut-craft.svg")
 sums=()
 for i in "${!urls[@]}"; do
     curl -sSL --fail --retry 5 --retry-all-errors -o "$work/$i" "${urls[$i]}"

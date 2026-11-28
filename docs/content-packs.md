@@ -33,7 +33,7 @@ At the top of the pack, listing every file in it:
   "pack_version": "1.0.0",
   "licence": "CC0-1.0",
   "author": "Cut Craft",
-  "homepage": "https://github.com/NoobyNull/Cut-Craft",
+  "homepage": "https://github.com/Power-Whittle/PowerWhittle",
   "items": [
     {
       "file": "Pieces/Pawn half.stl",

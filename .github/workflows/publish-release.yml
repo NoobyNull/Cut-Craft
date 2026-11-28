@@ -3,14 +3,6 @@
 # files (FILE.minisig beside each; Help > Check for Updates installs nothing unsigned), and
 # adds them to the release with scripts/publish-release. Whichever computer finishes first
 # publishes the release; the others add their files to it as they finish.
-#
-# Each release is mirrored to Power-Whittle/PowerWhittle too, where Cut Craft is moving (the
-# updater reads both; crates/updater HOMES): the tag and main are pushed there, and the same
-# signed files go on the same release with the same script. It pushes with the secret
-# MIRROR_TOKEN, or else ADDON_RELEASE_TOKEN: a token of the owner's that may push code,
-# workflows and releases there (a classic token with the repo and workflow scopes does).
-# Org secrets do not reach this repository, so the secret is set here. Without one, or
-# when the mirror fails, the release here goes ahead.
 name: Publish release
 
 on:
@@ -68,21 +60,3 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: scripts/publish-release "$TAG" dist
-      - name: Mirror them to Power-Whittle
-        continue-on-error: true
-        env:
-          MIRROR: Power-Whittle/PowerWhittle
-          MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN || secrets.ADDON_RELEASE_TOKEN }}
-        run: |
-          if [[ -z $MIRROR_TOKEN ]]; then
-            echo "::notice::Neither MIRROR_TOKEN nor ADDON_RELEASE_TOKEN is set, so $TAG is not mirrored to $MIRROR"
-            exit 0
-          fi
-          git fetch -q --unshallow origin || git fetch -q origin
-          git fetch -q origin "+refs/heads/main:refs/remotes/origin/main" "refs/tags/$TAG:refs/tags/$TAG"
-          git remote add mirror "https://x-access-token:$MIRROR_TOKEN@github.com/$MIRROR.git"
-          git -c http.https://github.com/.extraheader= push mirror "refs/tags/$TAG"
-          # main as it is here; a mirror whose main went its own way keeps it, with a warning
-          git -c http.https://github.com/.extraheader= push mirror "refs/remotes/origin/main:refs/heads/main" \
-            || echo "::warning::$MIRROR's main was not updated"
-          GH_TOKEN=$MIRROR_TOKEN GITHUB_REPOSITORY=$MIRROR scripts/publish-release "$TAG" dist

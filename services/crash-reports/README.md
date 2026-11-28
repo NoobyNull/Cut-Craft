@@ -91,7 +91,7 @@ CutCraft can't send.
 - Every crash with its status: **New**, **Came back**, **GitHub issue**, **Handled**.
 - Click a crash to read its example logs, copy or delete one, and then:
   - **Mark handled and delete logs** (with an optional note such as "fixed in 0.6.5");
-  - **Draft GitHub issue** opens a new-issue page on NoobyNull/Cut-Craft filled in with the
+  - **Draft GitHub issue** opens a new-issue page on Power-Whittle/PowerWhittle filled in with the
     counts and the newest log. Read it for anything personal before posting, then paste the
     issue's address and **Save issue link and delete logs**;
   - **Reopen**, or **Forget this crash completely** (counts too).

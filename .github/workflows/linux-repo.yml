@@ -1,4 +1,4 @@
-# Cut Craft's apt and dnf repositories on GitHub Pages (https://noobynull.github.io/Cut-Craft/):
+# Cut Craft's apt and dnf repositories on GitHub Pages (https://power-whittle.github.io/PowerWhittle/):
 # once Builds (Linux) has added its files to a release, takes the .deb and .rpm files of the
 # newest few releases, checks each is signed by Cut Craft's release key (minisign), signs them and the
 # repositories' indexes with the repository key (scripts/linux-repo) and publishes the site.
@@ -79,7 +79,7 @@ jobs:
           printf '%s\n' "$REPO_SIGNING_KEY" | gpg --batch --import
           REPO_KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')
           export REPO_KEY_ID
-          export BASE_URL="https://noobynull.github.io/Cut-Craft"
+          export BASE_URL="https://power-whittle.github.io/PowerWhittle"
           scripts/linux-repo packages site
       - uses: actions/upload-pages-artifact@v3
         with:

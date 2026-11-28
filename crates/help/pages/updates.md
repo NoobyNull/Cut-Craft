@@ -90,16 +90,15 @@ as it was and the window says what happened. Most of the time the fix is one of 
 - **A link or Open the Download Page does nothing**: links open in this computer's default
   web browser. Versions before 0.7.1 never opened links (on every system, not only the Mac).
   In those, type the release page's address into your browser yourself:
-  `github.com/NoobyNull/Cut-Craft/releases`.
+  `github.com/Power-Whittle/PowerWhittle/releases`.
 
 ## Where updates come from
 
-PowerWhittle's releases are on GitHub, and they are moving to the Power-Whittle organisation's
-page, `github.com/Power-Whittle/PowerWhittle`. While they move, each release goes on both
-pages. PowerWhittle looks at both and offers you the newest one built for your computer,
-whichever page has it first, so there is nothing to change on your side. Every download
-is still checked against PowerWhittle's own signature before anything is installed, whichever
-page it comes from.
+PowerWhittle's releases are on GitHub, on the Power-Whittle organisation's page,
+`github.com/Power-Whittle/PowerWhittle`. It was `github.com/NoobyNull/Cut-Craft` before the move,
+and that address still leads there, so older copies keep finding updates with nothing to change
+on your side. Every download is checked against PowerWhittle's own signature before anything is
+installed.
 
 ## Copies that update another way
 

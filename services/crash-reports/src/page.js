@@ -198,7 +198,7 @@ export const SCRIPT = String.raw`(() => {
 const $ = (id) => document.getElementById(id);
 const KEY = 'cutcraft-crash-token';
 const STATUS = { new: 'New', back: 'Came back', issue: 'GitHub issue', handled: 'Handled' };
-const REPO_ISSUES = 'https://github.com/NoobyNull/Cut-Craft/issues/new';
+const REPO_ISSUES = 'https://github.com/Power-Whittle/PowerWhittle/issues/new';
 let token = null;
 let selected = null;
 let lastSummary = null;
@@ -472,7 +472,7 @@ async function openCrash(sig, quiet) {
       onclick: () => act(d.signature, '/handled', { note: note.value.trim() || undefined }) }));
   }
   if (d.status !== 'issue') {
-    const link = el('input', { type: 'url', placeholder: 'https://github.com/NoobyNull/Cut-Craft/issues/123', 'aria-label': 'GitHub issue address' });
+    const link = el('input', { type: 'url', placeholder: 'https://github.com/Power-Whittle/PowerWhittle/issues/123', 'aria-label': 'GitHub issue address' });
     const draft = el('button', { text: 'Draft GitHub issue', onclick: () => window.open(issueDraftUrl(d), '_blank', 'noopener') });
     if (!d.samples.length) draft.title = 'No example log left to include';
     actions.append(el('div', { class: 'row', style: 'flex-basis:100%' }, draft, link,

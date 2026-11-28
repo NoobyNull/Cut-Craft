@@ -18,5 +18,5 @@ export GNUPGHOME=$home
 gpg --batch --passphrase '' --quick-gen-key "Cut Craft packages" rsa4096 sign never
 fpr=$(gpg --list-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')
 (umask 077; gpg --batch --armor --export-secret-keys "$fpr" >"$copy")
-gh secret set REPO_SIGNING_KEY -R NoobyNull/Cut-Craft <"$copy"
+gh secret set REPO_SIGNING_KEY -R Power-Whittle/PowerWhittle <"$copy"
 echo "Made key $fpr, stored as REPO_SIGNING_KEY; private copy in $copy."

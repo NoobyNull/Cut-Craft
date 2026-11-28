@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 program=${1:-target/release/cut-craft}
 version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 maintainer=${MAINTAINER:-PowerWhittle <6624403+NoobyNull@users.noreply.github.com>}
-home=https://github.com/NoobyNull/Cut-Craft
+home=https://github.com/Power-Whittle/PowerWhittle
 summary="Design in 2D and 3D and make CNC router toolpaths"
 mkdir -p dist
 work=$(mktemp -d)

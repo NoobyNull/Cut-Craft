@@ -14,7 +14,7 @@ To add a note, put a header and its words at the end of this file, and open a pu
     until: 2026-12-06
     ---
     Come and **see the machines**. Markdown works: headings, **bold**, lists and
-    [links](https://github.com/NoobyNull/Cut-Craft).
+    [links](https://github.com/Power-Whittle/PowerWhittle).
 
 The `---` lines start at the left edge (the example above is indented only so it is not read as
 a note).

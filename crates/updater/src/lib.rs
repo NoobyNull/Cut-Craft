@@ -32,13 +32,10 @@ use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-/// Where PowerWhittle's releases are published, preferred first. PowerWhittle is moving to the
-/// Power-Whittle organisation: for a while each release is published on both (the release
-/// workflow mirrors it), and later only on Power-Whittle. Both are read, so an update is
-/// found while the mirror is not made yet, falls behind, or once `NoobyNull`'s stops.
-/// The Power-Whittle copy was first named `Cut-Craft`; versions that still ask for that name
-/// reach it through GitHub's redirect.
-pub const HOMES: [&str; 2] = ["Power-Whittle/PowerWhittle", "NoobyNull/Cut-Craft"];
+/// Where PowerWhittle's releases are published. The repository was `NoobyNull/Cut-Craft`
+/// until it moved to the Power-Whittle organisation; versions that still ask there reach it
+/// through GitHub's redirect.
+pub const HOMES: [&str; 1] = ["Power-Whittle/PowerWhittle"];
 
 /// The newest releases of `home`, test builds among them (left out when read). Not
 /// `/releases/latest`: each computer's builds are attached as they finish, so the newest
@@ -48,7 +45,7 @@ pub fn releases_url(home: &str) -> String {
     format!("https://api.github.com/repos/{home}/releases?per_page=20")
 }
 /// Where releases are listed, for downloading by hand.
-pub const RELEASES_PAGE: &str = "https://github.com/NoobyNull/Cut-Craft/releases";
+pub const RELEASES_PAGE: &str = "https://github.com/Power-Whittle/PowerWhittle/releases";
 /// The minisign public key releases are signed with (the secret key is only in the
 /// repository's Actions secrets; see `scripts/sign-release`).
 pub const RELEASE_KEY: &str = include_str!("../release-key.pub");
@@ -119,18 +116,22 @@ impl Found {
 
 /// Asks GitHub whether there is something newer than `current` for `install`.
 pub fn check(install: &Install, current: &Version) -> Result<Found, String> {
-    let releases = gather(&get_text)?;
+    let releases = gather(&HOMES, &get_text)?;
     Ok(pick(install, std::env::consts::OS, &releases, current))
 }
 
-/// The releases of every one of [`HOMES`], preferred home's first, asked of `get`. A home
+/// The releases of every one of `homes` (such as [`HOMES`]), preferred home's first, asked
+/// of `get`. A home
 /// with no releases (or no repository) is passed over; one that does not answer otherwise
 /// (offline, too many checks) is said at once when it is the first asked, and passed over
 /// after one has answered.
-fn gather(get: &dyn Fn(&str) -> Result<String, String>) -> Result<Vec<Release>, String> {
+fn gather(
+    homes: &[&str],
+    get: &dyn Fn(&str) -> Result<String, String>,
+) -> Result<Vec<Release>, String> {
     let mut releases = Vec::new();
     let mut none = None;
-    for home in HOMES {
+    for home in homes {
         match get(&releases_url(home)) {
             Ok(text) => releases.extend(Release::parse_list(&text)?),
             Err(e) if releases.is_empty() && !e.contains("no releases") => return Err(e),
@@ -144,9 +145,8 @@ fn gather(get: &dyn Fn(&str) -> Result<String, String>) -> Result<Vec<Release>, 
 }
 
 /// Where `announcements.md` (the team's hand-written notes, read by the app's
-/// `announcements`) is read from, in order: the repository the team edits first, since the
-/// release copy's `main` only moves at a release; the copy when the first does not answer.
-pub const ANNOUNCEMENT_HOMES: [&str; 2] = ["NoobyNull/Cut-Craft", "Power-Whittle/PowerWhittle"];
+/// `announcements`) is read from, in order.
+pub const ANNOUNCEMENT_HOMES: [&str; 1] = ["Power-Whittle/PowerWhittle"];
 
 /// Points the announcements elsewhere, such as a file served locally for a test.
 pub const ANNOUNCEMENTS_VARIABLE: &str = "CUTCRAFT_ANNOUNCEMENTS_URL";
@@ -595,8 +595,8 @@ mod tests {
     }
 
     #[test]
-    fn announcements_are_read_from_the_repository_edited_first_then_its_copy() {
-        assert_eq!(ANNOUNCEMENT_HOMES[0], "NoobyNull/Cut-Craft");
+    fn announcements_are_read_from_power_whittle_and_from_the_next_home_when_one_is_down() {
+        assert_eq!(ANNOUNCEMENT_HOMES, ["Power-Whittle/PowerWhittle"]);
         assert_eq!(
             announcements_url("Power-Whittle/PowerWhittle"),
             "https://raw.githubusercontent.com/Power-Whittle/PowerWhittle/main/announcements.md"
@@ -617,9 +617,8 @@ mod tests {
     }
 
     #[test]
-    fn releases_are_read_from_power_whittle_first_then_noobynull() {
-        assert!(HOMES[0].starts_with("Power-Whittle/"), "{HOMES:?}");
-        assert!(HOMES.contains(&"NoobyNull/Cut-Craft"));
+    fn releases_are_read_from_power_whittle() {
+        assert_eq!(HOMES, ["Power-Whittle/PowerWhittle"]);
         assert_eq!(
             releases_url("Power-Whittle/PowerWhittle"),
             "https://api.github.com/repos/Power-Whittle/PowerWhittle/releases?per_page=20"
@@ -635,7 +634,7 @@ mod tests {
         let current = Version::new(0, 7, 0);
         let both = |power: Result<String, String>, nooby: Result<String, String>| {
             let asked = std::cell::RefCell::new(Vec::new());
-            let found = gather(&|url: &str| {
+            let found = gather(&[PW, NN], &|url: &str| {
                 asked.borrow_mut().push(url.to_owned());
                 if url.contains("/Power-Whittle/") {
                     power.clone()

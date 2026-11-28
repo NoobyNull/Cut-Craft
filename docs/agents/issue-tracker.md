@@ -1,6 +1,6 @@
 # Issue tracker: GitHub
 
-Issues and specs for this repo live as GitHub issues in `NoobyNull/Cut-Craft`. Use the `gh` CLI for all operations.
+Issues and specs for this repo live as GitHub issues in `Power-Whittle/PowerWhittle`. Use the `gh` CLI for all operations.
 
 Where `gh` isn't available (Claude project threads, for example), use the GitHub connector tools (`mcp__github__*`) for the same operations: `issue_write` to create, edit, label or close, `issue_read` to read, `list_issues` to list and `add_issue_comment` to comment.
 

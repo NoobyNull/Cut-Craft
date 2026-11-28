@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 const TIP_WAITS: Duration = Duration::from_secs(4);
 
 /// Where the program's repository is, for Support us on GitHub.
-const REPOSITORY: &str = "https://github.com/NoobyNull/Cut-Craft";
+const REPOSITORY: &str = "https://github.com/Power-Whittle/PowerWhittle";
 
 /// The Announcements window and the fetch from GitHub.
 pub(super) struct Announcements {
