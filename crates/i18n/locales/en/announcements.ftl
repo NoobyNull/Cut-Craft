@@ -10,11 +10,11 @@ announcements-support-text = Like it? Star it on GitHub, watch it for new releas
 announcements-support-button = Support us on GitHub
 
 # src/announcements.rs: the announcements this version ships with
-announcement-powerwhittle-title = Cut Craft is becoming PowerWhittle
+announcement-powerwhittle-title = CutCraft is becoming PowerWhittle
 announcement-powerwhittle-body =
     Thank you all for your support of this project.
 
-    Cut Craft's name is officially changing to **PowerWhittle**. It is the same program, and
+    CutCraft's name is officially changing to **PowerWhittle**. It is the same program, and
     the change should not interrupt anything: your files, settings and updates carry on as
     they are.
 
