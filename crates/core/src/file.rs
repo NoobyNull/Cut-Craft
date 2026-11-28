@@ -78,7 +78,12 @@ pub fn bring_over_settings(base: &Path) -> std::io::Result<bool> {
     // one bring-over at a time, so none replaces a file after another has finished and the
     // app has saved over it; the lock goes with the file when this returns
     std::fs::create_dir_all(&new)?;
-    let lock = std::fs::File::create(new.join(BRINGING_OVER))?;
+    // opened without emptying it: Windows refuses to empty a file another start has locked
+    let lock = std::fs::File::options()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(new.join(BRINGING_OVER))?;
     lock.lock()?;
     if new.join(BROUGHT_OVER).exists() {
         return Ok(false);
