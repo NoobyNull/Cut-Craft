@@ -206,7 +206,7 @@ fn a_bring_over_cut_short_is_finished_next_start_keeping_what_the_new_folder_has
 
 #[test]
 fn after_a_failed_bring_over_the_app_saves_in_the_old_folder_and_the_next_start_brings_it() {
-    use cut_craft_core::file::{BROUGHT_OVER, bring_over_settings, settings_folder};
+    use cut_craft_core::file::{BROUGHT_OVER, COPIED_SO_FAR, bring_over_settings, settings_folder};
     let base = std::env::temp_dir().join(format!("pw-settings-failed-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
     let (old, new) = (base.join("cut-craft"), base.join("powerwhittle"));
@@ -215,22 +215,25 @@ fn after_a_failed_bring_over_the_app_saves_in_the_old_folder_and_the_next_start_
     // a start that copied options.json, then failed on another file
     std::fs::create_dir_all(&new).unwrap();
     std::fs::write(new.join("options.json"), "{\"mine\": true}").unwrap();
+    std::fs::write(new.join(COPIED_SO_FAR), "options.json\n").unwrap();
     assert_eq!(
         settings_folder(&base),
         old,
         "the app keeps to the old folder"
     );
-    // that session saves its options where it reads them, after the part copy was made
-    let saved = std::fs::File::options()
+    // that session saves its options where it reads them, with the very same time as the
+    // part copy, as a folder that keeps times to the second or two can give
+    let copy_time = std::fs::metadata(new.join("options.json"))
+        .unwrap()
+        .modified()
+        .unwrap();
+    std::fs::write(old.join("options.json"), "{\"changed\": true}").unwrap();
+    std::fs::File::options()
         .write(true)
-        .truncate(true)
         .open(old.join("options.json"))
+        .unwrap()
+        .set_modified(copy_time)
         .unwrap();
-    std::io::Write::write_all(&mut &saved, b"{\"changed\": true}").unwrap();
-    saved
-        .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(60))
-        .unwrap();
-    drop(saved);
     // the next start brings the saved options over, not the stale copy
     assert!(bring_over_settings(&base).unwrap());
     assert_eq!(
@@ -238,6 +241,7 @@ fn after_a_failed_bring_over_the_app_saves_in_the_old_folder_and_the_next_start_
         "{\"changed\": true}"
     );
     assert!(new.join(BROUGHT_OVER).exists());
+    assert!(!new.join(COPIED_SO_FAR).exists(), "the list goes once done");
     assert_eq!(
         settings_folder(&base),
         new,

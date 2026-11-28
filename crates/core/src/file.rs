@@ -61,15 +61,17 @@ pub fn settings_folder(base: &Path) -> PathBuf {
 pub const BROUGHT_OVER: &str = ".brought-over-from-cut-craft";
 /// Locked in the new settings folder while a bring-over runs.
 const BRINGING_OVER: &str = ".bringing-over.lock";
+/// The files a bring-over not yet finished has copied, one path under the folder a line.
+pub const COPIED_SO_FAR: &str = ".brought-over-so-far";
 
 /// On the first start after the rename, copies the old settings folder in `base` into the new
 /// one, so everything set before carries on. The old folder is left as it was, so going back
-/// to an older copy still finds its settings. A file already in the new folder is kept unless
-/// the old one changed after it, so a start that stopped part way is finished the next time
-/// with what was saved meanwhile in the old folder ([`settings_folder`]), and a file put there
-/// by hand first stays. [`BROUGHT_OVER`] marks it done only once every file is in. Two starts
-/// at once take turns, and the second finds it done. Whether anything was copied: nothing is
-/// once it is done, or when there was never an old folder.
+/// to an older copy still finds its settings. A start that stopped part way is finished the
+/// next time: the files it copied are copied again, with whatever was saved meanwhile in the
+/// old folder ([`settings_folder`]), while a file put in the new folder by hand first stays.
+/// [`BROUGHT_OVER`] marks it done only once every file is in. Two starts at once take turns,
+/// and the second finds it done. Whether anything was copied: nothing is once it is done, or
+/// when there was never an old folder.
 pub fn bring_over_settings(base: &Path) -> std::io::Result<bool> {
     let (old, new) = (base.join(OLD_SETTINGS_FOLDER), base.join(SETTINGS_FOLDER));
     if !old.is_dir() || new.join(BROUGHT_OVER).exists() {
@@ -88,8 +90,21 @@ pub fn bring_over_settings(base: &Path) -> std::io::Result<bool> {
     if new.join(BROUGHT_OVER).exists() {
         return Ok(false);
     }
-    copy_missing(&old, &new)?;
+    let list = new.join(COPIED_SO_FAR);
+    let mut copied = Copied {
+        before: std::fs::read_to_string(&list)
+            .unwrap_or_default()
+            .lines()
+            .map(str::to_owned)
+            .collect(),
+        list: std::fs::File::options()
+            .append(true)
+            .create(true)
+            .open(&list)?,
+    };
+    copy_over(&old, &new, "", &mut copied)?;
     std::fs::write(new.join(BROUGHT_OVER), "")?;
+    let _ = std::fs::remove_file(&list);
     Ok(true)
 }
 
@@ -98,51 +113,40 @@ pub fn bring_over_old_settings() -> std::io::Result<bool> {
     config_base().map_or(Ok(false), |base| bring_over_settings(&base))
 }
 
-/// Copies what `to` lacks, or has only an older copy of, from `from`. A copy's time is when it
-/// was made, so a file that came over before is copied again only when the old one has changed
-/// since. Each file is written beside its place first and then linked into it, so a copy cut
-/// short is never taken for the whole file, and two windows started together never write over
-/// each other's files.
-fn copy_missing(from: &Path, to: &Path) -> std::io::Result<()> {
+/// What the bring-overs so far have copied: the list as this one found it, and the list.
+struct Copied {
+    before: std::collections::HashSet<String>,
+    list: std::fs::File,
+}
+
+/// Copies from `from` into `to` each file `to` lacks or an earlier bring-over copied, `under`
+/// being their path below the settings folder. Each is listed before it is copied, so one cut
+/// short is copied again, and written beside its place and renamed into it, so a part copy is
+/// never taken for the whole file.
+fn copy_over(from: &Path, to: &Path, under: &str, copied: &mut Copied) -> std::io::Result<()> {
     std::fs::create_dir_all(to)?;
     for entry in std::fs::read_dir(from)? {
         let entry = entry?;
-        let target = to.join(entry.file_name());
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let (target, path) = (to.join(entry.file_name()), format!("{under}{name}"));
         if entry.file_type()?.is_dir() {
-            copy_missing(&entry.path(), &target)?;
+            copy_over(&entry.path(), &target, &format!("{path}/"), copied)?;
             continue;
         }
-        let made = entry.metadata()?.modified()?;
-        if is_older(&target, made) {
-            let mut part = target.clone().into_os_string();
-            part.push(format!(".copying-{}", std::process::id()));
-            std::fs::copy(entry.path(), &part)?;
-            // a link is made only where there is no file yet, never over one. An older copy is
-            // replaced only while it is still older: until the bring-over is done nothing else
-            // writes here ([`settings_folder`]), and bring-overs take turns. A folder that cannot
-            // link files fails the bring-over, so the app keeps to the old folder.
-            let linked = match std::fs::hard_link(&part, &target) {
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                    if is_older(&target, made) {
-                        std::fs::rename(&part, &target)
-                    } else {
-                        Ok(())
-                    }
-                }
-                done => done,
-            };
-            let _ = std::fs::remove_file(&part);
-            linked?;
+        if target.exists() && !copied.before.contains(&path) {
+            continue;
         }
+        std::io::Write::write_all(&mut copied.list, format!("{path}\n").as_bytes())?;
+        copied.list.sync_data()?;
+        let mut part = target.clone().into_os_string();
+        part.push(format!(".copying-{}", std::process::id()));
+        let done = std::fs::copy(entry.path(), &part).and_then(|_| std::fs::rename(&part, &target));
+        if done.is_err() {
+            let _ = std::fs::remove_file(&part);
+        }
+        done?;
     }
     Ok(())
-}
-
-/// Whether `file` is missing, or was last changed before `than`.
-fn is_older(file: &Path, than: std::time::SystemTime) -> bool {
-    std::fs::metadata(file)
-        .and_then(|m| m.modified())
-        .map_or(true, |changed| changed < than)
 }
 
 #[cfg(windows)]
