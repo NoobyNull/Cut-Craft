@@ -6,7 +6,10 @@ import {
   receive, summary, detail, markHandled, markIssue, reopen, deleteSample, forget, cleanup,
 } from './store.js';
 import { PAGE, SCRIPT } from './page.js';
-import { checkShape, checkWork, ipWait, countIp, crashId, countRefusal } from './guard.js';
+import {
+  checkShape, checkWork, ipWait, countIp, crashId, countRefusal, networkOf, countAs,
+} from './guard.js';
+import { takeBug } from './bugs.js';
 import {
   AuthError, keyCount, listKeys, removeKey, registerOptions, register, loginOptions, login,
   startSession, hasSession, endSession,
@@ -110,6 +113,19 @@ async function takeReport(request, env, now) {
   return json({ ok: true }, 202);
 }
 
+function takeBugReport(request, env, now) {
+  const ip = request.headers.get('cf-connecting-ip') ?? '';
+  return takeBug(request, env, now, {
+    ipHash: (at) => networkOf(env.DB, ip, at),
+    count: async (signature, at) => countAs(env.DB, await networkOf(env.DB, ip, at), signature, at),
+    refuse: async (reason, status, error, extra) => {
+      await countRefusal(env.DB, ip, `bug: ${reason}`, now);
+      return problem(status, error, extra);
+    },
+    json,
+  });
+}
+
 async function adminApi(request, env, path, url, now, who) {
   const method = request.method;
   if (path === '/admin/api/keys') {
@@ -166,6 +182,10 @@ export async function handle(request, env, now = new Date()) {
   if (path === '/v1/crash') {
     if (method !== 'POST') return problem(405, 'Send crash reports with POST.', { allow: 'POST' });
     return takeReport(request, env, now);
+  }
+  if (path === '/v1/bug') {
+    if (method !== 'POST') return problem(405, 'Send bug reports with POST.', { allow: 'POST' });
+    return takeBugReport(request, env, now);
   }
   if (method === 'GET' && path === '/') {
     return new Response(PAGE, { headers: { 'content-type': 'text/html; charset=utf-8', ...PAGE_HEADERS } });

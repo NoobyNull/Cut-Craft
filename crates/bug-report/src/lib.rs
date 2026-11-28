@@ -8,8 +8,9 @@
 //! state have the person's home folder and user name taken out ([`privacy::scrub`]).
 //!
 //! Code marks what it draws with [`mark`]; the app calls [`Reporter::frame`] once a frame,
-//! after drawing. Issues are made through the GitHub CLI (`gh`, already signed in); a report
-//! that cannot be sent is kept on disk instead.
+//! after drawing. Issues are made by PowerWhittle's bug-report service, so anyone can send
+//! one, or through the person's own GitHub CLI (`gh`, already signed in) when they chose that
+//! ([`send`]). A report that cannot be sent is kept on disk and opened in the browser.
 
 mod github;
 pub mod hint;
@@ -17,6 +18,7 @@ pub mod logs;
 pub mod number;
 pub mod privacy;
 pub mod relay;
+pub mod send;
 mod spot;
 pub mod system;
 pub mod unapplied;
@@ -373,6 +375,17 @@ pub struct Reporter {
     /// Whether the details of the computer go with a report unless unticked, and with a
     /// crash log sent by itself (Edit ▸ Options ▸ Bug Reports; on unless switched off).
     pub computer_details: bool,
+    /// Where Report a Bug sends to: the bug-report service (its `/v1/bug` address), unless
+    /// the person chose their own GitHub CLI, or there is no service (tests).
+    pub route: send::Route,
+    /// How a bug report is posted to the service (replaced in tests).
+    pub post_bug: fn(&str, &str) -> Result<String, String>,
+    /// This install's random number ([`relay::new_install_id`]), which the service limits
+    /// reports by.
+    pub install: String,
+    /// The person's GitHub name, typed in the form and kept for the next report; empty for
+    /// none.
+    pub github_name: String,
     /// A crash log on its way to the service, and how that went.
     crash_sending: Option<(String, mpsc::Receiver<Result<(), relay::Failure>>)>,
     /// [`Host::translation`], as it said when the form opened (`translation_asked`).
@@ -418,6 +431,10 @@ impl Reporter {
             work_bits: relay::WORK_BITS,
             retry_dir: None,
             computer_details: true,
+            route: send::Route::Cli,
+            post_bug: relay::post_bug_https,
+            install: String::new(),
+            github_name: String::new(),
             crash_sending: None,
             translation: None,
             translation_asked: false,
@@ -626,6 +643,7 @@ impl Reporter {
         }
         let translation = self.translation.clone();
         let sending = self.sending.is_some();
+        let (route, github_name) = (&self.route, &mut self.github_name);
         let (mut open, mut submit_now, mut cancel) = (true, false, false);
         let size = ctx.content_rect().size() * egui::vec2(FORM_SHARE, DIALOG_HEIGHT_SHARE);
         let id = egui::Id::unique("report_a_bug");
@@ -646,6 +664,18 @@ impl Reporter {
                     .desired_width(f32::INFINITY),
             );
             what_is_sent(ui, draft);
+            if matches!(route, send::Route::Service(_)) {
+                ui.horizontal(|ui| {
+                    ui.label(cut_craft_i18n::t!("Your GitHub name (if you have one)"));
+                    ui.add(
+                        egui::TextEdit::singleline(github_name)
+                            .hint_text(cut_craft_i18n::t!("optional")),
+                    )
+                    .on_hover_text(cut_craft_i18n::t!(
+                        "The issue names you, so GitHub tells you when someone answers it. Leave it empty to send it without a name"
+                    ));
+                });
+            }
             ui.horizontal(|ui| {
                 if ui.button(cut_craft_i18n::t!("Add Pictures…")).clicked() {
                     draft.pictures.extend((host.pick_pictures)());
@@ -697,30 +727,38 @@ impl Reporter {
         }
     }
 
-    /// Sends `report` on a thread of its own; a report that cannot go is kept on disk, and
-    /// without the GitHub CLI the browser gets it as a new issue to finish by hand.
+    /// Sends `report` on a thread of its own, the way the person chose ([`send::send`]); a
+    /// report that cannot go is kept on disk and opened in the browser.
     fn send(&mut self, ctx: &egui::Context, report: Report) {
-        let (repo, keep, browser) = (self.repo.clone(), self.keep_dir.clone(), self.browser);
+        let (route, repo, keep, browser) = (
+            self.route.clone(),
+            self.repo.clone(),
+            self.keep_dir.clone(),
+            self.browser,
+        );
+        let (install, reporter, bits, post) = (
+            self.install.clone(),
+            self.github_name.trim().to_owned(),
+            self.work_bits,
+            self.post_bug,
+        );
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
-            let result = submit(&report, &repo, &github::run_gh).map_err(|e| {
-                let kept = match keep.map(|dir| github::keep(&report, &dir)) {
-                    Some(Ok(path)) => format!("{e}; the report is kept in {}", path.display()),
-                    _ => e,
-                };
-                if browser && !github::gh_installed() {
-                    let url = github::issue_url(&repo, &report);
-                    if github::open_with_platform(url.as_ref()).is_ok() {
-                        return format!(
-                            "{kept}. The GitHub CLI (gh) is not installed, so your browser has \
-                             the report as a new issue: add the pictures there and submit it"
-                        );
-                    }
-                }
-                kept
-            });
-            let _ = tx.send(result);
+            let open = |target: &std::ffi::OsStr| github::open_with_platform(target);
+            let sending = send::Sending {
+                route,
+                repo: &repo,
+                keep: keep.as_deref(),
+                browser,
+                install: &install,
+                reporter: &reporter,
+                work_bits: bits,
+                post_bug: &post,
+                run: &github::run_gh,
+                open: &open,
+            };
+            let _ = tx.send(send::send(&report, &sending));
             ctx.request_repaint();
         });
         self.sending = Some(rx);

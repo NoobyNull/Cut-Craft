@@ -14,6 +14,13 @@ IP_PER_CRASH = "2"   # reports of one crash a network (IP) may send a day
 IP_DAILY = "10"      # reports in all a network may send a day
 POW_BITS = "22"      # proof of work: leading zero bits the app must find (~4M hashes, well under a second)
 
+# Bug reports (POST /v1/bug): pictures go to BUG_PICTURE_REPO with the BUG_PICTURE_TOKEN secret,
+# the issue to BUG_REPO with the BUG_TOKEN secret (README.md, Bug reports).
+BUG_REPO = "Power-Whittle/PowerWhittle"
+BUG_PICTURE_REPO = "Power-Whittle/Bug-Report-Pictures"
+BUG_IP_DAILY = "5"     # bug reports a network may send a day
+BUG_DAILY_LIMIT = "50" # bug reports accepted a day across everyone
+
 [[d1_databases]]
 binding = "DB"
 database_name = "cutcraft-crash-reports"

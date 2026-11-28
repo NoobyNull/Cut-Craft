@@ -106,7 +106,11 @@ fn work_text(log: &str, install: &str, day: &str, nonce: &str) -> String {
 /// A proof of work for sending `log` from `install` on `day`: the first counter (in base 36,
 /// as the service wants it) whose hash starts with `bits` zero bits.
 pub fn prove(log: &str, install: &str, day: &str, bits: u32) -> String {
-    let start = work_text(log, install, day, "");
+    prove_from(&work_text(log, install, day, ""), bits)
+}
+
+/// The first counter (base 36) that, put after `start`, hashes to `bits` leading zero bits.
+fn prove_from(start: &str, bits: u32) -> String {
     let mut sha = Sha256::new();
     sha.update(start.as_bytes());
     (0..u64::MAX)
@@ -118,6 +122,98 @@ pub fn prove(log: &str, install: &str, day: &str, bits: u32) -> String {
         })
         .unwrap_or_default()
 }
+
+/// A bug report for the service's `/v1/bug`: it puts the pictures in its pictures repository
+/// and opens the issue, so the person needs no GitHub account.
+pub struct Bug<'a> {
+    pub title: &'a str,
+    /// The issue's text, without its pictures ([`crate::github::details`]).
+    pub text: &'a str,
+    pub install: &'a str,
+    /// The person's GitHub name, to be named in the issue; empty for none.
+    pub reporter: &'a str,
+    /// Each picture's name and bytes.
+    pub pictures: &'a [(String, Vec<u8>)],
+}
+
+/// Posts `body` (JSON) to `url`; the service's answer, or why it failed in words for the
+/// person.
+pub type PostBug<'a> = &'a dyn Fn(&str, &str) -> Result<String, String>;
+
+/// The text a bug report's proof of work hashes, `nonce` last: what the service hashes. The
+/// pictures are left out (the service has too little time to hash megabytes).
+fn bug_work_text(bug: &Bug, day: &str, nonce: &str) -> String {
+    format!(
+        "cutcraft-bug-v1\n{day}\n{}\n{:x}\n{nonce}",
+        bug.install,
+        Sha256::digest(format!("{}\n{}", bug.title, bug.text).as_bytes())
+    )
+}
+
+/// What is sent for `bug`, its proof of work made for `day` with `bits` zero bits.
+pub fn bug_payload(bug: &Bug, day: &str, bits: u32) -> serde_json::Value {
+    use base64::Engine as _;
+    let pictures: Vec<serde_json::Value> = bug
+        .pictures
+        .iter()
+        .map(|(name, bytes)| {
+            serde_json::json!({
+                "name": name,
+                "data": base64::engine::general_purpose::STANDARD.encode(bytes),
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "title": bug.title,
+        "text": bug.text,
+        "install_id": bug.install,
+        "reporter": bug.reporter.trim().trim_start_matches('@'),
+        "pictures": pictures,
+        "work": prove_from(&bug_work_text(bug, day, ""), bits),
+    })
+}
+
+/// Sends `bug` to the service at `url`; the new issue's address. Slow enough (the proof of
+/// work, then the pictures) to want a thread of its own.
+pub fn send_bug(url: &str, bug: &Bug, bits: u32, post: PostBug) -> Result<String, String> {
+    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let answer = post(url, &bug_payload(bug, &today, bits).to_string())?;
+    serde_json::from_str::<serde_json::Value>(&answer)
+        .ok()
+        .and_then(|a| a["url"].as_str().map(str::to_owned))
+        .ok_or_else(|| "the bug-report service did not say where the issue is".to_owned())
+}
+
+/// Posts a bug report's JSON over HTTPS; the answer's text, or the service's own reason.
+pub fn post_bug_https(url: &str, body: &str) -> Result<String, String> {
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .http_status_as_error(false)
+        .timeout_global(Some(std::time::Duration::from_secs(BUG_SECONDS)))
+        .build()
+        .into();
+    let mut answer = agent
+        .post(url)
+        .header("Content-Type", "application/json")
+        .header(
+            "User-Agent",
+            &format!("PowerWhittle/{}", env!("CARGO_PKG_VERSION")),
+        )
+        .send(body)
+        .map_err(|e| format!("the bug-report service could not be reached: {e}"))?;
+    let status = answer.status().as_u16();
+    let text = answer.body_mut().read_to_string().unwrap_or_default();
+    if (200..300).contains(&status) {
+        return Ok(text);
+    }
+    let why = serde_json::from_str::<serde_json::Value>(&text)
+        .ok()
+        .and_then(|a| a["error"].as_str().map(str::to_owned))
+        .unwrap_or_else(|| format!("it answered {status}"));
+    Err(format!("the bug-report service did not take it: {why}"))
+}
+
+/// How long a bug report with its pictures may take to send, in seconds.
+const BUG_SECONDS: u64 = 120;
 
 fn leading_zeros(hash: &[u8]) -> u32 {
     let mut bits = 0;
@@ -338,6 +434,54 @@ mod tests {
             leading_zeros(&Sha256::digest(text.as_bytes())) >= WORK_BITS
         });
         assert!(proven, "{work}");
+    }
+
+    #[test]
+    fn a_bug_report_carries_its_pictures_and_a_proof_the_service_checks() {
+        let pictures = [("screenshot.png".to_owned(), vec![1, 2, 3])];
+        let bug = Bug {
+            title: "t",
+            text: "b",
+            install: "install-1",
+            reporter: " @Ray-1961 ",
+            pictures: &pictures,
+        };
+        // the same text services/crash-reports/test/bugs.test.js expects
+        assert_eq!(
+            bug_work_text(&bug, "2026-11-28", "n"),
+            format!(
+                "cutcraft-bug-v1\n2026-11-28\ninstall-1\n{:x}\nn",
+                Sha256::digest(b"t\nb")
+            )
+        );
+        let sent = bug_payload(&bug, "2026-11-28", 8);
+        assert_eq!(sent["pictures"][0]["name"], "screenshot.png");
+        assert_eq!(sent["pictures"][0]["data"], "AQID");
+        assert_eq!(sent["reporter"], "Ray-1961");
+        let work = sent["work"].as_str().unwrap();
+        let hash = Sha256::digest(bug_work_text(&bug, "2026-11-28", work).as_bytes());
+        assert!(leading_zeros(&hash) >= 8);
+    }
+
+    #[test]
+    fn a_sent_bug_report_gives_its_issue_or_the_services_reason() {
+        let pictures = [];
+        let bug = Bug {
+            title: "t",
+            text: "b",
+            install: "install-1",
+            reporter: "",
+            pictures: &pictures,
+        };
+        let filed = |_: &str, _: &str| Ok(r#"{"url":"https://github.com/pw/app/issues/9"}"#.into());
+        assert_eq!(
+            send_bug("https://x/v1/bug", &bug, 1, &filed).unwrap(),
+            "https://github.com/pw/app/issues/9"
+        );
+        let refused = |_: &str, _: &str| Err("the bug-report service did not take it: no".into());
+        assert!(send_bug("https://x/v1/bug", &bug, 1, &refused).is_err());
+        let odd = |_: &str, _: &str| Ok("{}".into());
+        assert!(send_bug("https://x/v1/bug", &bug, 1, &odd).is_err());
     }
 
     #[test]

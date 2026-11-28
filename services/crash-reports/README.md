@@ -46,6 +46,42 @@ Other fields are ignored. Replies: **202** taken; **400** a field is wrong (don'
 **413** too big (don't retry); **429** with `Retry-After` seconds (same install within the hour,
 or the day's limit reached); **5xx** try later. No CORS, no cookies.
 
+## Bug reports
+
+`POST /v1/bug` takes Report a Bug's reports from anyone, GitHub account or not. It puts the
+pictures in `BUG_PICTURE_REPO` (a public repository of their own, so the token never touches
+code) and opens the issue in `BUG_REPO`, labelled `bug`, with the `BUG_PICTURE_TOKEN` and `BUG_TOKEN` secrets.
+Nothing of a bug report is kept here but a count per network hash, for the caps.
+
+| Field | Rule |
+| --- | --- |
+| `title` | 1–200 characters on one line |
+| `text` | the issue's text, up to 60 KB; every `@name` in it is made so it pings nobody |
+| `install_id` | as for crashes |
+| `reporter` | optional GitHub user name; the issue says "Reported by @name", so they hear of answers |
+| `pictures` | up to 6 of `{name, data}`: `name` of `A-Z a-z 0-9 . _ -`, `data` base64, up to 10 MB each |
+| `work` | proof of work over `cutcraft-bug-v1\n<day>\n<install_id>\n<sha256 of title\ntext>\n<nonce>`, `POW_BITS` zero bits |
+
+Replies: **201** `{url}` of the issue; **400**/**413** refused as it is; **429** with
+`Retry-After` (`BUG_IP_DAILY` a network a day, `BUG_DAILY_LIMIT` in all); **502** GitHub refused
+it (the error says why); **503** bug reports are not set up (a token missing). On any failure the
+app opens the report in the browser instead. Big pictures cost CPU time: on the free plan's
+10 ms a request may be cut off, which the app treats as any other failure.
+
+Setting up (once): make the public repository named in `BUG_PICTURE_REPO` with a first commit
+(a README). Then two fine-grained tokens, owner Power-Whittle, because a token's permissions
+cover every repository it names:
+
+- `BUG_PICTURE_TOKEN`: repository `BUG_PICTURE_REPO` only, **Contents: Read and write**.
+- `BUG_TOKEN`: repository `BUG_REPO` only, **Issues: Read and write**. No Contents, so it can't
+  touch code.
+
+```sh
+npx wrangler secret put BUG_PICTURE_TOKEN
+npx wrangler secret put BUG_TOKEN
+npx wrangler deploy
+```
+
 ## Deploying (once)
 
 Needs a Cloudflare account (the free plan is enough) and Node 22 or newer.

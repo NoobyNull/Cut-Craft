@@ -559,6 +559,20 @@ setting-send-which-system-and-version-053caa =
     Ubuntu 24.04...), its processor (Intel/AMD or ARM) and graphics card with crash and
     bug reports: some bugs happen only on some computers. Never the computer's name or
     your user name. Off: only the report and its log are sent
+setting-send-bug-reports-9b09fe = Send bug reports
+setting-how-report-a-bug-sends-200a13 =
+    How Report a Bug sends a report. PowerWhittle's bug-report service needs no GitHub
+    account and nothing installed. Your own GitHub CLI files it as you, but its pictures
+    need write access to PowerWhittle's repository, so it suits only the people who work on
+    PowerWhittle. Either way, a report that can't be sent opens in your browser to finish
+setting-powerwhittle-s-bug-report-service-42ee9b = PowerWhittle's bug-report service
+setting-through-powerwhittle-s-bug-report-5c11be =
+    Through PowerWhittle's bug-report service: no GitHub account needed. Your pictures and
+    report become a public GitHub issue
+setting-my-github-cli-df5df4 = My GitHub CLI
+setting-with-the-github-cli-gh-f0afc8 =
+    With the GitHub CLI (gh) signed in on this computer, as you. Pictures need write access
+    to PowerWhittle's repository
 setting-web-api-782851 = Web API
 setting-options-web-api-lets-a-de4638 =
     Options ▸ Web API: lets a script, a test or Claude drive PowerWhittle over HTTP, the way you

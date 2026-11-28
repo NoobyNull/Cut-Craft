@@ -282,10 +282,11 @@ went wrong. Cut Craft adds, without you doing anything:
 - what the app was doing (the screen, view, open tool, job size and contents) and the build;
 - a screenshot of the window, and any pictures you add.
 
-**Submit to GitHub** files it as an issue through the [GitHub CLI](https://cli.github.com)
-(`gh`, signed in). Without `gh`, your browser opens GitHub's new-issue page with the report
-filled in, to finish by hand; either way a report that can't be sent is kept in the settings
-folder, pictures included.
+**Submit to GitHub** sends it to PowerWhittle's bug-report service, which files it as an
+issue with its pictures: no GitHub account or GitHub CLI needed. People who work on the app can
+send through their own [GitHub CLI](https://cli.github.com) instead (Edit ▸ Options ▸ Bug
+Reports). A report that can't be sent is kept in the settings folder, pictures included, and
+your browser opens GitHub's new-issue page with it filled in, beside the folder of pictures.
 
 ## Building from source
 
