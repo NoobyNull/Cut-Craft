@@ -43,6 +43,7 @@ mod hints;
 mod icon_themes;
 mod icons;
 mod languages;
+mod lettered;
 mod marks;
 mod messages;
 mod options;

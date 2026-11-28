@@ -40,6 +40,25 @@ pub struct Appearance {
     #[serde(default = "text_size")]
     #[schemars(title = "Text size", extend("x-unit" = "%"), range(min = 80, max = 200))]
     pub text_size: u32,
+    /// Where a tool form's measurement pictures go. Beside the fields: small, at the right
+    /// of the settings they mark, so more of the form fits. Full width: across the form,
+    /// above its settings. Either way their letters are the size of the form's text
+    #[serde(default)]
+    #[schemars(title = "Form pictures")]
+    pub form_pictures: FormPictures,
+}
+
+/// Where a tool form's measurement pictures go (Options ▸ Appearance ▸ Form pictures).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum FormPictures {
+    /// Small, at the right of the settings they mark
+    #[default]
+    #[schemars(title = "Beside the fields")]
+    Beside,
+    /// Across the form, above the settings they mark
+    #[schemars(title = "Full width")]
+    FullWidth,
 }
 
 /// How far the 2D view's wrap bands reach past each seam of a rotary job.
@@ -84,6 +103,7 @@ impl Default for Appearance {
             grid_point_size: grid_point_size(),
             rotary_wrap: WrapBands::default(),
             text_size: text_size(),
+            form_pictures: FormPictures::default(),
         }
     }
 }

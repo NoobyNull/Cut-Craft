@@ -42,6 +42,16 @@ what the preview has cut keeps each toolpath's colour. A change made in the list
 reorder, group, delete, or a tick showing or hiding a toolpath) while a tool's form is open
 beside it is kept when that form is cancelled: Cancel takes back only what the form did.
 
+
+## The pictures beside the settings
+
+A block of sizes, such as Cutting Depths, has a small drawing at its right. Each size is
+marked on it with a letter, and its field has the same letter in front of its name: the **D**
+on the drawing is the **D Cut Depth** beside it. The letters are always the size of the
+form's text, so they stay easy to read however small the drawing is. On a narrow panel the
+drawing sits above the settings instead. For bigger drawings across the form, set
+**Options ▸ Appearance ▸ Form pictures** to **Full width** (see
+[Changing settings](help:settings)).
 ## Pressing Calculate again
 
 A toolpath's form stays open after Calculate, so it is easy to press Calculate a second

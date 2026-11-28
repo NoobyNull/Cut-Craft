@@ -469,6 +469,15 @@ setting-text-size-041143 = Text size
 setting-how-big-text-buttons-and-a5d892 =
     How big text, buttons and lines are, as a percentage: larger is easier to read and to
     click, smaller fits more on a small screen (from the next start)
+setting-form-pictures-27cd8e = Form pictures
+setting-where-a-tool-form-s-afd267 =
+    Where a tool form's measurement pictures go. Beside the fields: small, at the right
+    of the settings they mark, so more of the form fits. Full width: across the form,
+    above its settings. Either way their letters are the size of the form's text
+setting-beside-the-fields-77877d = Beside the fields
+setting-small-at-the-right-of-2d911c = Small, at the right of the settings they mark
+setting-full-width-582e90 = Full width
+setting-across-the-form-above-the-e8fcef = Across the form, above the settings they mark
 setting-mouse-and-shortcuts-0e0f82 = Mouse and Shortcuts
 setting-the-mouse-in-the-2d-ecb865 = The mouse in the 2D and 3D views, and the shortcuts set in place of PowerWhittle's own.
 setting-tilting-the-wheel-left-or-0d309e = Tilting the wheel left or right

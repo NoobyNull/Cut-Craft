@@ -119,6 +119,12 @@ the left and the dark theme on the right. **Options ▸ Appearance ▸ Rotary wr
 how far past each seam a rotary job's 2D view shows the other side of the material (see
 [Moving around the 2D view](help:view_2d)).
 
+**Options ▸ Appearance ▸ Form pictures** sets where a tool form's measurement pictures go.
+**Beside the fields**, the setting it starts with, draws each one small at the right of the
+settings it marks, so more of the form fits on the screen. **Full width** draws them across
+the form, above their settings. Either way the letters on a picture are the same size as the
+form's text, and **Text size** makes both bigger or smaller together.
+
 **[Ribbon](help:layout_ribbon)**: Design, Model and Toolpaths tabs across the top, each a row
 of tool groups, the sheets, layers and toolpath list on the left, and the open form on the
 right. A **Favourites** tab holds the tools you keep at hand.

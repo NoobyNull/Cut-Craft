@@ -35,6 +35,8 @@ egui_extras.workspace = true
 image.workspace = true
 # draws a measurement picture (SVG) small for the help, as egui_extras draws it in forms
 resvg = { version = "0.45", default-features = false }
+# reads which parts of a picture are its letters (src/lettered.rs)
+roxmltree = "0.20"
 # the help pictures (--help-pictures): saved as small 64-colour PNGs
 color_quant = "1.1"
 png = "0.18"

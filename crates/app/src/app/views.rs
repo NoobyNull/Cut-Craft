@@ -406,6 +406,7 @@ impl CutCraftApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.title = title;
         }
+        crate::form::set_pictures(ctx, self.options.appearance.form_pictures);
         self.capture_shortcut(ctx);
         self.polyline_keys(ctx);
         self.sculpt_keys(ctx);

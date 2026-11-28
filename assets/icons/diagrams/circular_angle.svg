@@ -11,5 +11,5 @@
   <path d="M224,112 L224,54" stroke="#8E98A4" stroke-width="1" fill="none" stroke-linecap="round" stroke-dasharray="4 3"/>
   <path d="M224,112 L274.2,83" stroke="#8E98A4" stroke-width="1" fill="none" stroke-linecap="round" stroke-dasharray="4 3"/>
   <path d="M 224,72 A 40,40 0 0 1 258.6,92" fill="none" stroke="#B0187E" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" marker-start="url(#a)" marker-end="url(#a)"/>
-  <path d="M260.68359375 64.63375H254.8046875L253.876953125 67.29H250.09765625L255.498046875 52.709921875000006H259.98046875L265.380859375 67.29H261.6015625ZM255.7421875 61.928671875000006H259.736328125L257.744140625 56.127890625000006Z" fill="#B0187E"/>
+  <path class="label" data-text="A" data-align="center center" d="M260.68359375 64.63375H254.8046875L253.876953125 67.29H250.09765625L255.498046875 52.709921875000006H259.98046875L265.380859375 67.29H261.6015625ZM255.7421875 61.928671875000006H259.736328125L257.744140625 56.127890625000006Z" fill="#B0187E"/>
 </svg>
