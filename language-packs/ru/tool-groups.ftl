@@ -1,0 +1,54 @@
+# The names over groups of tools: the tool groups of every layout, the captioned boxes of tools
+# that do one job different ways, and the lists shown as a group. A group's key is `group-` and
+# its English name.
+
+group-file-operations = Операции с файлами
+group-import = Импорт
+group-2d-view-control = Управление 2D-видом
+group-create-vectors = Создание векторов
+group-select-and-edit = Выделение и правка
+group-join-combine-and-trim = Соединение, объединение и обрезка
+group-align-objects = Выравнивание объектов
+group-transform-objects = Преобразование объектов
+group-offset-and-layout = Смещение и раскладка
+group-array-objects = Массивы объектов
+group-shape-creation = Создание фигур
+group-shape-editing = Правка фигур
+group-export-model = Экспорт модели
+group-job-and-bits = Задание и фрезы
+group-cut-out-and-clear = Вырезка и выборка
+group-holes = Отверстия
+group-carve-and-engrave = Резьба и гравировка
+group-edges-and-inlays = Кромки и инкрустации
+group-3d-toolpaths = 3D-траектории
+group-laser = Лазер
+group-from-other-toolpaths = Из других траекторий
+group-templates = Шаблоны
+group-reports = Отчёты
+group-save-for-the-machine = Сохранение для станка
+group-paperwork-for-the-job = Документы к заданию
+group-big-jobs = Большие задания
+group-zoom = Масштаб
+group-lines-and-curves = Линии и кривые
+group-rectangles = Прямоугольники
+group-circles-and-ellipses = Круги и эллипсы
+group-polygons-and-stars = Многоугольники и звёзды
+group-text = Текст
+group-join-and-close = Соединение и замыкание
+group-combine-shapes = Объединение фигур
+group-trim = Обрезка
+group-part-names = Имена деталей
+group-pictures = Изображения
+group-trace-picture = Трассировка изображения
+group-center-on-the-material = По центру материала
+group-center-on-each-other = По центру друг друга
+group-line-up-edges = Выравнивание по краям
+group-space-out-evenly = Равномерное распределение
+group-nesting = Раскладка
+group-copies = Копии
+group-create-shape = Создание фигуры
+group-clear-the-model = Очистка модели
+group-favourites = Избранное
+group-gadgets = Гаджеты
+group-design-favourites = Избранное дизайна
+group-toolpath-favourites = Избранные траектории

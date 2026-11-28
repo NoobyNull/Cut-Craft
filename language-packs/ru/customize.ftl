@@ -1,0 +1,14 @@
+customize-title = Настройка панелей инструментов
+customize-every-tool = Все инструменты
+customize-search = Найти инструмент
+customize-your-bars = Ваши панели инструментов
+customize-add = Добавить →
+customize-remove = ← Убрать
+customize-up = Вверх
+customize-down = Вниз
+customize-new = Новая панель
+customize-rename = Переименовать
+customize-delete = Удалить
+customize-main = Основные инструменты (все инструменты)
+customize-main-why = В основных инструментах есть все инструменты, поэтому их нельзя изменить. Перемещайте их за точки в начале (Холст).
+customize-empty = Здесь пока ничего нет: выберите инструмент слева, затем «Добавить →».

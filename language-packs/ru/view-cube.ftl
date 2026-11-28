@@ -1,0 +1,14 @@
+view-cube-top = Сверху
+view-cube-bottom = Снизу
+view-cube-front = Спереди
+view-cube-back = Сзади
+view-cube-right = Справа
+view-cube-left = Слева
+view-cube-iso = Изо
+view-cube-home-tip = Домой: вернуться к домашнему виду, задание целиком. Щёлкните правой кнопкой, чтобы сделать этот вид домашним.
+view-cube-make-home = Сделать этот вид домашним
+view-cube-reset-home = Сбросить домашний вид
+view-cube-turn-left-tip = Повернуть вид на четверть оборота против часовой стрелки
+view-cube-turn-right-tip = Повернуть вид на четверть оборота по часовой стрелке
+view-cube-turn-off-tip = Поворот работает, когда вы смотрите прямо на грань: сначала щёлкните грань куба
+view-cube-nudge-tip = Показать: { $face }

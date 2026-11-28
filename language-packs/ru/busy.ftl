@@ -1,0 +1,3 @@
+busy-cancel = Отмена
+busy-stop-it-esc-nothing-in = Остановить (Esc): в задании ничего не изменится
+busy-working = Выполняется…
