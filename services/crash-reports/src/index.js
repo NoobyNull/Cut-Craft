@@ -7,7 +7,7 @@ import {
 } from './store.js';
 import { PAGE, SCRIPT } from './page.js';
 import {
-  checkShape, checkWork, ipWait, countIp, crashId, countRefusal, networkOf, countAs,
+  checkShape, checkWork, ipWait, countIp, crashId, countRefusal, networkOf, countAs, uncountAs,
 } from './guard.js';
 import { takeBug } from './bugs.js';
 import {
@@ -118,6 +118,7 @@ function takeBugReport(request, env, now) {
   return takeBug(request, env, now, {
     ipHash: (at) => networkOf(env.DB, ip, at),
     count: async (signature, at) => countAs(env.DB, await networkOf(env.DB, ip, at), signature, at),
+    uncount: async (signature, at) => uncountAs(env.DB, await networkOf(env.DB, ip, at), signature, at),
     refuse: async (reason, status, error, extra) => {
       await countRefusal(env.DB, ip, `bug: ${reason}`, now);
       return problem(status, error, extra);

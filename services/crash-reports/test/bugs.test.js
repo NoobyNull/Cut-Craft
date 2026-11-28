@@ -70,6 +70,14 @@ test('GitHub refusing the issue is a 502 that says why', async () => {
   assert.match((await r.json()).error, /GitHub answered 403/);
 });
 
+test('a report GitHub refused does not use up the network\'s allowance', async () => {
+  const e = env(fakeGitHub({ failIssues: true }), { BUG_IP_DAILY: '1' });
+  assert.equal((await send(e, bug(), '203.0.113.9')).status, 502);
+  e.GITHUB_FETCH = fakeGitHub().fetch;
+  assert.equal((await send(e, bug(), '203.0.113.9')).status, 201, 'the retry is taken');
+  assert.equal((await send(e, bug(), '203.0.113.9')).status, 429, 'and then counted');
+});
+
 test('without its tokens the service says bug reports are not set up', async () => {
   const r = await send(env(fakeGitHub(), { BUG_TOKEN: undefined }), bug());
   assert.equal(r.status, 503);

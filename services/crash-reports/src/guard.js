@@ -94,6 +94,13 @@ export async function countAs(db, who, signature, now) {
   ).bind(dayOf(now.toISOString()), who, signature).run();
 }
 
+/** Take back one report counted under `signature` from network hash `who` today. */
+export async function uncountAs(db, who, signature, now) {
+  await db.prepare(
+    'UPDATE ip_counts SET count = count - 1 WHERE day = ? AND who = ? AND signature = ? AND count > 0',
+  ).bind(dayOf(now.toISOString()), who, signature).run();
+}
+
 /** Count a report this IP sent. */
 export async function countIp(db, ip, signature, now) {
   if (!ip) return;

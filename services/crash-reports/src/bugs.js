@@ -177,9 +177,11 @@ export const bugSettings = (env) => ({
 
 /**
  * Takes a bug report: checks it, its proof of work and the caps, then makes the issue.
- * `ipHash` turns the sender's IP into the day's salted hash; `count` records one more report.
+ * `ipHash` turns the sender's IP into the day's salted hash; `count` records one more report,
+ * counted before GitHub is called so a burst can't slip past the caps, and `uncount` takes it
+ * back when GitHub refuses, so a report that wasn't filed doesn't use up the allowance.
  */
-export async function takeBug(request, env, now, { ipHash, count, refuse, json }) {
+export async function takeBug(request, env, now, { ipHash, count, uncount, refuse, json }) {
   if (!env.BUG_TOKEN || !env.BUG_PICTURE_TOKEN || !env.BUG_REPO || !env.BUG_PICTURE_REPO) {
     return json({ error: 'Bug reports are not set up on this service.' }, 503);
   }
@@ -210,6 +212,7 @@ export async function takeBug(request, env, now, { ipHash, count, refuse, json }
   try {
     issue = await openIssue(env, bug, await uploadPictures(env, bug, now));
   } catch (e) {
+    await uncount(BUG_COUNT, now);
     return json({ error: `The bug report could not be filed: ${e.message}` }, 502);
   }
   return json({ url: issue.html_url }, 201);
