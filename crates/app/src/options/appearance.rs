@@ -46,6 +46,43 @@ pub struct Appearance {
     #[serde(default)]
     #[schemars(title = "Form pictures")]
     pub form_pictures: FormPictures,
+    /// How a toolpath form's settings are laid out. Tabs: a few short pages across the top
+    /// (Bit & Depth, the toolpath's own, Where, Movement, Finishing, Defaults), a dot on a
+    /// tab with a warning or a changed setting. One page: every setting in one long list
+    #[serde(default)]
+    #[schemars(title = "Tool forms")]
+    pub tool_forms: ToolForms,
+    /// Where a tabbed form's Calculate button is. Under every tab: always there, so a
+    /// change on any tab can be calculated at once. Last tab only: the other tabs have Next
+    /// instead, to go through every tab before calculating
+    #[serde(default)]
+    #[schemars(title = "Calculate button")]
+    pub calculate_button: CalculateButton,
+}
+
+/// How a toolpath form's settings are laid out (Options ▸ Appearance ▸ Tool forms).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolForms {
+    /// A few short pages across the top
+    #[default]
+    Tabs,
+    /// Every setting in one long list
+    #[schemars(title = "One page")]
+    OnePage,
+}
+
+/// Where a tabbed form's Calculate button is (Options ▸ Appearance ▸ Calculate button).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CalculateButton {
+    /// Always there, whichever tab is open
+    #[default]
+    #[schemars(title = "Under every tab")]
+    EveryTab,
+    /// On the last tab; the others have Next
+    #[schemars(title = "Last tab only")]
+    LastTab,
 }
 
 /// Where a tool form's measurement pictures go (Options ▸ Appearance ▸ Form pictures).
@@ -104,6 +141,8 @@ impl Default for Appearance {
             rotary_wrap: WrapBands::default(),
             text_size: text_size(),
             form_pictures: FormPictures::default(),
+            tool_forms: ToolForms::default(),
+            calculate_button: CalculateButton::default(),
         }
     }
 }

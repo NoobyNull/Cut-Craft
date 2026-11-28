@@ -282,6 +282,7 @@ impl CutCraftApp {
                 made: None,
                 note: None,
                 brief: false,
+                tabs: super::form_tab_strip::Shown::default(),
             });
             // a form shows in its page, so bring an auto-hidden page out
             if self.pages.shown(page) == Shown::Hidden {

@@ -125,6 +125,16 @@ settings it marks, so more of the form fits on the screen. **Full width** draws 
 the form, above their settings. Either way the letters on a picture are the same size as the
 form's text, and **Text size** makes both bigger or smaller together.
 
+**Options ▸ Appearance ▸ Tool forms** sets how a toolpath's form is laid out. **Tabs**, the
+setting it starts with, splits it into a few short pages across its top: **Bit & Depth**,
+the toolpath's own, **Where**, **Movement**, **Finishing** and **Defaults** (see
+[Toolpaths](help:toolpaths)). **One page** shows every setting in one long list, as before.
+
+**Options ▸ Appearance ▸ Calculate button** sets where a tabbed form's **Calculate** is.
+**Under every tab**, the setting it starts with, keeps it at the foot of every tab, so a
+change on any tab can be calculated at once. **Last tab only** puts **Next** there instead
+until the last tab, to go through every tab before calculating.
+
 **[Ribbon](help:layout_ribbon)**: Design, Model and Toolpaths tabs across the top, each a row
 of tool groups, the sheets, layers and toolpath list on the left, and the open form on the
 right. A **Favourites** tab holds the tools you keep at hand.

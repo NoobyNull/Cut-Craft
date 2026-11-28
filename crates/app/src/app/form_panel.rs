@@ -55,18 +55,19 @@ impl CutCraftApp {
         let (mut apply, mut close, mut default, mut cancel) = (false, false, false, false);
         let mut new_shape = false;
         let as_new_offered = self.offers_calculate_as_new();
-        let (save, load) = if open.page == Page::Toolpaths {
-            settings_file_row(ui)
-        } else {
-            (false, false)
-        };
+        let waits = self.calculate_waits_for_last_tab();
+        let (save, load) = self.foot_settings_row(ui);
         if committing.is_none() {
             new_shape = live_row(ui, open.kind, drawing, made);
         }
-        let as_new = as_new_offered && calculate_as_new_row(ui);
+        let as_new = as_new_offered && !waits && calculate_as_new_row(ui);
         let mut reset = false;
+        let mut next = false;
         ui.horizontal(|ui| {
-            if let Some((label, hint)) = &committing {
+            if waits {
+                next =
+                    marked_commit_button(ui, &tr!("form-tab-next"), &tr!("form-tab-next.tooltip"));
+            } else if let Some((label, hint)) = &committing {
                 apply = marked_commit_button(ui, label, hint);
             }
             reset = reset_button(ui, open.id);
@@ -90,6 +91,10 @@ impl CutCraftApp {
                 }
             });
         });
+        if next {
+            self.next_form_tab();
+            return;
+        }
         if new_shape {
             if let Some(form) = self.form.as_mut() {
                 (form.drawn, form.applied) = (None, None);
@@ -132,8 +137,22 @@ impl CutCraftApp {
         }
     }
 
+    /// Save Settings… and Load Settings… at the foot of a toolpath's form, unless it is
+    /// tabbed (they are on its Defaults tab): whether each was pressed.
+    fn foot_settings_row(&self, ui: &mut egui::Ui) -> (bool, bool) {
+        let toolpath = self
+            .form
+            .as_ref()
+            .is_some_and(|f| f.page == Page::Toolpaths);
+        if toolpath && !self.form_is_tabbed() {
+            settings_file_row(ui)
+        } else {
+            (false, false)
+        }
+    }
+
     /// Save Settings… (or Load Settings… when not `save`) on a toolpath's form.
-    fn form_settings_file(&mut self, save: bool) {
+    pub(super) fn form_settings_file(&mut self, save: bool) {
         let Some(form) = &self.form else { return };
         let dialog = form_settings_dialog();
         if save {
@@ -331,12 +350,19 @@ impl CutCraftApp {
             self.notes_editor(ui);
             return;
         }
+        if self.form_is_tabbed() {
+            egui::Panel::top("form_top").show(ui, |ui| {
+                self.form_heading(ui);
+                self.way_picker(ui);
+                self.form_tab_strip(ui);
+            });
+        }
         egui::ScrollArea::vertical().show(ui, |ui| self.command_form(ui));
     }
 
     /// The warning for a toolpath form whose tool is a drill (it cuts only straight down)
     /// when the toolpath is not Drilling.
-    fn drill_sideways(form: &super::OpenForm) -> Option<String> {
+    pub(super) fn drill_sideways(form: &super::OpenForm) -> Option<String> {
         let tool = form.params.get("tool")?;
         if !form.kind.is_toolpath() || tool.get("drill_only") != Some(&Value::Bool(true)) {
             return None;
@@ -351,7 +377,7 @@ impl CutCraftApp {
 
     /// The warning for a toolpath form whose tool is the wrong kind: a router bit on a laser
     /// toolpath, or a laser on a router's (as soon as it is picked; never refused).
-    fn wrong_kind_of_tool(form: &super::OpenForm) -> Option<String> {
+    pub(super) fn wrong_kind_of_tool(form: &super::OpenForm) -> Option<String> {
         if !form.kind.is_toolpath() {
             return None;
         }

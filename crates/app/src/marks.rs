@@ -35,6 +35,12 @@ pub fn want(ctx: &egui::Context, name: &str) {
     ctx.data_mut(|d| d.insert_temp(wanted_id(), name.to_owned()));
 }
 
+/// The name [`want`]ed, or rung by [`spotlight`]: a form turns to the tab it is on.
+pub fn wanted_name(ctx: &egui::Context) -> Option<String> {
+    ctx.data(|d| d.get_temp::<String>(wanted_id()))
+        .or_else(|| ctx.data(|d| d.get_temp::<String>(spotlit_id())))
+}
+
 fn wanted(ctx: &egui::Context, name: &str) -> bool {
     ctx.data(|d| d.get_temp::<String>(wanted_id()))
         .is_some_and(|w| w == name)

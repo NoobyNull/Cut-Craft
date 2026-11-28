@@ -10,6 +10,7 @@ mod inputs;
 pub use inputs::*;
 mod layout;
 pub use layout::*;
+pub mod form_tabs;
 
 /// Choices with this many options or fewer are radio buttons; more make a drop-down.
 const MOST_RADIOS: usize = 5;
@@ -411,6 +412,13 @@ pub fn show(ui: &mut egui::Ui, fields: &[Field], params: &mut Value, look: &Look
     let top = params.clone();
     let all: Vec<&Field> = fields.iter().collect();
     show_within(ui, &all, params, look, &top)
+}
+
+/// Edits `params` through some of its fields (a tab's, [`form_tabs::on_tab`]); true when
+/// anything changed. A setting shown only while another says so reads all of `params`.
+pub fn show_some(ui: &mut egui::Ui, fields: &[&Field], params: &mut Value, look: &Look) -> bool {
+    let top = params.clone();
+    show_within(ui, fields, params, look, &top)
 }
 
 /// The Sequence box, and under it the pattern maker: a turn to add with, a sample button for

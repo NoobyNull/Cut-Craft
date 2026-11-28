@@ -63,6 +63,18 @@ fn through(params: &serde_json::Value, stock: Stock) -> bool {
     stock.thickness > 0.0 && depth + THROUGH >= stock.thickness
 }
 
+/// A toolpath made with Cut right through (no longer on the form) read as a depth of the
+/// material's thickness, to change as any other; whether it was. Done whichever tab of the
+/// form is shown.
+pub(super) fn through_as_depth(params: &mut serde_json::Value, stock: Stock) -> bool {
+    if params["through"] != true {
+        return false;
+    }
+    params["depth"] = stock.thickness.into();
+    params["through"] = false.into();
+    true
+}
+
 /// The words over Add Tabs when a profile would cut its piece loose.
 pub(super) fn loose() -> String {
     tr!("tabs-loose")
@@ -141,12 +153,8 @@ pub(super) fn group_end(
     stock: Stock,
 ) -> bool {
     let mut changed = false;
-    // a toolpath made with Cut right through (no longer on the form) reads as a depth of
-    // the material's thickness, to change as any other
-    if group == form::CUTTING_DEPTHS && params["through"] == true {
-        params["depth"] = stock.thickness.into();
-        params["through"] = false.into();
-        changed = true;
+    if group == form::CUTTING_DEPTHS {
+        changed |= through_as_depth(params, stock);
     }
     if group == "Tabs" {
         if stock.untabbed > 0 && !cuts_loose(params, stock) && through(params, stock) {
