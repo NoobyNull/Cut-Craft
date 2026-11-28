@@ -34,8 +34,8 @@ answer it best come first.
 ![A question typed in the search box, and the pages that answer it, best first](pictures/help/ask-a-question.png)
 
 It knows words that mean the same (bridges and hold-downs find tabs, "cut out" finds
-Profile) and other endings of a word ("pockets" finds Pocket), so you don't need Cut
-Craft's own name for a thing.
+Profile) and other endings of a word ("pockets" finds Pocket), so you don't need PowerWhittle's
+own name for a thing.
 
 ## Finding a tool by how it looks
 

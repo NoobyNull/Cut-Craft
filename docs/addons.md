@@ -108,8 +108,8 @@ Add-on**, which installs the official Depth entry and shows progress in its own 
 
 Install details:
 
-- An add-on is unpacked into `<settings folder>/addons/<id>/` (`~/.config/cut-craft/addons/`
-  on Linux, `%APPDATA%\cut-craft\addons\` on Windows), with `installed.json` recording
+- An add-on is unpacked into `<settings folder>/addons/<id>/` (`~/.config/powerwhittle/addons/`
+  on Linux, `%APPDATA%\powerwhittle\addons\` on Windows), with `installed.json` recording
   the repository, tag, version and whether it was signed. Updates use that record.
 - Everything is first unpacked beside the old copy, then swapped in. If any step fails
   (checksum, signature, size, missing file), the old copy stays as it was and nothing

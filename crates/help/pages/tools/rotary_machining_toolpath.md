@@ -187,8 +187,8 @@ model the 3D view shows. Material Setup's **Model Position in Material** is for 
 does not move it; where the material reaches further out than the model, it is cut down to the
 model. With
 **Off centre** the side of the ball can reach under a ledge or into a hollow that a bit pointing
-at the axis would miss, and it is never let into the model. A model drawn or sculpted in Cut
-Craft, or one sunk into another, is cut from its heights as before.
+at the axis would miss, and it is never let into the model. A model drawn or sculpted in PowerWhittle,
+or one sunk into another, is cut from its heights as before.
 
 ## How the rings join up
 

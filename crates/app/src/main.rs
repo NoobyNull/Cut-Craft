@@ -70,8 +70,16 @@ fn main() {
         startup::Start::HelpPictures(dir, tools) => (Some(app::Pictures::Help(dir, tools)), None),
         startup::Start::App(open) => (None, open),
     };
+    // the first start after the rename from Cut Craft: the settings come over before
+    // anything reads them (the log saying how comes once the log is set up)
+    let brought = cut_craft_core::file::bring_over_old_settings();
     // the log and, on a panic, the crash log the next start offers to report
     cut_craft_bug_report::logs::install(files::config_dir().as_deref());
+    match brought {
+        Ok(true) => log::info!("settings brought over from the Cut Craft settings folder"),
+        Ok(false) => {}
+        Err(e) => log::warn!("could not bring the Cut Craft settings over: {e}"),
+    }
     // a window that can't open says why, rather than nothing happening
     startup::explain_failures();
     // what the last update set aside, now that the new version is the one running

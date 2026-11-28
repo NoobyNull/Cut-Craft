@@ -147,8 +147,8 @@ Toolpaths page's buttons, each with its progress window as usual.
   - `width=800` makes the picture 800 pixels wide; left out, it is the view's own size.
 
   The window shows that view for a moment while the picture is taken, then goes back to how
-  you left it. Windows and menus open over the view are left out of the picture. Cut
-  Craft's window must be open on screen (not minimised) to take it.
+  you left it. Windows and menus open over the view are left out of the picture. PowerWhittle's
+  window must be open on screen (not minimised) to take it.
 - **GET state**: the material (size, thickness, where Z zero and the datum are), where the
   3D model sits in it, each part of the model with its heights, and what is picked:
   vectors, model parts and the toolpath picked in the toolpath list.
@@ -205,11 +205,11 @@ Toolpaths page's buttons, each with its progress window as usual.
   with (your **Set as Default** settings, if you saved some); **GET commands/job_setup**
   lists them all. Settings Job Setup will not take are refused, and the job open stays
   as it was.
-- **POST job/open** `{"path": "/home/me/sign.ccjob"}`: **Open** on that job file.
+- **POST job/open** `{"path": "/home/me/sign.pwjob"}`: **Open** on that job file.
 
   Neither throws away unsaved changes: they are refused until you save, or send
   `"discard": true`.
-- **POST job/save** `{}`: **Save**. With `{"path": "/home/me/sign.ccjob"}` it is
+- **POST job/save** `{}`: **Save**. With `{"path": "/home/me/sign.pwjob"}` it is
   **Save As**: the job is that file from then on.
 - **POST job/export** `{"format": "export_dxf", "path": "/home/me/sign.dxf"}`: an
   **Export** menu item. The docs page lists each format.

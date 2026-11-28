@@ -621,7 +621,7 @@ impl CutCraftApp {
         self.job_needed()?;
         let path = match path {
             Some(path) => {
-                files::named_for_saving(&whole_path(path)?, &[cut_craft_core::file::JOB_EXTENSION])
+                files::named_for_saving(&whole_path(path)?, &cut_craft_core::file::JOB_EXTENSIONS)
             }
             None => self.session.path.clone().ok_or_else(|| {
                 ApiError::refused(

@@ -111,9 +111,9 @@ fn shorten(line: &str) -> String {
 /// What the person's own files end in (jobs, toolpaths, drawings, models, pictures, fonts):
 /// a crash report sent by itself names none of them.
 const THEIR_FILES: &[&str] = &[
-    "ccjob", "ajob", "nc", "gcode", "ngc", "tap", "cnc", "txt", "svg", "dxf", "eps", "ai", "pdf",
-    "stl", "obj", "3mf", "step", "stp", "png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "webp",
-    "csv", "json", "html", "pp", "vtdb", "ttf", "otf",
+    "pwjob", "pwjobt", "ccjob", "ccjobt", "ajob", "nc", "gcode", "ngc", "tap", "cnc", "txt", "svg",
+    "dxf", "eps", "ai", "pdf", "stl", "obj", "3mf", "step", "stp", "png", "jpg", "jpeg", "gif",
+    "bmp", "tif", "tiff", "webp", "csv", "json", "html", "pp", "vtdb", "ttf", "otf",
 ];
 /// Where a path is in the person's own folders, once [`scrub`] has put home as `~`: home, a
 /// drive, a network share, a mounted disk.

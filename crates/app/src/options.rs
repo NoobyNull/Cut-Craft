@@ -1,5 +1,5 @@
-//! Edit ▸ Options: settings kept between runs, in the sections. Only the settings Cut
-//! Craft acts on are here: what the views draw when it starts, and the recent files kept.
+//! Edit ▸ Options: settings kept between runs, in the sections. Only the settings PowerWhittle
+//! acts on are here: what the views draw when it starts, and the recent files kept.
 
 use crate::display::Display;
 use eframe::egui;

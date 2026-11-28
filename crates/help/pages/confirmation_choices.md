@@ -60,8 +60,8 @@ Like every page of Options, changes here wait for **Apply**: see
 
 ## Unsigned gadgets and add-ons
 
-When you choose **Run and Remember** for a gadget or add-on that is **not official**, Cut
-Craft runs it without asking from then on, until its code changes (see
+When you choose **Run and Remember** for a gadget or add-on that is **not official**, PowerWhittle
+runs it without asking from then on, until its code changes (see
 [Running unsigned code](help:addons)). This page says how many you have told to run that
 way.
 

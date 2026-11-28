@@ -7,7 +7,7 @@ see-also: new, save, open_folder
 
 ![The steps, one after another](pictures/open/tour.gif)
 
-1. Open a job you saved before (a .ccjob file, or a .pwjob file saved by PowerWhittle).
+1. Open a job you saved before (a .pwjob file, or a .ccjob file saved when the app was called Cut Craft).
 
    ![Step 1](pictures/open/step-1.png)
 

@@ -5,20 +5,23 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-pub const JOB_EXTENSION: &str = "ccjob";
+pub const JOB_EXTENSION: &str = "pwjob";
+/// Jobs saved before the app was renamed `PowerWhittle`: the same file, so they still open.
+pub const CUT_CRAFT_JOB_EXTENSION: &str = "ccjob";
 /// Jobs saved before the app was renamed Cut Craft; they still open.
 pub const OLD_JOB_EXTENSION: &str = "ajob";
 /// Job templates: jobs that open as new, unsaved files.
-pub const TEMPLATE_EXTENSION: &str = "ccjobt";
-/// What jobs are saved as once the app is renamed `PowerWhittle` (release 1). The file inside
-/// is the same, so this copy opens them too.
-pub const RENAMED_JOB_EXTENSION: &str = "pwjob";
-/// Job templates saved once the app is renamed `PowerWhittle`.
-pub const RENAMED_TEMPLATE_EXTENSION: &str = "pwjobt";
-/// Every extension a job file opens under.
-pub const JOB_EXTENSIONS: [&str; 3] = [JOB_EXTENSION, RENAMED_JOB_EXTENSION, OLD_JOB_EXTENSION];
-/// Every extension a job template opens under.
-pub const TEMPLATE_EXTENSIONS: [&str; 2] = [TEMPLATE_EXTENSION, RENAMED_TEMPLATE_EXTENSION];
+pub const TEMPLATE_EXTENSION: &str = "pwjobt";
+/// Job templates saved before the app was renamed `PowerWhittle`.
+pub const CUT_CRAFT_TEMPLATE_EXTENSION: &str = "ccjobt";
+const FORMAT: &str = "cut-craft-job";
+const OLD_FORMAT: &str = "aspire-clone-job";
+/// Bump when the document's JSON shape changes, and teach `load_job` to read the old one.
+const VERSION: u32 = 1;
+/// Every extension a job file opens under, the one jobs are saved as first.
+pub const JOB_EXTENSIONS: [&str; 3] = [JOB_EXTENSION, CUT_CRAFT_JOB_EXTENSION, OLD_JOB_EXTENSION];
+/// Every extension a job template opens under, the one templates are saved as first.
+pub const TEMPLATE_EXTENSIONS: [&str; 2] = [TEMPLATE_EXTENSION, CUT_CRAFT_TEMPLATE_EXTENSION];
 
 /// Whether `path` is a job template, which opens as a new, unsaved job.
 pub fn is_template(path: &Path) -> bool {
@@ -28,16 +31,53 @@ pub fn is_template(path: &Path) -> bool {
             .any(|t| e.eq_ignore_ascii_case(t))
     })
 }
-const FORMAT: &str = "cut-craft-job";
-const OLD_FORMAT: &str = "aspire-clone-job";
-/// Bump when the document's JSON shape changes, and teach `load_job` to read the old one.
-const VERSION: u32 = 1;
 
-/// Where Cut Craft keeps its settings: `%APPDATA%\cut-craft` on Windows,
-/// `~/Library/Application Support/cut-craft` on macOS, elsewhere `$XDG_CONFIG_HOME/cut-craft`,
-/// else `~/.config/cut-craft`.
+/// The settings folder's name, in the place each system keeps settings.
+pub const SETTINGS_FOLDER: &str = "powerwhittle";
+/// Its name before the app was renamed `PowerWhittle`.
+pub const OLD_SETTINGS_FOLDER: &str = "cut-craft";
+
+/// Where the app keeps its settings: `%APPDATA%\powerwhittle` on Windows,
+/// `~/Library/Application Support/powerwhittle` on macOS, elsewhere
+/// `$XDG_CONFIG_HOME/powerwhittle`, else `~/.config/powerwhittle`.
 pub fn config_dir() -> Option<PathBuf> {
-    config_base().map(|dir| dir.join("cut-craft"))
+    config_base().map(|dir| dir.join(SETTINGS_FOLDER))
+}
+
+/// On the first start after the rename, copies the old settings folder in `base` to the new
+/// one, so everything set before carries on. The old folder is left as it was, so going back
+/// to an older copy still finds its settings. Whether anything was copied: nothing is when
+/// the new folder is there already or there was never an old one.
+pub fn bring_over_settings(base: &Path) -> std::io::Result<bool> {
+    let (old, new) = (base.join(OLD_SETTINGS_FOLDER), base.join(SETTINGS_FOLDER));
+    if new.exists() || !old.is_dir() {
+        return Ok(false);
+    }
+    // copied beside, then renamed into place: a copy cut short is never taken as done
+    let part = base.join(format!("{SETTINGS_FOLDER}.copying"));
+    let _ = std::fs::remove_dir_all(&part);
+    copy_folder(&old, &part)?;
+    std::fs::rename(&part, &new)?;
+    Ok(true)
+}
+
+/// [`bring_over_settings`] in this system's settings place.
+pub fn bring_over_old_settings() -> std::io::Result<bool> {
+    config_base().map_or(Ok(false), |base| bring_over_settings(&base))
+}
+
+fn copy_folder(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_folder(&entry.path(), &target)?;
+        } else {
+            std::fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(windows)]
