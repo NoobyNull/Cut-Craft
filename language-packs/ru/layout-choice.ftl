@@ -1,0 +1,16 @@
+layout-choice-ribbon = Лента
+layout-choice-rail = Панель
+layout-choice-canvas = Холст
+layout-choice-classic = Классическая
+layout-choice-ribbon-about = Вкладки инструментов сверху: Дизайн, Модель и Траектории. Листы, слои и траектории — слева.
+layout-choice-rail-about = Столбец групп инструментов слева. Щёлкните группу, чтобы увидеть список её инструментов по названиям.
+layout-choice-canvas-about = Всё окно — ваш рисунок. Инструменты, настройки и списки плавают поверх него.
+layout-choice-classic-about = Страница «Дизайн» со значками инструментов слева и страница «Траектории» справа, открываемые вкладками по бокам.
+layout-choice-window-layout = Компоновка окна
+layout-choice-every-tool-in-each = Выберите, как расположить окно. Все инструменты есть в каждой компоновке; меняется только расположение кнопок.
+layout-choice-pick-your-layout = Выберите компоновку окна
+layout-choice-now-starts-in-ribbon = Теперь PowerWhittle запускается с компоновкой «Лента». Выберите нужную: все инструменты есть в каждой, меняется только расположение кнопок.
+layout-choice-change-any-time = Изменить можно в любой момент кнопкой «Компоновка интерфейса» (в разделе «Управление 2D-видом») или в меню Вид ▸ Компоновка окна.
+layout-choice-use-this-layout = Использовать эту компоновку
+layout-choice-keep-my-layout = Оставить { $layout }
+layout-choice-cancel = Отмена

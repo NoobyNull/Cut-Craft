@@ -1,0 +1,14 @@
+shortcuts-page-add = Добавить…
+shortcuts-page-back-to-cut-craft-s = Вернуть стандартное сочетание PowerWhittle для этого действия. Если эта клавиша сейчас занята другим действием, вас спросят, перенести ли её обратно сюда
+shortcuts-page-cancel = Отмена
+shortcuts-page-find = Найти
+shortcuts-page-move-it-here = Перенести сюда
+shortcuts-page-pick-another = Выбрать другое
+shortcuts-page-press-add-beside-an-action = Нажмите «Добавить» рядом с действием, затем клавишу или кнопку мыши для его запуска. Помимо клавиш можно использовать боковые кнопки мыши (Назад и Вперёд) и нажатие колёсика. Нажмите × на сочетании, чтобы убрать его. Ctrl+C, Ctrl+X и Ctrl+V всегда только копируют, вырезают и вставляют.
+shortcuts-page-reset = Сбросить
+shortcuts-page-shortcuts = Сочетания клавиш
+shortcuts-page-take-this-shortcut-away = Убрать это сочетание
+shortcuts-page-then-press-the-key-or = Затем нажмите нужную клавишу или кнопку мыши
+shortcuts-page-an-action-or-a-shortcut = действие или сочетание, например Панорама или Ctrl+Z
+shortcuts-page-none = нет
+shortcuts-page-already-runs = ⚠ { $keys } уже запускает «{ $action }». Перенести сюда, чтобы запускало это действие?
