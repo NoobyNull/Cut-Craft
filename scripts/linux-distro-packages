@@ -100,7 +100,7 @@ cat >"$rpmroot/powerwhittle.spec" <<EOF
 Name: powerwhittle
 Version: $version
 Release: 1
-Obsoletes: cut-craft < $version
+Obsoletes: cut-craft <= $version
 Provides: cut-craft = $version
 Summary: $summary
 License: LicenseRef-Cut-Craft

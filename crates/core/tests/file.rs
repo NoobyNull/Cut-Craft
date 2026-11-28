@@ -203,3 +203,45 @@ fn a_bring_over_cut_short_is_finished_next_start_keeping_what_the_new_folder_has
     assert!(!new.join("options.json").exists());
     std::fs::remove_dir_all(&base).unwrap();
 }
+
+#[test]
+fn after_a_failed_bring_over_the_app_saves_in_the_old_folder_and_the_next_start_brings_it() {
+    use cut_craft_core::file::{BROUGHT_OVER, bring_over_settings, settings_folder};
+    let base = std::env::temp_dir().join(format!("pw-settings-failed-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let (old, new) = (base.join("cut-craft"), base.join("powerwhittle"));
+    std::fs::create_dir_all(&old).unwrap();
+    std::fs::write(old.join("options.json"), "{\"mine\": true}").unwrap();
+    // a start that copied options.json, then failed on another file
+    std::fs::create_dir_all(&new).unwrap();
+    std::fs::write(new.join("options.json"), "{\"mine\": true}").unwrap();
+    assert_eq!(
+        settings_folder(&base),
+        old,
+        "the app keeps to the old folder"
+    );
+    // that session saves its options where it reads them, after the part copy was made
+    let saved = std::fs::File::options()
+        .write(true)
+        .truncate(true)
+        .open(old.join("options.json"))
+        .unwrap();
+    std::io::Write::write_all(&mut &saved, b"{\"changed\": true}").unwrap();
+    saved
+        .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(60))
+        .unwrap();
+    drop(saved);
+    // the next start brings the saved options over, not the stale copy
+    assert!(bring_over_settings(&base).unwrap());
+    assert_eq!(
+        std::fs::read_to_string(new.join("options.json")).unwrap(),
+        "{\"changed\": true}"
+    );
+    assert!(new.join(BROUGHT_OVER).exists());
+    assert_eq!(
+        settings_folder(&base),
+        new,
+        "and from then on the new folder"
+    );
+    std::fs::remove_dir_all(&base).unwrap();
+}

@@ -39,9 +39,22 @@ pub const OLD_SETTINGS_FOLDER: &str = "cut-craft";
 
 /// Where the app keeps its settings: `%APPDATA%\powerwhittle` on Windows,
 /// `~/Library/Application Support/powerwhittle` on macOS, elsewhere
-/// `$XDG_CONFIG_HOME/powerwhittle`, else `~/.config/powerwhittle`.
+/// `$XDG_CONFIG_HOME/powerwhittle`, else `~/.config/powerwhittle`. Until
+/// [`bring_over_settings`] has finished, the old folder instead ([`settings_folder`]).
 pub fn config_dir() -> Option<PathBuf> {
-    config_base().map(|dir| dir.join(SETTINGS_FOLDER))
+    config_base().map(|base| settings_folder(&base))
+}
+
+/// The settings folder in `base`: the new one, unless the old one is there and has not all
+/// come over yet. Then the old one, so nothing the app saves can shadow a setting still to come
+/// over, and the next start brings everything across, changes and all.
+pub fn settings_folder(base: &Path) -> PathBuf {
+    let (old, new) = (base.join(OLD_SETTINGS_FOLDER), base.join(SETTINGS_FOLDER));
+    if old.is_dir() && !new.join(BROUGHT_OVER).exists() {
+        old
+    } else {
+        new
+    }
 }
 
 /// Left in the new settings folder once everything from the old one is in it.
@@ -49,9 +62,10 @@ pub const BROUGHT_OVER: &str = ".brought-over-from-cut-craft";
 
 /// On the first start after the rename, copies the old settings folder in `base` into the new
 /// one, so everything set before carries on. The old folder is left as it was, so going back
-/// to an older copy still finds its settings. A file already in the new folder is kept, so a
-/// start that stopped part way (or a file put there by hand first) is finished the next time,
-/// and [`BROUGHT_OVER`] marks it done only once every file is in. Whether anything was copied:
+/// to an older copy still finds its settings. A file already in the new folder is kept unless
+/// the old one changed after it, so a start that stopped part way is finished the next time
+/// with what was saved meanwhile in the old folder ([`settings_folder`]), and a file put there
+/// by hand first stays. [`BROUGHT_OVER`] marks it done only once every file is in. Whether anything was copied:
 /// nothing is once it is done, or when there was never an old folder.
 pub fn bring_over_settings(base: &Path) -> std::io::Result<bool> {
     let (old, new) = (base.join(OLD_SETTINGS_FOLDER), base.join(SETTINGS_FOLDER));
@@ -68,9 +82,11 @@ pub fn bring_over_old_settings() -> std::io::Result<bool> {
     config_base().map_or(Ok(false), |base| bring_over_settings(&base))
 }
 
-/// Copies what `to` lacks from `from`. Each file is written beside its place first and then
-/// linked into it, so a copy cut short is never taken for the whole file, and two windows
-/// started together never write over each other's files.
+/// Copies what `to` lacks, or has only an older copy of, from `from`. A copy's time is when it
+/// was made, so a file that came over before is copied again only when the old one has changed
+/// since. Each file is written beside its place first and then linked into it, so a copy cut
+/// short is never taken for the whole file, and two windows started together never write over
+/// each other's files.
 fn copy_missing(from: &Path, to: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(to)?;
     for entry in std::fs::read_dir(from)? {
@@ -78,14 +94,24 @@ fn copy_missing(from: &Path, to: &Path) -> std::io::Result<()> {
         let target = to.join(entry.file_name());
         if entry.file_type()?.is_dir() {
             copy_missing(&entry.path(), &target)?;
-        } else if !target.exists() {
+            continue;
+        }
+        let made = entry.metadata()?.modified()?;
+        if is_older(&target, made) {
             let mut part = target.clone().into_os_string();
             part.push(format!(".copying-{}", std::process::id()));
             std::fs::copy(entry.path(), &part)?;
-            // a link is made only where there is no file yet, never over one, so a setting
-            // another window has saved meanwhile is never replaced by the old one
+            // a link is made only where there is no file yet, and an older copy is replaced
+            // only while it is still older, so a setting another window has saved meanwhile
+            // is never replaced by the old one
             let linked = match std::fs::hard_link(&part, &target) {
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                    if is_older(&target, made) {
+                        std::fs::rename(&part, &target)
+                    } else {
+                        Ok(())
+                    }
+                }
                 // a folder that cannot link files
                 Err(_) if !target.exists() => std::fs::rename(&part, &target),
                 done => done,
@@ -95,6 +121,13 @@ fn copy_missing(from: &Path, to: &Path) -> std::io::Result<()> {
         }
     }
     Ok(())
+}
+
+/// Whether `file` is missing, or was last changed before `than`.
+fn is_older(file: &Path, than: std::time::SystemTime) -> bool {
+    std::fs::metadata(file)
+        .and_then(|m| m.modified())
+        .map_or(true, |changed| changed < than)
 }
 
 #[cfg(windows)]
