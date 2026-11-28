@@ -3944,3 +3944,25 @@ setting-after-the-steps-down-one-8b1d6b =
     After the steps down, one last pass along the outline, a finishing stepover apart, so
     a turned part comes off smooth: for a part that is round all along, finished here with
     no carving after
+
+## Drill Grid (gadget_drill_grid)
+setting-draws-a-grid-of-circles-4b8dff = Draws a grid of circles in the middle of the job.
+setting-columns-across-62c44c = Columns (across)
+setting-how-many-holes-in-each-323285 = How many holes in each row, left to right.
+setting-rows-up-eff2cc = Rows (up)
+setting-how-many-rows-of-holes-fa350e = How many rows of holes, bottom to top.
+setting-spacing-across-ff55a7 = Spacing across
+setting-from-one-hole-s-centre-78ec11 = From one hole's centre to the next one's, left to right.
+setting-spacing-up-dce0b7 = Spacing up
+setting-from-one-hole-s-centre-9ed694 = From one hole's centre to the next one's, bottom to top.
+setting-hole-diameter-c90a9e = Hole diameter
+setting-how-wide-each-hole-is-8b8d3f = How wide each hole is drawn.
+
+## Hole Pattern (gadget_hole_pattern)
+setting-draws-circles-spaced-evenly-round-db3365 = Draws circles spaced evenly round a circle in the middle of the job.
+setting-number-of-holes-d854d2 = Number of holes
+setting-how-many-holes-spaced-evenly-0644bd = How many holes, spaced evenly round the circle.
+setting-pattern-diameter-f64ce4 = Pattern diameter
+setting-the-size-of-the-circle-bc8911 = The size of the circle the holes' centres sit on.
+setting-first-hole-at-degrees-62a986 = First hole at (degrees)
+setting-0-is-to-the-right-be5ad6 = 0 is to the right of the middle, 90 is straight up.

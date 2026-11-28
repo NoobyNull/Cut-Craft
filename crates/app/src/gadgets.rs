@@ -190,6 +190,17 @@ fn add(
     Ok(listed)
 }
 
+/// PowerWhittle's commands with the gadgets that come with it added, and those gadgets as
+/// the menu lists them: the commands whose English words go into Fluent, as the user's own
+/// gadgets bring their own words.
+#[cfg(test)]
+pub fn with_built_in() -> (Registry, Vec<Listed>) {
+    let mut registry = crate::commands::registry();
+    let loaded = load(&mut registry, None, &[], &Trust::new(None));
+    assert!(loaded.problems.is_empty(), "{:?}", loaded.problems);
+    (registry, loaded.built_in)
+}
+
 /// The `.lua` files in `dir`, by name.
 fn lua_files(dir: &Path) -> Vec<PathBuf> {
     let mut files: Vec<PathBuf> = std::fs::read_dir(dir).map_or_default(|entries| {

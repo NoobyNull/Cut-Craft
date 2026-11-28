@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-28
 see-also: settings, addons, bug_reports
 ---
 
@@ -70,7 +70,10 @@ same way wherever you see it. It translates what each tool does in its tooltip, 
 tool's form and settings, the right-click menus of your layers, sheets, levels and
 toolpaths, what the status bar says, and the hints and buttons around the 2D view and the
 layers list, Machine Configuration, the Bit Library and the Report a Bug form, and what a
-tool says when it cannot run, too. When a newer pack is published, **Gadgets ▸ Add-ons**
+tool says when it cannot run, too. The **Gadgets** menu is translated as well: **My
+Gadgets**, its items, and the gadgets that come with PowerWhittle (**Drill Grid**, **Hole
+Pattern**) with their forms. A gadget you added yourself keeps the name and words its file
+gives. When a newer pack is published, **Gadgets ▸ Add-ons**
 offers to update it.
 
 If a pack you picked is removed, PowerWhittle goes back to English the next time it starts

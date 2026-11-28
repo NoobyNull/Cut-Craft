@@ -34,7 +34,8 @@ fn schemas() -> Vec<(String, Value)> {
             as_value(schemars::schema_for!(fmt_export_as_stl::Settings)),
         ),
     ];
-    let registry = crate::commands::registry();
+    // with the gadgets that come with PowerWhittle, whose forms show in the Gadgets menu
+    let registry = crate::gadgets::with_built_in().0;
     for c in registry.commands() {
         all.push((format!("{} ({})", c.meta().label, c.id()), c.schema()));
     }

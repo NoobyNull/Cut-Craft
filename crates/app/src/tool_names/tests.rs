@@ -24,6 +24,12 @@ fn every_tool() -> Vec<&'static str> {
             ids.push(c.id());
         }
     }
+    // the gadgets that come with PowerWhittle, in the Gadgets menu
+    for g in crate::gadgets::with_built_in().1 {
+        if !ids.iter().any(|id| *id == g.id) {
+            ids.push(Box::leak(g.id.into_boxed_str()));
+        }
+    }
     for b in crate::app::built_ins::BUILT_INS {
         if !ids.contains(&b.id) {
             ids.push(b.id);
@@ -73,7 +79,10 @@ fn every_page_tab() -> Vec<&'static str> {
 /// tool and of a sub-tab, and those of a job's toolpaths, layers, sheets, levels, components
 /// and groups.
 fn every_menu_item() -> Vec<String> {
-    let menus = MenuSystem::new();
+    let mut menus = MenuSystem::new();
+    // the Gadgets menu as it starts: the gadgets that come with PowerWhittle, and My Gadgets
+    // with none of the user's own yet
+    menus.add_gadgets(&crate::gadgets::with_built_in().1, &[]);
     let mut items: Vec<gui::MenuItem> = Vec::new();
     for menu in menus.menus.iter().chain(&menus.without_job().menus) {
         items.extend(menu.items.iter().cloned());
@@ -138,7 +147,7 @@ fn every_menu_item() -> Vec<String> {
 /// from the code rather than from `tools.ftl` as built, so `write_english_names` agrees with
 /// itself in one run.
 fn menu_item_names(items: &[gui::MenuItem], out: &mut Vec<String>) {
-    let registry = crate::commands::registry();
+    let registry = crate::gadgets::with_built_in().0;
     let tools = every_tool();
     let named_as_tool = |item: &gui::MenuItem| {
         let built_in =
@@ -175,7 +184,7 @@ fn check(problems: &[String], file: &str) {
 
 #[test]
 fn every_tool_has_its_name_in_english() {
-    let registry = crate::commands::registry();
+    let registry = crate::gadgets::with_built_in().0;
     let problems: Vec<String> = every_tool()
         .into_iter()
         .filter_map(|id| mismatch(&tool_key(id), &english_name(&registry, id)))
@@ -313,6 +322,20 @@ fn a_menu_item_named_as_its_tool_shares_the_tools_words() {
 }
 
 #[test]
+fn a_gadget_that_comes_with_powerwhittle_is_named_from_fluent() {
+    let (_, built_in) = crate::gadgets::with_built_in();
+    for g in built_in {
+        let item = gui::MenuItem::with_action(&g.label, &g.id);
+        assert!(
+            english().has(&tool_key(&g.id)),
+            "{} has no name in tools.ftl",
+            g.id
+        );
+        assert_eq!(menu_item_name(&item), g.label);
+    }
+}
+
+#[test]
 fn a_name_with_no_key_shows_as_given() {
     assert_eq!(
         tool_name("gadget:hole_pattern", "Hole Pattern"),
@@ -333,7 +356,7 @@ fn a_name_with_no_key_shows_as_given() {
 #[ignore = "writes files; run by hand"]
 fn write_english_names() {
     use std::fmt::Write as _;
-    let registry = crate::commands::registry();
+    let registry = crate::gadgets::with_built_in().0;
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../i18n/locales/en");
     let mut tools = String::from(TOOLS_HEADER);
     for id in every_tool() {
