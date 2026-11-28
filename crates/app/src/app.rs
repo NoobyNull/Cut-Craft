@@ -70,6 +70,7 @@ mod help_coverage;
 mod help_pictures;
 #[path = "help_tours.rs"]
 mod help_tours;
+mod icons_page;
 mod installed;
 mod job_files;
 mod keyboard;
@@ -704,6 +705,8 @@ pub(crate) struct CutCraftApp {
     /// The language packs installed, each with how much of PowerWhittle it covers (a
     /// percentage), for Options ▸ Language while it is open; read again when it next opens.
     language_packs: Option<Vec<(crate::languages::Pack, u32)>>,
+    /// The icon sets Options ▸ Icons offers, read while that page is open.
+    icon_sets: Option<Vec<crate::icon_themes::IconSet>>,
     /// The machines (Machine Configuration), the active one's default post saving
     /// toolpaths; without one, PowerWhittle's own `FluidNC` post for the job does.
     machines: cut_craft_machines::Machines,

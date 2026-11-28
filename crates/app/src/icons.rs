@@ -27,6 +27,9 @@ pub struct Icons {
     preloaded: bool,
     /// Whether the bitmaps are, which always are (for their alpha).
     bitmaps_loaded: bool,
+    /// The icon theme drawn over the built-in icons, if any (see [`Icons::with_theme`]): part
+    /// of where egui keeps each icon's bytes, so another theme's are never mistaken for them.
+    theme: String,
 }
 
 impl Icons {
@@ -36,6 +39,7 @@ impl Icons {
             by_stem: HashMap::new(),
             preloaded: false,
             bitmaps_loaded: false,
+            theme: String::new(),
         }
     }
 
@@ -88,6 +92,47 @@ impl Icons {
         }
     }
 
+    /// These icons with an icon theme's drawn over them: every picture in `dir` (laid out as
+    /// `assets/icons`, any of `.png`, `.svg` and `.bmp`) replaces the one at the same path,
+    /// whatever its own file type; anything the theme has no picture for keeps its own, and a
+    /// picture of the theme's that PowerWhittle has no place for is left out. `name` tells
+    /// this theme's pictures apart from another's.
+    #[must_use]
+    pub fn with_theme(mut self, name: &str, dir: &Path) -> Self {
+        let by_stem: HashMap<String, String> = self
+            .by_path
+            .keys()
+            .map(|key| (without_type(key).to_owned(), key.clone()))
+            .collect();
+        for (rel, source) in Self::load(dir).by_path {
+            if let Some(key) = by_stem.get(without_type(&rel)) {
+                self.by_path.insert(key.clone(), source);
+            }
+        }
+        self.theme = format!("{name}/");
+        self
+    }
+
+    /// `key` as the file it is read from now names it: a theme's PNG standing in for a
+    /// built-in SVG is read as a PNG.
+    fn real_key<'a>(&self, key: &'a str) -> std::borrow::Cow<'a, str> {
+        let found = match self.by_path.get(key) {
+            Some(Source::File(path)) => path.extension().and_then(|e| e.to_str()),
+            _ => None,
+        };
+        match found {
+            Some(ext) if !key.ends_with(&format!(".{ext}")) => {
+                format!("{}.{ext}", without_type(key)).into()
+            }
+            _ => key.into(),
+        }
+    }
+
+    /// Where an icon's bytes are kept in egui; the extension tells the loaders what it is.
+    fn uri(&self, key: &str) -> String {
+        format!("bytes://icons/{}{}", self.theme, self.real_key(key))
+    }
+
     fn index(&mut self, key: &str, source: Source) {
         if let Some(stem) = stands_in(key) {
             self.by_stem
@@ -111,7 +156,7 @@ impl Icons {
                 .values()
                 .any(|s| matches!(s, Source::BuiltIn(_)));
         for (key, source) in &self.by_path {
-            let bitmap = is_bitmap(key);
+            let bitmap = is_bitmap(&self.real_key(key));
             if !(built_in || bitmap && first || !bitmap && others) {
                 continue;
             }
@@ -129,9 +174,10 @@ impl Icons {
                     }
                 },
             };
-            ctx.include_bytes(uri(key), bytes);
+            let uri = self.uri(key);
+            ctx.include_bytes(uri.clone(), bytes);
             // decoding runs on a thread of egui's: started now, ready by the first draw
-            let _ = ctx.try_load_image(&uri(key), egui::SizeHint::default());
+            let _ = ctx.try_load_image(&uri, egui::SizeHint::default());
         }
         if built_in {
             self.preloaded = true;
@@ -141,12 +187,12 @@ impl Icons {
     /// An indexed icon: from the bytes [`Icons::preload`] handed over, else its file, read
     /// when first drawn.
     pub fn image(&self, key: &str) -> egui::Image<'static> {
-        let ready = self.preloaded || self.bitmaps_loaded && is_bitmap(key);
+        let ready = self.preloaded || self.bitmaps_loaded && is_bitmap(&self.real_key(key));
         match self.by_path.get(key) {
             Some(Source::File(path)) if !ready => {
                 egui::Image::new(format!("file://{}", path.display()))
             }
-            _ => egui::Image::new(uri(key)),
+            _ => egui::Image::new(self.uri(key)),
         }
     }
 
@@ -157,7 +203,7 @@ impl Icons {
             Source::BuiltIn(bytes) => (*bytes).into(),
             Source::File(path) => fs::read(path).ok()?.into(),
         };
-        let small = if is_svg(key) {
+        let small = if is_svg(&self.real_key(key)) {
             // drawn straight at the small size: the SVG reader is given no fonts (pictures
             // draw their letters as outlines)
             let hint = egui::SizeHint::Size {
@@ -210,9 +256,11 @@ fn stands_in(key: &str) -> Option<&str> {
     (!PICTURE_FOLDERS.contains(&folder)).then(|| stem.rsplit('/').next().unwrap_or(stem))
 }
 
-/// Where an icon's bytes are kept in egui; the extension tells the loaders what it is.
-fn uri(key: &str) -> String {
-    format!("bytes://icons/{key}")
+/// `key` without its file type: `diagrams/size_wh.svg` is `diagrams/size_wh`.
+fn without_type(key: &str) -> &str {
+    key.rsplit_once('.')
+        .filter(|(_, ext)| !ext.contains('/'))
+        .map_or(key, |(stem, _)| stem)
 }
 
 /// Whether an icon is drawn from shapes (an SVG), at whatever size it is shown.
@@ -383,6 +431,57 @@ mod tests {
         let png = icons.small_png("diagrams/size_wh.svg", 48).expect("made");
         let image = image::load_from_memory(&png).expect("a picture");
         assert_eq!((image.width(), image.height()), (48, 24));
+    }
+
+    #[test]
+    fn a_theme_draws_over_the_built_in_icons_and_leaves_the_rest() {
+        let dir = icon_dir("theme");
+        fs::create_dir_all(dir.join("diagrams")).unwrap();
+        let mut png = std::io::Cursor::new(vec![]);
+        image::RgbaImage::from_pixel(4, 2, image::Rgba([0, 0, 255, 255]))
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        // a PNG standing in for a built-in SVG, and one PowerWhittle has no place for
+        fs::write(dir.join("diagrams/size_wh.png"), png.get_ref()).unwrap();
+        fs::write(
+            dir.join("diagrams/not_a_picture_we_have.png"),
+            png.get_ref(),
+        )
+        .unwrap();
+        let mut icons = Icons::built_in().with_theme("3d", &dir);
+        let built_in = Icons::built_in();
+        assert_eq!(icons.by_path.len(), built_in.by_path.len(), "nothing added");
+        assert!(matches!(
+            icons.by_path.get("diagrams/size_wh.svg"),
+            Some(Source::File(_))
+        ));
+        assert!(matches!(
+            icons.by_path.get("drawing/align/left.png"),
+            Some(Source::BuiltIn(_))
+        ));
+        // the save button: the theme folder's SVG read instead of the built-in PNG
+        assert!(matches!(
+            icons.by_path.get("file/save.png"),
+            Some(Source::File(_))
+        ));
+        let ctx = egui::Context::default();
+        egui_extras::install_image_loaders(&ctx);
+        icons.preload(&ctx, false);
+        let uri = |key: &str| icons.image(key).source(&ctx).uri().unwrap().to_owned();
+        assert_eq!(
+            uri("diagrams/size_wh.svg"),
+            "bytes://icons/3d/diagrams/size_wh.png"
+        );
+        assert_eq!(
+            uri("drawing/align/left.png"),
+            "bytes://icons/3d/drawing/align/left.png"
+        );
+        let image = decoded(&ctx, &uri("diagrams/size_wh.svg")).expect("decodes");
+        assert_eq!(image.size, [4, 2], "the theme's picture, read as a PNG");
+        assert!(decoded(&ctx, &uri("drawing/align/left.png")).is_ok());
+        let small = icons.small_png("diagrams/size_wh.svg", 8).expect("made");
+        let small = image::load_from_memory(&small).expect("a picture");
+        assert_eq!((small.width(), small.height()), (8, 4));
     }
 
     #[test]

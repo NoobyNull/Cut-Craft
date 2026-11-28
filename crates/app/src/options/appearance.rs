@@ -455,3 +455,17 @@ pub struct Language {
 
 /// The Language page's key.
 pub const LANGUAGE: &str = "language";
+
+/// Which icons PowerWhittle's buttons and pictures are drawn with. Its page lists the choices
+/// itself (the icon sets installed), so it has no settings of the ordinary kind.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct IconChoice {
+    /// The icon set in use, as [`crate::icon_themes::IconSet::key`]; empty for the built-in
+    /// flat icons.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub set: String,
+}
+
+/// The Icons page's key.
+pub const ICONS: &str = "icons";

@@ -1,6 +1,6 @@
 ---
-reviewed: 2026-11-26
-see-also: relief_from_photo, open_gadgets_folder, settings, language, confirmation_choices, web_api
+reviewed: 2026-11-28
+see-also: relief_from_photo, open_gadgets_folder, settings, language, icons, confirmation_choices, web_api
 ---
 
 **Add-ons** brings in extra tools that are too big to come with PowerWhittle, such as the Depth
@@ -30,6 +30,12 @@ written. Everything you install is listed in **Gadgets ▸ My Gadgets**, and get
    installing it. You can still install it with **Install Anyway**, but nobody has checked
    what it does, so do that only if you trust whoever made it.
 4. When it is done, the add-on shows in **Gadgets ▸ My Gadgets** straight away.
+
+## Icon themes
+
+**3D Icons** draws every button in 3D, face-on or angled. Once it's installed, pick it in
+**Edit ▸ Options ▸ Icons** (see [Choosing the icons](help:icons)). Anything it has no
+picture for keeps its flat icon.
 
 ## Languages
 

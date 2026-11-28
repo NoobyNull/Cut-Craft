@@ -35,6 +35,11 @@ pub struct Options {
     #[serde(default)]
     #[schemars(title = "Language", extend("x-section" = true))]
     pub language: Language,
+    /// The icons PowerWhittle's buttons and pictures are drawn with: the flat ones, built in,
+    /// or a set from an icon theme installed from Gadgets ▸ Add-ons.
+    #[serde(default)]
+    #[schemars(title = "Icons", extend("x-section" = true))]
+    pub icons: IconChoice,
     /// How PowerWhittle starts, and what every new job starts with: the material, where X0 Y0
     /// and Z zero are, the rapid heights and home (the job settings under it).
     #[serde(default)]
@@ -256,6 +261,7 @@ impl Default for Options {
                 vcarve_direction: cmd_vcarve_engrave_toolpath::Direction::default(),
             },
             language: Language::default(),
+            icons: IconChoice::default(),
             performance: Performance::default(),
             general: General {
                 recent_file_list_size: u32::try_from(crate::files::RECENT_COUNT)

@@ -29,3 +29,9 @@ options-unsigned-forget = Forget These Answers
 options-unsigned-forgotten = Unsigned gadgets and add-ons will ask again before they next run.
 options-customize-toolbars = Customize Toolbars...
     .tooltip = Every tool beside your toolbars and Favourites: add, take off, move, make, rename and delete
+# The Icons page.
+icons-flat = Flat (built in)
+icons-none-installed = No icon themes are installed. Get one in Gadgets ▸ Add-ons.
+icons-fallback = Anything a set has no picture for keeps its flat icon. The icons change once you press Apply.
+# Status bar, when the icon set chosen is gone (removed in Gadgets ▸ Add-ons).
+icons-set-missing = The icon set you chose is not installed any more, so the flat icons are shown.

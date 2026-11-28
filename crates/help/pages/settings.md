@@ -1,12 +1,13 @@
 ---
-reviewed: 2026-11-27
+reviewed: 2026-11-28
 see-also: toolbars, backups, view_2d, performance, setup_material, job_setup, web_api, bug_reports, favourites, keyboard_shortcuts, colors_on_screen, confirmation_choices, screen_readers
 ---
 
 # Changing settings
 
 **Edit ▸ Options** holds PowerWhittle's settings, page by page down the left: how it looks,
-the mouse and shortcuts, toolpath previews, the [language](help:language), the Web API
+the mouse and shortcuts, toolpath previews, the [language](help:language), the
+[icons](help:icons), the Web API
 and more.
 
 A change you make there does **not** take effect straight away. It waits until you press

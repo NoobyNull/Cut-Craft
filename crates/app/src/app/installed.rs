@@ -19,6 +19,31 @@ impl CutCraftApp {
         if !pack.is_empty() {
             self.use_language(&pack);
         }
+        let set = self.options.icons.set.clone();
+        if !set.is_empty() {
+            self.use_icons(&set);
+        }
+    }
+
+    /// Draws every icon from the icon set `set` (its key; empty for the flat icons) from now
+    /// on, the flat ones standing in for any picture it lacks. One that is gone leaves the
+    /// flat icons, and the status bar says why; Options then says flat too.
+    pub(super) fn use_icons(&mut self, set: &str) {
+        let folder = self
+            .addons
+            .dir()
+            .and_then(|dir| crate::icon_themes::folder(dir, set));
+        self.icons = if let Some(folder) = folder {
+            crate::icons::Icons::default_set().with_theme(set, &folder)
+        } else {
+            if !set.is_empty() {
+                self.status
+                    .set_message(&cut_craft_i18n::tr!("icons-set-missing"));
+                self.options.icons.set.clear();
+                self.save_options();
+            }
+            crate::icons::Icons::default_set()
+        };
     }
 
     /// Shows every word in the language pack `pack` (its id; empty for English) from now
@@ -43,8 +68,9 @@ impl CutCraftApp {
             .addons
             .dir()
             .map_or_default(crate::addons::installed_tools);
-        // a pack installed or removed shows in Options ▸ Language
+        // a pack or icon theme installed or removed shows in Options
         self.language_packs = None;
+        self.icon_sets = None;
         self.relist_my_gadgets();
     }
 
