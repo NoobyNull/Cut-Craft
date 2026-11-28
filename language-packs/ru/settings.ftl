@@ -3975,3 +3975,25 @@ setting-after-the-steps-down-one-8b1d6b =
     После шагов вниз — последний проход по контуру с чистовым шагом, чтобы точёная деталь
     вышла гладкой: для детали, круглой по всей длине, которая доделывается здесь без
     последующей резьбы
+
+## Drill Grid (gadget_drill_grid)
+setting-draws-a-grid-of-circles-4b8dff = Рисует сетку окружностей в середине задания.
+setting-columns-across-62c44c = Столбцы (поперёк)
+setting-how-many-holes-in-each-323285 = Сколько отверстий в каждом ряду, слева направо.
+setting-rows-up-eff2cc = Ряды (вверх)
+setting-how-many-rows-of-holes-fa350e = Сколько рядов отверстий, снизу вверх.
+setting-spacing-across-ff55a7 = Шаг поперёк
+setting-from-one-hole-s-centre-78ec11 = От центра одного отверстия до центра следующего, слева направо.
+setting-spacing-up-dce0b7 = Шаг вверх
+setting-from-one-hole-s-centre-9ed694 = От центра одного отверстия до центра следующего, снизу вверх.
+setting-hole-diameter-c90a9e = Диаметр отверстия
+setting-how-wide-each-hole-is-8b8d3f = Какой ширины рисуется каждое отверстие.
+
+## Hole Pattern (gadget_hole_pattern)
+setting-draws-circles-spaced-evenly-round-db3365 = Рисует окружности, равномерно расставленные по кругу в середине задания.
+setting-number-of-holes-d854d2 = Число отверстий
+setting-how-many-holes-spaced-evenly-0644bd = Сколько отверстий, равномерно по кругу.
+setting-pattern-diameter-f64ce4 = Диаметр расстановки
+setting-the-size-of-the-circle-bc8911 = Размер окружности, на которой стоят центры отверстий.
+setting-first-hole-at-degrees-62a986 = Первое отверстие под углом (градусы)
+setting-0-is-to-the-right-be5ad6 = 0 — вправо от середины, 90 — прямо вверх.

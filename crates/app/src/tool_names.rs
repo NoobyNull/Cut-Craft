@@ -135,10 +135,16 @@ fn named_as_its_tool(item: &MenuItem) -> bool {
 }
 
 /// A menu item's name in the language in use: its tool's name when it is named as that
-/// tool, else its own words. A recent file or a gadget shows its own name.
+/// tool, else its own words. A recent file shows its own name, and so does a gadget the user
+/// added.
 pub fn menu_item_name(item: &MenuItem) -> String {
-    if item.named || item.action.starts_with("open_recent:") || item.action.starts_with("gadget_") {
+    if item.named || item.action.starts_with("open_recent:") {
         return item.name.clone();
+    }
+    // a gadget that comes with PowerWhittle has its name in tools.ftl; the user's own shows
+    // the name it gives
+    if item.action.starts_with("gadget_") {
+        return tool_name(&item.action, &item.name);
     }
     if named_as_its_tool(item) {
         return tr(&tool_key(&item.action));
