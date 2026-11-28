@@ -12,7 +12,7 @@ covers the ways PowerWhittle keeps your work safe in between.
 
 ## Increment and Save: a new copy each time
 
-![Increment and Save makes a new numbered copy each time](pictures/basics/increment_save.png)
+![Increment and Save makes a new numbered copy each time](pictures/basics/increment_save.svg)
 
 **File ▸ Increment and Save** (**Ctrl+Alt+S**) saves a new copy with the next number on
 its name, and leaves the file you had as it was:
@@ -29,7 +29,7 @@ the open file as usual.
 
 ## The recovery copy: work kept if the power goes
 
-![A recovery copy is kept every 30 seconds, so a power cut loses little](pictures/basics/recovery_copy.png)
+![A recovery copy is kept every 30 seconds, so a power cut loses little](pictures/basics/recovery_copy.svg)
 
 PowerWhittle copies your unsaved work every 30 seconds. If it closes without saving (a crash,
 a power cut), it opens that work again the next time it starts. The copy is kept until

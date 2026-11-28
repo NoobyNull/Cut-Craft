@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-27
+reviewed: 2026-11-28
 see-also: toolbars, interface_layout, settings, find_tool
 ---
 
@@ -8,7 +8,7 @@ see-also: toolbars, interface_layout, settings, find_tool
 Use a few tools all the time? Make them **favourites** and show just those, so you are not
 hunting through every group for them.
 
-![Right-click a tool's button to add it to your favourites](pictures/basics/favourites.png)
+![Right-click a tool's button to add it to your favourites](pictures/basics/favourites.svg)
 
 ## Adding a tool or a group
 

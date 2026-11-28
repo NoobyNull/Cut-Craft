@@ -215,8 +215,8 @@ fn every_tip_has_an_illustration_of_its_own_or_its_tools_icon() {
                     picture.starts_with("tips/")
                         && std::path::Path::new(picture)
                             .extension()
-                            .is_some_and(|e| e == "png"),
-                    "{picture}: a drawn illustration from assets/icons/tips"
+                            .is_some_and(|e| e == "svg"),
+                    "{picture}: a drawn illustration from assets/icons/tips, sharp at any size"
                 );
                 assert!(icons.contains(picture), "{picture} is not drawn");
                 assert!(seen.insert(picture), "{picture} illustrates two tips");
@@ -251,7 +251,7 @@ fn a_tip_about_a_tool_shows_that_tools_icon() {
         Some("toolpaths/pocket_toolpath.png"),
         "the same picture as the button and its help page"
     );
-    assert_eq!(h.tip_picture(&TIPS[0]), Some("tips/sample_project.png"));
+    assert_eq!(h.tip_picture(&TIPS[0]), Some("tips/sample_project.svg"));
 }
 
 #[test]

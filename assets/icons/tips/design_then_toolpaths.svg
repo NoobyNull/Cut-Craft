@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 224" width="448" height="224">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.8 L10,5 L0,8.2 Z" fill="#B0187E"/></marker><marker id="b" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.6 L10,5 L0,8.4 Z" fill="#3F6FB8"/></marker><marker id="g" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.5 L10,5 L0,8.5 Z" fill="#2E9E5B"/></marker><marker id="k" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.8 L10,5 L0,8.2 Z" fill="#9AA5B4"/></marker><marker id="r" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.5 L10,5 L0,8.5 Z" fill="#C0392B"/></marker></defs>
+  <rect x="0.5" y="0.5" width="447" height="223" rx="10" fill="#FBFAF7" stroke="#D9D4CC"/>
+  <rect x="40.0" y="30.0" width="368.0" height="164.0" rx="6" fill="#FFFFFF" stroke="#3F6FB8" stroke-width="1.6"/>
+  <rect x="52.0" y="42.0" width="60.0" height="140.0" rx="4" fill="#EEF2F8" stroke="#3F6FB8" stroke-width="1.6"/>
+  <rect x="336.0" y="42.0" width="60.0" height="140.0" rx="4" fill="#EEF2F8" stroke="#3F6FB8" stroke-width="1.6"/>
+  <path d="M76.92 69.14H80.58V58.78L76.83 59.55V56.74L80.56 55.96H84.49V69.14H88.14V72H76.92Z" fill="#B0187E"/>
+  <path d="M364.68 68.96H371.74V72H360.09V68.96L365.94 63.79Q366.73 63.08 367.1 62.41Q367.48 61.73 367.48 61Q367.48 59.87 366.72 59.18Q365.96 58.5 364.71 58.5Q363.74 58.5 362.59 58.91Q361.44 59.32 360.13 60.14V56.62Q361.53 56.16 362.89 55.91Q364.25 55.67 365.56 55.67Q368.44 55.67 370.04 56.94Q371.63 58.21 371.63 60.47Q371.63 61.78 370.96 62.92Q370.28 64.05 368.11 65.95Z" fill="#B0187E"/>
+  <rect x="64.0" y="90.0" width="36.0" height="18.0" rx="3" fill="#FFFFFF" stroke="#3F6FB8" stroke-width="1.6"/>
+  <rect x="64.0" y="118.0" width="36.0" height="18.0" rx="3" fill="#FFFFFF" stroke="#3F6FB8" stroke-width="1.6"/>
+  <rect x="64.0" y="146.0" width="36.0" height="18.0" rx="3" fill="#FFFFFF" stroke="#3F6FB8" stroke-width="1.6"/>
+  <rect x="348.0" y="90.0" width="36.0" height="18.0" rx="3" fill="#FFFFFF" stroke="#2E9E5B" stroke-width="1.6"/>
+  <rect x="348.0" y="118.0" width="36.0" height="18.0" rx="3" fill="#FFFFFF" stroke="#2E9E5B" stroke-width="1.6"/>
+  <rect x="348.0" y="146.0" width="36.0" height="18.0" rx="3" fill="#FFFFFF" stroke="#2E9E5B" stroke-width="1.6"/>
+  <path d="M224.0,74.0 L235.4,104.4 L267.7,105.8 L242.4,126.0 L251.0,157.2 L224.0,139.3 L197.0,157.2 L205.6,126.0 L180.3,105.8 L212.6,104.4 Z" stroke="#3F6FB8" stroke-width="1.6" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M224.0,66.0 L237.3,101.7 L275.4,103.3 L245.6,127.0 L255.7,163.7 L224.0,142.7 L192.3,163.7 L202.4,127.0 L172.6,103.3 L210.7,101.7 Z" stroke="#2E9E5B" stroke-width="1.4" fill="none" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="6 4"/>
+  <path d="M140,150 Q224,40 310,150" stroke="#B0187E" stroke-width="1.4" fill="none" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#a)"/>
+</svg>

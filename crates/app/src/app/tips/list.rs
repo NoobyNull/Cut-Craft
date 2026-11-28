@@ -9,7 +9,7 @@ use crate::options::WindowLayout;
 pub(in super::super) const TIPS: &[Tip] = &[
     scene(
         Area::Start,
-        "tips/sample_project.png",
+        "tips/sample_project.svg",
         "New to PowerWhittle? On the blank sheet it opens with, **Try a sample project** opens a \
          finished sign with its toolpaths already made, so you can see the whole journey from \
          drawing to cutting file before you start your own.",
@@ -17,42 +17,42 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     scene(
         Area::Start,
-        "tips/f1_help.png",
+        "tips/f1_help.svg",
         "Press **F1** with a tool's settings open to read the help for that tool. With nothing \
          open, F1 opens Help Contents, where you can search every tool.",
         "finding_help",
     ),
     scene(
         Area::Start,
-        "tips/hover_note.png",
+        "tips/hover_note.svg",
         "Not sure what a setting means? Hover the pointer over its name for a short note about \
          it.",
         "finding_help",
     ),
     scene(
         Area::Start,
-        "tips/tool_list.png",
+        "tips/tool_list.svg",
         "The **?** at the top of the Design and Toolpaths pages lists every tool on that page, \
          each with a page of help.",
         "design",
     ),
     scene(
         Area::Start,
-        "tips/design_then_toolpaths.png",
+        "tips/design_then_toolpaths.svg",
         "PowerWhittle works in two steps. **Design** is where you draw what you want. \
          **Toolpaths** is where you tell the machine how to cut it.",
         "getting_started",
     ),
     scene(
         Area::Start,
-        "tips/preview_cut.png",
+        "tips/preview_cut.svg",
         "Always **Preview** a toolpath before you cut. It shows the bit carving the material on \
          screen, so a mistake costs nothing but a click.",
         "toolpaths",
     ),
     scene(
         Area::Drawing,
-        "tips/closed_shape.png",
+        "tips/closed_shape.svg",
         "Most toolpaths need a **closed** shape: one whose line meets itself all the way round. \
          **View ▸ Show Open Vector Ends** marks the gaps, and **Edit ▸ Join Open Ends** closes \
          them.",
@@ -60,7 +60,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     scene(
         Area::Drawing,
-        "tips/common_lines.png",
+        "tips/common_lines.svg",
         "Lines drawn in **red** are common lines: two vectors on the same layer lying exactly \
          on top of each other, as Paste or a copy that lands on its original leaves them. A \
          profile would cut that line twice, so delete or move the extra copy.",
@@ -68,14 +68,14 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     scene(
         Area::Toolpaths,
-        "tips/tool_database.png",
+        "tips/tool_database.svg",
         "Picking a bit from the **Bit Library** fills in its speeds, feeds and depth per pass \
          for you. Set them once for each bit and every toolpath uses them.",
         "tool_database",
     ),
     scene(
         Area::Toolpaths,
-        "tips/out_of_date.png",
+        "tips/out_of_date.svg",
         "Changed a shape, or the material's thickness in Job Setup, after making its toolpath? \
          The toolpath is marked out of date, and PowerWhittle offers to recalculate it. Saving or \
          sending an out-of-date toolpath always stops to ask first.",
@@ -83,55 +83,55 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     scene(
         Area::Program,
-        "tips/number_sums.png",
+        "tips/number_sums.svg",
         "Number fields take sums. Type **W/2** for half the material's width, or **T** for its \
          thickness, and the answer is worked out when you press Enter.",
         "number_fields",
     ),
     scene(
         Area::Program,
-        "tips/number_arrows.png",
+        "tips/number_arrows.svg",
         "Every number field has small up and down arrows. Hold **Shift** while clicking them \
          for steps ten times as big.",
         "number_fields",
     ),
     scene(
         Area::Start,
-        "tips/units.png",
+        "tips/units.svg",
         "Switching between millimetres and inches converts every measurement in the job, so \
          nothing changes size. Work in whichever your rulers and bits use.",
         "getting_started",
     ),
     scene(
         Area::Start,
-        "tips/mouse_zoom.png",
+        "tips/mouse_zoom.svg",
         "Roll the mouse wheel to zoom in and out about the pointer. Drag with the middle mouse \
          button to move around the drawing.",
         "view_2d",
     ),
     scene(
         Area::Start,
-        "tips/views_2d_3d.png",
+        "tips/views_2d_3d.svg",
         "**F2** shows the 2D view and **F3** the 3D view. **F11** and **F12** switch between \
          the layout for designing and the layout for machining.",
         "view_2d",
     ),
     scene(
         Area::Program,
-        "tips/esc_close.png",
+        "tips/esc_close.svg",
         "Press **Esc** to close the open tool's settings without making anything.",
         "keyboard_shortcuts",
     ),
     scene(
         Area::Drawing,
-        "tips/edit_again.png",
+        "tips/edit_again.svg",
         "Select a shape and press **E** to change it in the tool that made it, with the same \
          settings you used.",
         "keyboard_shortcuts",
     ),
     scene(
         Area::Drawing,
-        "tips/snapping.png",
+        "tips/snapping.svg",
         "Drawing snaps to the grid, guides and the ends and middles of lines. **F4** chooses \
          what it snaps to, and holding **Shift** while you draw turns snapping off. A shape \
          stays on what it snapped to until you move it on its own.",
@@ -139,21 +139,21 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     scene(
         Area::Start,
-        "tips/undo.png",
+        "tips/undo.svg",
         "Made a mistake? **Ctrl+Z** undoes it, as many times as you need. **Ctrl+Y** puts it \
          back.",
         "getting_started",
     ),
     scene(
         Area::Program,
-        "tips/favourites.png",
+        "tips/favourites.svg",
         "Use a tool all the time? Right-click its button ▸ **Add to Favourites**, then \
          right-click the page's tab to show just your favourites.",
         "favourites",
     ),
     scene(
         Area::Toolpaths,
-        "tips/bigger_bits_first.png",
+        "tips/bigger_bits_first.svg",
         "Pockets with fine detail cut much faster with **Clear with bigger bits first**: a \
          large bit clears the open space and the small bit only cuts the corners it can't \
          reach.",
@@ -161,21 +161,21 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     scene(
         Area::Cutting,
-        "tips/toolpath_time.png",
+        "tips/toolpath_time.svg",
         "**Toolpath Summary**, on the Toolpaths page, says how long each toolpath takes to cut, \
          so you know how long the machine will be busy before you start.",
         "toolpath_summary",
     ),
     scene(
         Area::Program,
-        "tips/increment_save.png",
+        "tips/increment_save.svg",
         "**File ▸ Increment and Save** saves a new copy with the next number on its name (sign_1, \
          then sign_2), so you can always go back to an earlier version.",
         "saving_jobs",
     ),
     scene(
         Area::Program,
-        "tips/recovery_copy.png",
+        "tips/recovery_copy.svg",
         "PowerWhittle keeps a recovery copy of unsaved work every 30 seconds. If the power goes \
          off, your work opens again next time, and the copy is kept until you save or close \
          it. **Edit ▸ Options ▸ General** sets how often.",
@@ -183,34 +183,34 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     scene(
         Area::Drawing,
-        "tips/trace_bitmap.png",
+        "tips/trace_bitmap.svg",
         "Have a picture or logo? **Trace Bitmap** turns it into vectors you can carve.",
         "trace_bitmap",
     ),
     scene(
         Area::Modelling,
-        "tips/relief_from_photo.png",
+        "tips/relief_from_photo.svg",
         "**Relief from Photo** (Modeling ▸ Shape Creation) turns a picture into a 3D shape to \
          carve.",
         "relief_from_photo",
     ),
     scene(
         Area::Cutting,
-        "tips/job_sheet.png",
+        "tips/job_sheet.svg",
         "**Toolpaths ▸ Print Job Sheet** prints what the job needs at the machine: the file \
          names, each bit and where it goes, and how long it all takes.",
         "print_job_sheet",
     ),
     scene(
         Area::Program,
-        "tips/report_bug.png",
+        "tips/report_bug.svg",
         "Something not working as it should? Right-click ▸ **Report a Bug Here…** sends a \
          report about the part of the window you clicked on.",
         "bug_reports",
     ),
     scene(
         Area::Program,
-        "tips/first_setup.png",
+        "tips/first_setup.svg",
         "Got a new machine, or set it up wrong the first time? **Help ▸ Run First-Time Setup \
          Again** asks the starting questions again, starting from your answers, and corrects \
          a machine you set up as not listed, keeping the posts you added to it and the rest \
@@ -219,7 +219,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     scene(
         Area::Program,
-        "tips/keyboard.png",
+        "tips/keyboard.svg",
         "**Help ▸ Keyboard Shortcuts** lists the key for every tool, so you can work without \
          the menus. **Edit ▸ Options ▸ Mouse and Shortcuts** changes them, and can put a tool \
          or panning on your mouse's thumb buttons.",
@@ -1271,7 +1271,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     scene(
         Area::Program,
-        "tips/four_layouts.png",
+        "tips/four_layouts.svg",
         "PowerWhittle can arrange its window four ways: **Ribbon**, **Rail**, **Canvas** or \
          **Classic**. Press **Interface Layout** (under 2D View Control) to see each and pick \
          one. Every tool is in every layout.",
@@ -1279,7 +1279,7 @@ pub(in super::super) const TIPS: &[Tip] = &[
     ),
     scene(
         Area::Program,
-        "tips/canvas_layout.png",
+        "tips/canvas_layout.svg",
         "Want more room to draw? The **Canvas** layout gives the drawing the whole window: the \
          tools float in a small palette at the left and open as you point at them, and the \
          open form floats on the right. Press **Try Canvas** to switch, and **Interface \

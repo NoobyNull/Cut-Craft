@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-26
+reviewed: 2026-11-28
 see-also: view_3d, pan, zoom_box, zoom_to_job, keyboard_shortcuts, interface_layout, job_setup, settings
 icon: view/2d_view.png
 ---
@@ -12,7 +12,7 @@ the job.
 
 ## Zooming and moving with the mouse
 
-![Roll the wheel to zoom about the pointer; drag with the wheel pressed to move around](pictures/basics/mouse_zoom.png)
+![Roll the wheel to zoom about the pointer; drag with the wheel pressed to move around](pictures/basics/mouse_zoom.svg)
 
 1. Point at the part of the drawing you want a closer look at.
 2. **Roll the mouse wheel** away from you to zoom in, towards you to zoom out. The view
@@ -67,7 +67,7 @@ the toolpath preview in the [3D view](help:view_3d).
 
 ## 2D or 3D
 
-![F2 shows the 2D view and F3 the 3D view](pictures/basics/views_2d_3d.png)
+![F2 shows the 2D view and F3 the 3D view](pictures/basics/views_2d_3d.svg)
 
 - **F2** shows the 2D view, for drawing.
 - **F3** shows the 3D view, for models and the toolpath preview. See
