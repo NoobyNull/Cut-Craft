@@ -10,6 +10,24 @@ pub const JOB_EXTENSION: &str = "ccjob";
 pub const OLD_JOB_EXTENSION: &str = "ajob";
 /// Job templates: jobs that open as new, unsaved files.
 pub const TEMPLATE_EXTENSION: &str = "ccjobt";
+/// What jobs are saved as once the app is renamed `PowerWhittle` (release 1). The file inside
+/// is the same, so this copy opens them too.
+pub const RENAMED_JOB_EXTENSION: &str = "pwjob";
+/// Job templates saved once the app is renamed `PowerWhittle`.
+pub const RENAMED_TEMPLATE_EXTENSION: &str = "pwjobt";
+/// Every extension a job file opens under.
+pub const JOB_EXTENSIONS: [&str; 3] = [JOB_EXTENSION, RENAMED_JOB_EXTENSION, OLD_JOB_EXTENSION];
+/// Every extension a job template opens under.
+pub const TEMPLATE_EXTENSIONS: [&str; 2] = [TEMPLATE_EXTENSION, RENAMED_TEMPLATE_EXTENSION];
+
+/// Whether `path` is a job template, which opens as a new, unsaved job.
+pub fn is_template(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+        TEMPLATE_EXTENSIONS
+            .iter()
+            .any(|t| e.eq_ignore_ascii_case(t))
+    })
+}
 const FORMAT: &str = "cut-craft-job";
 const OLD_FORMAT: &str = "aspire-clone-job";
 /// Bump when the document's JSON shape changes, and teach `load_job` to read the old one.

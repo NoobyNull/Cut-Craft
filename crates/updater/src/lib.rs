@@ -264,14 +264,7 @@ pub fn install(install: &Install, found: &Found, step: &dyn Fn(Step)) -> Result<
                     step(Step::Installing);
                     return install_appimage(file, &asset.name, &bytes, &release.version);
                 }
-                Install::Archive { windows, .. } => {
-                    let name = if *windows {
-                        "cut-craft.exe"
-                    } else {
-                        "cut-craft"
-                    };
-                    package::program_from(&bytes, *windows, name)?
-                }
+                Install::Archive { windows, .. } => package::program_from(&bytes, *windows)?,
                 Install::Packaged { .. } | Install::Flatpak | Install::Elsewhere { .. } => {
                     unreachable!("only downloads have an asset")
                 }

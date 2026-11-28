@@ -4,23 +4,26 @@
 //! `node_editing`, `snapping`, `gestures_2d`, `options_window` and `dialog_windows`.
 
 use super::{
-    APP_NAME, Align, Change, CutCraftApp, DESIGN_TABS, DROP_SHADE, EntityId, JOB_EXTENSION, Layout,
-    OLD_JOB_EXTENSION, RESOLUTIONS, Screen, Split, UNITS, Value, View, ViewTransform, bordered,
-    egui, file_name, files, page_width, paint_focus_ring, show_page,
+    APP_NAME, Align, Change, CutCraftApp, DESIGN_TABS, DROP_SHADE, EntityId, Layout, RESOLUTIONS,
+    Screen, Split, UNITS, Value, View, ViewTransform, bordered, egui, file_name, files, page_width,
+    paint_focus_ring, show_page,
 };
 use crate::options::WindowLayout;
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_core::document::Units;
+use cut_craft_core::file::{JOB_EXTENSIONS, TEMPLATE_EXTENSIONS};
 use cut_craft_i18n::tr;
 
 /// Where a crash log is kept when the person chose not to send crash logs.
 const LAST_CRASH: &str = "last-crash.log";
 
 /// The extensions of the files that, dropped or opened with PowerWhittle, open as a job.
-const DROPPED_JOBS: [&str; 3] = [
-    JOB_EXTENSION,
-    OLD_JOB_EXTENSION,
-    cut_craft_core::file::TEMPLATE_EXTENSION,
+const DROPPED_JOBS: [&str; 5] = [
+    JOB_EXTENSIONS[0],
+    JOB_EXTENSIONS[1],
+    JOB_EXTENSIONS[2],
+    TEMPLATE_EXTENSIONS[0],
+    TEMPLATE_EXTENSIONS[1],
 ];
 
 /// How far beyond the selection's corners its rotation handles sit, in pick reaches.

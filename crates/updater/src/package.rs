@@ -74,11 +74,27 @@ pub fn verify_signature(
     }
 }
 
-/// The program `name` (`cut-craft` or `cut-craft.exe`) inside a release archive.
-pub fn program_from(archive: &[u8], zip: bool, name: &str) -> Result<Vec<u8>, String> {
+/// The names the program can have inside a release archive: today's, then the one it takes
+/// when the app is renamed `PowerWhittle` at release 1, so this copy can still update to it.
+pub fn program_names(windows: bool) -> [&'static str; 2] {
+    if windows {
+        ["cut-craft.exe", "powerwhittle.exe"]
+    } else {
+        ["cut-craft", "powerwhittle"]
+    }
+}
+
+/// The program inside a release archive (a `.zip` for Windows, else a `.tar.gz`), under
+/// any of its [`program_names`].
+pub fn program_from(archive: &[u8], windows: bool) -> Result<Vec<u8>, String> {
+    let wanted = program_names(windows);
+    let name = wanted.join(" or ");
     let missing = || format!("the download has no {name} in it");
-    let named = |path: &Path| path.file_name().is_some_and(|f| f == name);
-    if zip {
+    let named = |path: &Path| {
+        path.file_name()
+            .is_some_and(|f| wanted.iter().any(|n| f == *n))
+    };
+    if windows {
         let mut z = zip::ZipArchive::new(std::io::Cursor::new(archive))
             .map_err(|e| format!("the download is not a readable .zip ({e})"))?;
         let index = (0..z.len())
@@ -312,12 +328,9 @@ mod tests {
             ("cut-craft-v0.4.4-linux-x86_64/README.md", b"readme"),
             ("cut-craft-v0.4.4-linux-x86_64/cut-craft", b"\x7fELF new"),
         ]);
-        assert_eq!(
-            program_from(&archive, false, "cut-craft").unwrap(),
-            b"\x7fELF new"
-        );
-        assert!(program_from(&archive, false, "cut-craft.exe").is_err());
-        assert!(program_from(b"not gzip", false, "cut-craft").is_err());
+        assert_eq!(program_from(&archive, false).unwrap(), b"\x7fELF new");
+        assert!(program_from(&archive, true).is_err());
+        assert!(program_from(b"not gzip", false).is_err());
     }
 
     #[test]
@@ -326,15 +339,24 @@ mod tests {
             ("cut-craft-v0.4.4-windows-x86_64/README.md", b"readme"),
             ("cut-craft-v0.4.4-windows-x86_64/cut-craft.exe", b"MZ new"),
         ]);
-        assert_eq!(
-            program_from(&archive, true, "cut-craft.exe").unwrap(),
-            b"MZ new"
-        );
+        assert_eq!(program_from(&archive, true).unwrap(), b"MZ new");
+        let tar = tar_gz(&[("cut-craft-v0.4.4-linux-x86_64/cut-craft.exe", b"MZ new")]);
         assert!(
-            program_from(&archive, true, "cut-craft")
+            program_from(&tar, false)
                 .unwrap_err()
                 .contains("no cut-craft")
         );
+    }
+
+    #[test]
+    fn takes_the_program_out_of_a_download_made_after_the_rename_to_powerwhittle() {
+        let linux = tar_gz(&[("powerwhittle-1.0.0-linux-x86_64/powerwhittle", b"\x7fELF 1")]);
+        assert_eq!(program_from(&linux, false).unwrap(), b"\x7fELF 1");
+        let windows = zip(&[(
+            "powerwhittle-1.0.0-windows-x86_64/powerwhittle.exe",
+            b"MZ 1",
+        )]);
+        assert_eq!(program_from(&windows, true).unwrap(), b"MZ 1");
     }
 
     fn scratch(name: &str) -> PathBuf {

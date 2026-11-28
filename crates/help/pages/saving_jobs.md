@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-23
+reviewed: 2026-11-27
 see-also: save, open, save_toolpaths, setup_material, settings, updates
 icon: common/save.png
 ---
@@ -66,7 +66,8 @@ changes, still marked with **\*** in the title and still kept for recovery.
 Open a file **with PowerWhittle** from your file manager (**Open With**, or drag it onto Cut
 Craft's icon) and PowerWhittle starts with it:
 
-- A job (`.ccjob`) opens.
+- A job (`.ccjob`) opens. So does a job saved by PowerWhittle, this app's new name from
+  release 1 (`.pwjob`, and `.pwjobt` for a template): it is the same file under a new name.
 - A drawing or picture (DXF, SVG, PNG, JPG and the rest) is brought into a new, blank job.
   Change the material's size to fit it with [Setup Material](help:setup_material).
 - With **Classic Startup Flow** ticked (**Edit ▸ Options ▸ Job Defaults**), Job Setup asks

@@ -373,9 +373,7 @@ impl CutCraftApp {
         match opened {
             Ok((mut session, doc, history)) => {
                 self.reset_job();
-                let template = path
-                    .extension()
-                    .is_some_and(|e| e == cut_craft_core::file::TEMPLATE_EXTENSION);
+                let template = cut_craft_core::file::is_template(path);
                 if template {
                     // a template opens as a new file: saving asks where, the template stays
                     session.path = None;
