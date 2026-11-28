@@ -1,0 +1,17 @@
+send-asks-once-more-before-deleting = Перед удалением спросит ещё раз
+send-cancel = Отмена
+send-copy-files-from-this-computer = Скопировать файлы с этого компьютера в эту папку. Если файл с таким именем уже есть, перед заменой будет задан вопрос
+send-delete = Удалить
+send-keep = Оставить
+send-make = Создать
+send-new-folder = Новая папка
+send-new-folder-2 = Новая папка
+send-nothing-here-yet-send-to = Здесь пока ничего нет. «Отправить на станок» в окне «Сохранить траектории» помещает файлы сюда
+send-ok = ОК
+send-open-this-folder = Открыть эту папку
+send-refresh = Обновить
+send-rename = Переименовать
+send-upload-files = Загрузить файлы…
+send-folder = папка
+send-up = ⬆ Вверх
+send-machine-files-at = Файлы станка: { $place }

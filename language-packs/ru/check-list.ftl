@@ -1,0 +1,16 @@
+check-list-checking-the-toolpaths-a-big = Проверка траекторий: большая 3D-траектория проверяется некоторое время
+check-list-checks-before-cutting = Проверки перед резкой
+check-list-tick-to-say-you-have = Отметьте, чтобы подтвердить, что вы прочитали это и так и задумано
+check-list-tick-to-save-with-error = Отметьте, чтобы подтвердить, что вы это прочитали: тогда траектории можно будет сохранить с этой проблемой, а «Всё равно сохранить» спросит ещё раз
+check-list-not-checked = не проверено: { $why }
+check-list-count-passed = ✔ пройдено: { $count }
+check-list-count-to-read = ⚠ прочитать: { $count }
+check-list-count-damage = ⛔ могут повредить станок: { $count }
+check-list-count-must-fix = ✖ нужно исправить: { $count }
+check-list-count-not-checked = не проверено: { $count }
+check-list-what-each-check-looks-for = Что ищет каждая проверка и как исправить найденное
+check-list-read-each-and-tick = Прочитайте каждое ⚠ и отметьте его: «Сохранить траектории» и «Отправить на станок» ждут, пока не будут отмечены все
+check-list-refused = ⛔ Не сохраняется и не отправляется, пока это может повредить станок: исправьте проблему или отключите эту проверку в разделе «Защита станка» Конфигурации станка
+check-list-switch-off-to-save = Отметить нельзя: это может повредить станок. Исправьте проблему или отключите проверку в разделе «Защита станка» Конфигурации станка
+check-list-damage-message = Может повредить станок: { $message }
+check-list-must-fix-message = Нужно исправить: { $message }

@@ -1,0 +1,17 @@
+addons-languages = Языки
+addons-languages-about = PowerWhittle на другом языке. Каждый язык устанавливается отдельно; выберите его в меню Правка ▸ Параметры ▸ Язык. Слова, которых нет в пакете, показываются на английском.
+addons-languages-asking = Запрашиваем у GitHub список языков...
+addons-install = Установить
+addons-a-gadget-or-other-add = Гаджет или другое дополнение, опубликованное на GitHub: введите его репозиторий, например owner/name, или вставьте ссылку. PowerWhittle установит его последний выпуск.
+addons-cancel = Отмена
+addons-cut-craft-add-ons = Дополнения PowerWhittle
+addons-extra-tools-that-are-too = Дополнительные инструменты, слишком большие, чтобы входить в PowerWhittle. После установки каждый появляется как обычный инструмент.
+addons-install-anyway = Всё равно установить
+addons-install-from-github = Установить с GitHub
+addons-installed-from-github = Установлено с GitHub
+addons-keep = Оставить
+addons-remove = Удалить
+addons-asking-repo = Запрашиваем у GitHub последний выпуск { $repo }...
+addons-downloading = Загрузка { $name }...
+addons-not-official-heading = ⚠ Неофициальное
+addons-from-repo = { $id }, из { $repo }
