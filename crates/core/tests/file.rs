@@ -245,3 +245,34 @@ fn after_a_failed_bring_over_the_app_saves_in_the_old_folder_and_the_next_start_
     );
     std::fs::remove_dir_all(&base).unwrap();
 }
+
+#[test]
+fn starts_at_the_same_time_take_turns_and_bring_the_settings_over_once() {
+    use cut_craft_core::file::bring_over_settings;
+    let base = std::env::temp_dir().join(format!("pw-settings-together-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let old = base.join("cut-craft");
+    std::fs::create_dir_all(old.join("posts")).unwrap();
+    for n in 0..50 {
+        std::fs::write(old.join(format!("posts/{n}.pp")), format!("post {n}")).unwrap();
+    }
+    let starts: Vec<_> = (0..4)
+        .map(|_| {
+            let base = base.clone();
+            std::thread::spawn(move || bring_over_settings(&base).unwrap())
+        })
+        .collect();
+    let brought = starts
+        .into_iter()
+        .map(|s| s.join().unwrap())
+        .filter(|&b| b)
+        .count();
+    assert_eq!(brought, 1, "one start brings them, the others find it done");
+    for n in 0..50 {
+        assert_eq!(
+            std::fs::read_to_string(base.join(format!("powerwhittle/posts/{n}.pp"))).unwrap(),
+            format!("post {n}")
+        );
+    }
+    std::fs::remove_dir_all(&base).unwrap();
+}

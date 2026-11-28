@@ -59,17 +59,28 @@ pub fn settings_folder(base: &Path) -> PathBuf {
 
 /// Left in the new settings folder once everything from the old one is in it.
 pub const BROUGHT_OVER: &str = ".brought-over-from-cut-craft";
+/// Locked in the new settings folder while a bring-over runs.
+const BRINGING_OVER: &str = ".bringing-over.lock";
 
 /// On the first start after the rename, copies the old settings folder in `base` into the new
 /// one, so everything set before carries on. The old folder is left as it was, so going back
 /// to an older copy still finds its settings. A file already in the new folder is kept unless
 /// the old one changed after it, so a start that stopped part way is finished the next time
 /// with what was saved meanwhile in the old folder ([`settings_folder`]), and a file put there
-/// by hand first stays. [`BROUGHT_OVER`] marks it done only once every file is in. Whether anything was copied:
-/// nothing is once it is done, or when there was never an old folder.
+/// by hand first stays. [`BROUGHT_OVER`] marks it done only once every file is in. Two starts
+/// at once take turns, and the second finds it done. Whether anything was copied: nothing is
+/// once it is done, or when there was never an old folder.
 pub fn bring_over_settings(base: &Path) -> std::io::Result<bool> {
     let (old, new) = (base.join(OLD_SETTINGS_FOLDER), base.join(SETTINGS_FOLDER));
     if !old.is_dir() || new.join(BROUGHT_OVER).exists() {
+        return Ok(false);
+    }
+    // one bring-over at a time, so none replaces a file after another has finished and the
+    // app has saved over it; the lock goes with the file when this returns
+    std::fs::create_dir_all(&new)?;
+    let lock = std::fs::File::create(new.join(BRINGING_OVER))?;
+    lock.lock()?;
+    if new.join(BROUGHT_OVER).exists() {
         return Ok(false);
     }
     copy_missing(&old, &new)?;
@@ -102,10 +113,9 @@ fn copy_missing(from: &Path, to: &Path) -> std::io::Result<()> {
             part.push(format!(".copying-{}", std::process::id()));
             std::fs::copy(entry.path(), &part)?;
             // a link is made only where there is no file yet, never over one. An older copy is
-            // replaced only while it is still older: until the bring-over is done nothing but
-            // another bring-over writes here ([`settings_folder`]), and that copies the same
-            // files. A folder that cannot link files fails the bring-over, so the app keeps to
-            // the old folder rather than risk a replace that is not checked as it is made.
+            // replaced only while it is still older: until the bring-over is done nothing else
+            // writes here ([`settings_folder`]), and bring-overs take turns. A folder that cannot
+            // link files fails the bring-over, so the app keeps to the old folder.
             let linked = match std::fs::hard_link(&part, &target) {
                 Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                     if is_older(&target, made) {
