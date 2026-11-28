@@ -74,8 +74,8 @@ fn windows_resources() {
         .set_icon(&ico.to_string_lossy())
         .set("ProductName", "PowerWhittle")
         .set("FileDescription", "PowerWhittle")
-        .set("OriginalFilename", "cut-craft.exe")
-        .set("InternalName", "cut-craft");
+        .set("OriginalFilename", "powerwhittle.exe")
+        .set("InternalName", "powerwhittle");
     resources
         .compile()
         .expect("the icon is built into cut-craft.exe (needs the Windows SDK's rc.exe)");

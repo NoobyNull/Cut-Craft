@@ -58,7 +58,7 @@ jobs:
               echo "$tag was made meanwhile by another run." >> "$GITHUB_STEP_SUMMARY"
               continue
             fi
-            git tag -a "$tag" "$commit" -m "Cut Craft $version"
+            git tag -a "$tag" "$commit" -m "PowerWhittle $version"
             if ! git push origin "refs/tags/$tag"; then
               # another run made it a moment ago: fine, it starts its own build
               if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then

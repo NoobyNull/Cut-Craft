@@ -416,9 +416,9 @@ pub(super) const SECTION_PICTURE_ROWS: f32 = 3.0;
 // ponytail: fixed share until there is a preferences dialog
 pub(super) const SPLASH_SHARE: f32 = 1.0 / 3.0;
 pub(super) const APP_NAME: &str = "PowerWhittle";
-/// How the desktop knows the window: the same name as the launcher, `cut-craft.desktop`,
-/// so the taskbar shows its icon.
-pub(super) const APP_ID: &str = "cut-craft";
+/// How the desktop knows the window: the launcher's `StartupWMClass`, so the taskbar shows
+/// its icon.
+pub(super) const APP_ID: &str = "powerwhittle";
 /// Tool icon edge, in rows of the theme's interactive height.
 // ponytail: fixed ratio until a preferences dialog exists
 pub(super) const TOOL_ICON_ROWS: f32 = 1.75;

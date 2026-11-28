@@ -13,7 +13,7 @@ please report them (see [Reporting bugs](#reporting-bugs)).
 
 - [What it does](#what-it-does)
 - [A tour](#a-tour)
-- [Getting Cut Craft](#getting-cut-craft)
+- [Getting PowerWhittle](#getting-powerwhittle)
 - [Using it](#using-it)
 - [Reporting bugs](#reporting-bugs)
 - [Building from source](#building-from-source)
@@ -196,17 +196,17 @@ the foot, and a box in the header finds a tool by name.
 These pictures are made by the app itself and can be made again at any time (see
 [Screenshots](#screenshots)).
 
-## Getting Cut Craft
+## Getting PowerWhittle
 
 | Platform | How |
 |---|---|
-| macOS (Apple Silicon and Intel) | Download `CutCraft-…-macos.dmg` from the repository's Releases and drag Cut Craft to Applications. It isn't signed by Apple, so the first time macOS says it can't check it: open **System Settings ▸ Privacy & Security**, scroll down to the line about Cut Craft and click **Open Anyway** (on macOS 14 and older, right-clicking Cut Craft and choosing **Open** also works). |
-| Linux (x86-64), AppImage | Download `CutCraft-…-x86_64.AppImage`, make it executable (`chmod +x`) and run it. One file, nothing to install; it needs FUSE 2 (`libfuse2`), which most desktops have. |
-| Linux (x86-64), Flatpak | Download `cut-craft-…-x86_64.flatpak` and install it with `flatpak install --user cut-craft-…-x86_64.flatpak` (Flathub's freedesktop runtime comes with it). Inside its sandbox Report a Bug can't reach `gh`, so reports are kept on disk. |
-| Linux (x86-64), Ubuntu, Debian, Mint | Download `cut-craft_…_amd64.deb` and open it, or run `sudo apt install ./cut-craft_…_amd64.deb`. Your package manager looks after it, so Help ▸ Check for Updates tells you about new versions but doesn't replace it. |
-| Linux (x86-64), Fedora, openSUSE | Download `cut-craft-…-1.x86_64.rpm` and run `sudo dnf install ./cut-craft-…-1.x86_64.rpm` (openSUSE: `sudo zypper install`). Updated the same way as the .deb. |
-| Linux (x86-64), archive | Download `cut-craft-…-linux-x86_64.tar.gz`, unpack it and run `./cut-craft`. Or [build from source](#building-from-source). |
-| Windows (x86-64) | Download `cut-craft-…-windows-x86_64.zip`, unpack it and run `cut-craft.exe`. It isn't signed, so SmartScreen may ask first: **More info ▸ Run anyway**. Not tested much yet. |
+| macOS (Apple Silicon and Intel) | Download `PowerWhittle-…-macos.dmg` from the repository's Releases and drag PowerWhittle to Applications. It isn't signed by Apple, so the first time macOS says it can't check it: open **System Settings ▸ Privacy & Security**, scroll down to the line about PowerWhittle and click **Open Anyway** (on macOS 14 and older, right-clicking PowerWhittle and choosing **Open** also works). |
+| Linux (x86-64), AppImage | Download `PowerWhittle-…-x86_64.AppImage`, make it executable (`chmod +x`) and run it. One file, nothing to install; it needs FUSE 2 (`libfuse2`), which most desktops have. |
+| Linux (x86-64), Flatpak | Download `powerwhittle-…-x86_64.flatpak` and install it with `flatpak install --user powerwhittle-…-x86_64.flatpak` (Flathub's freedesktop runtime comes with it). Inside its sandbox Report a Bug can't reach `gh`, so reports are kept on disk. |
+| Linux (x86-64), Ubuntu, Debian, Mint | Download `powerwhittle_…_amd64.deb` and open it, or run `sudo apt install ./powerwhittle_…_amd64.deb`. Your package manager looks after it, so Help ▸ Check for Updates tells you about new versions but doesn't replace it. |
+| Linux (x86-64), Fedora, openSUSE | Download `powerwhittle-…-1.x86_64.rpm` and run `sudo dnf install ./powerwhittle-…-1.x86_64.rpm` (openSUSE: `sudo zypper install`). Updated the same way as the .deb. |
+| Linux (x86-64), archive | Download `powerwhittle-…-linux-x86_64.tar.gz`, unpack it and run `./powerwhittle`. Or [build from source](#building-from-source). |
+| Windows (x86-64) | Download `powerwhittle-…-windows-x86_64.zip`, unpack it and run `powerwhittle.exe`. It isn't signed, so SmartScreen may ask first: **More info ▸ Run anyway**. Not tested much yet. |
 
 Each release has all of them, and each run of **Builds (Linux)**, **Builds (Windows)** and
 **Builds (macOS)** under Actions has that computer's. A release's files appear one computer at
@@ -323,7 +323,7 @@ of the others (`.github/workflows/builds-macos.yml`, `builds-linux.yml`, `builds
 Each starts the program on its runner to check it keeps running with its window set up:
 
 - **macOS:** `scripts/macos-dmg` builds for Apple Silicon and Intel, joins them into one
-  `Cut Craft.app` and packs it in a DMG. It runs on any Mac too.
+  `PowerWhittle.app` and packs it in a DMG. It runs on any Mac too.
 - **Linux:** a release build on Ubuntu 22.04, packed as a `.tar.gz`, and by
   `scripts/linux-packages` as an AppImage and a Flatpak bundle (`packaging/linux`), and by
   `scripts/linux-distro-packages` as a `.deb` and an `.rpm`. Publishing them to an apt and a

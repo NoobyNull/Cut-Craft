@@ -847,11 +847,12 @@ pub fn clipart_previews_path() -> Option<PathBuf> {
     cache_dir().map(|dir| dir.join("clipart-previews"))
 }
 
-/// Where PowerWhittle keeps files it can make again: `%LOCALAPPDATA%\cut-craft` on Windows,
-/// `~/Library/Caches/cut-craft` on macOS, elsewhere `$XDG_CACHE_HOME/cut-craft`, else
-/// `~/.cache/cut-craft`.
+/// Where PowerWhittle keeps files it can make again: `%LOCALAPPDATA%\powerwhittle` on
+/// Windows, `~/Library/Caches/powerwhittle` on macOS, elsewhere `$XDG_CACHE_HOME/powerwhittle`,
+/// else `~/.cache/powerwhittle`. Nothing is brought over from the old `cut-craft` folder: it
+/// is all made again when needed.
 fn cache_dir() -> Option<PathBuf> {
-    cache_base().map(|dir| dir.join("cut-craft"))
+    cache_base().map(|dir| dir.join("powerwhittle"))
 }
 
 #[cfg(windows)]

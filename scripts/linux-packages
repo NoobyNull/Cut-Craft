@@ -15,9 +15,9 @@ mkdir -p dist
 
 # AppImage: one file holding the program (its icons are built in), a launcher, the desktop
 # entry and icon, and the keyboard libraries the window loads, for systems without them
-appdir=dist/CutCraft.AppDir
+appdir=dist/PowerWhittle.AppDir
 rm -rf "$appdir"
-install -Dm755 "$program" "$appdir/usr/bin/cut-craft"
+install -Dm755 "$program" "$appdir/usr/bin/powerwhittle"
 mkdir -p "$appdir/usr/lib"
 for lib in libxkbcommon.so.0 libxkbcommon-x11.so.0 libxcb-xkb.so.1; do
     if [[ -n $libs ]]; then
@@ -36,8 +36,8 @@ if [[ -n $libs && -d $libs/licenses ]]; then
     mkdir -p "$appdir/usr/share/doc"
     cp -r "$libs/licenses/." "$appdir/usr/share/doc/"
 fi
-install -Dm644 LICENSE "$appdir/usr/share/doc/cut-craft/LICENSE"
-install -Dm644 -t "$appdir/usr/share/doc/cut-craft/credits" credits/*.md
+install -Dm644 LICENSE "$appdir/usr/share/doc/powerwhittle/LICENSE"
+install -Dm644 -t "$appdir/usr/share/doc/powerwhittle/credits" credits/*.md
 install -m755 packaging/linux/AppRun "$appdir/AppRun"
 cp packaging/linux/family.yax.CutCraft.desktop "$appdir/"
 rsvg-convert -w 256 -h 256 assets/cut-craft.svg -o "$appdir/family.yax.CutCraft.png"
@@ -51,20 +51,20 @@ if [[ -z $tool ]]; then
     chmod +x "$tool"
 fi
 # runs without FUSE, as on GitHub's runners
-APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 "$tool" "$appdir" "dist/CutCraft-${version}-x86_64.AppImage"
+APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 "$tool" "$appdir" "dist/PowerWhittle-${version}-x86_64.AppImage"
 
 # Flatpak: a bundle to install with `flatpak install --user`
 stage=packaging/linux/stage
 rm -rf "$stage"
 mkdir -p "$stage"
-cp "$program" "$stage/cut-craft"
+cp "$program" "$stage/powerwhittle"
 cp assets/cut-craft.svg "$stage/"
 cp packaging/linux/family.yax.CutCraft.desktop "$stage/"
 cp LICENSE "$stage/"
 cp -r credits "$stage/"
 flatpak-builder --user --force-clean --repo=dist/flatpak-repo dist/flatpak-build \
     packaging/linux/family.yax.CutCraft.yml
-flatpak build-bundle dist/flatpak-repo "dist/cut-craft-${version}-x86_64.flatpak" family.yax.CutCraft \
+flatpak build-bundle dist/flatpak-repo "dist/powerwhittle-${version}-x86_64.flatpak" family.yax.CutCraft \
     --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
 rm -rf "$stage"
 ls -l dist/*.AppImage dist/*.flatpak
