@@ -50,7 +50,7 @@ fi
 
 if gh release view "$tag" "${repo[@]}" >/dev/null 2>&1; then
   echo "$tag is already published: adding these files to it"
-elif gh release create "$tag" "${repo[@]}" --verify-tag --title "Cut Craft $tag" --generate-notes; then
+elif gh release create "$tag" "${repo[@]}" --verify-tag --title "PowerWhittle $tag" --generate-notes; then
   echo "published $tag"
 elif gh release view "$tag" "${repo[@]}" >/dev/null 2>&1; then
   # another computer's build made it a moment ago

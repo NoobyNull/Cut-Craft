@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-28
 see-also: toolpaths, web_api, contents, performance
 ---
 
@@ -46,7 +46,7 @@ A toolpath that took longer last time, or a preview with more moves to cut, gets
 share, so the bar moves at an even pace.
 
 PowerWhittle remembers how long each kind of job took in a small file, `job-times.json`, in
-its settings folder (on Linux `~/.config/powerwhittle`, on Windows `%APPDATA%\powerwhittle`,
+its settings folder (on Linux `~/.config/powerwhittle`, or `$XDG_CONFIG_HOME/powerwhittle` if you set that, on Windows `%APPDATA%\powerwhittle`,
 on a Mac `~/Library/Application Support/powerwhittle`). Deleting it only means the first
 guesses start from scratch.
 

@@ -1,11 +1,11 @@
 [Desktop Entry]
 Type=Application
-Name=Cut Craft
+Name=PowerWhittle
 GenericName=CNC Design and Toolpaths
 Comment=Design in 2D and 3D and make CNC toolpaths
-Exec=cut-craft %f
+Exec=powerwhittle %f
 Icon=family.yax.CutCraft
 Terminal=false
 Categories=Graphics;Engineering;
 Keywords=CNC;CAD;CAM;router;toolpath;vcarve;
-StartupWMClass=cut-craft
+StartupWMClass=powerwhittle

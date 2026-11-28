@@ -671,7 +671,7 @@ mod tests {
         let flatpak = Install::flatpak_steps(&Version::new(0, 6, 14));
         assert_eq!(
             commands_in(&flatpak),
-            ["flatpak install --user cut-craft-0.6.14-x86_64.flatpak"]
+            ["flatpak install --user powerwhittle-0.6.14-x86_64.flatpak"]
         );
         let apt = "Update it there: for example `sudo apt update && sudo apt upgrade`, \
                    `sudo dnf upgrade`, or `paru -Syu`.";

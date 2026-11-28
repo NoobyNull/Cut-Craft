@@ -163,3 +163,140 @@ fn settings_from_before_the_rename_come_over_once_and_stay_where_they_were() {
     assert!(!fresh.join("powerwhittle").exists());
     std::fs::remove_dir_all(&base).unwrap();
 }
+
+#[test]
+fn a_bring_over_cut_short_is_finished_next_start_keeping_what_the_new_folder_has() {
+    use cut_craft_core::file::{BROUGHT_OVER, bring_over_settings};
+    let base = std::env::temp_dir().join(format!("pw-settings-retry-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let (old, new) = (base.join("cut-craft"), base.join("powerwhittle"));
+    std::fs::create_dir_all(old.join("addons/ru")).unwrap();
+    std::fs::write(old.join("options.json"), "{\"old\": true}").unwrap();
+    std::fs::write(old.join("addons/ru/main.ftl"), "old pack").unwrap();
+    // a start that failed part way, after which the log made the new folder, and a pack
+    // copied in by hand before the first start
+    std::fs::create_dir_all(new.join("addons/ru")).unwrap();
+    std::fs::write(new.join("cut-craft.log"), "log").unwrap();
+    std::fs::write(new.join("addons/ru/main.ftl"), "new pack").unwrap();
+    assert!(bring_over_settings(&base).unwrap());
+    assert_eq!(
+        std::fs::read_to_string(new.join("options.json")).unwrap(),
+        "{\"old\": true}",
+        "what was missing comes over"
+    );
+    assert_eq!(
+        std::fs::read_to_string(new.join("addons/ru/main.ftl")).unwrap(),
+        "new pack",
+        "what the new folder had is kept"
+    );
+    assert!(new.join(BROUGHT_OVER).exists());
+    let left: Vec<_> = std::fs::read_dir(&new)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.contains(".copying"))
+        .collect();
+    assert!(left.is_empty(), "no part copies left: {left:?}");
+    // once done, it is not done again
+    std::fs::remove_file(new.join("options.json")).unwrap();
+    assert!(!bring_over_settings(&base).unwrap());
+    assert!(!new.join("options.json").exists());
+    std::fs::remove_dir_all(&base).unwrap();
+}
+
+#[test]
+fn after_a_failed_bring_over_the_app_saves_in_the_old_folder_and_the_next_start_brings_it() {
+    use cut_craft_core::file::{BROUGHT_OVER, COPIED_SO_FAR, bring_over_settings, settings_folder};
+    let base = std::env::temp_dir().join(format!("pw-settings-failed-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let (old, new) = (base.join("cut-craft"), base.join("powerwhittle"));
+    std::fs::create_dir_all(&old).unwrap();
+    std::fs::write(old.join("options.json"), "{\"mine\": true}").unwrap();
+    // a start that copied options.json, then failed on another file
+    std::fs::create_dir_all(&new).unwrap();
+    std::fs::write(new.join("options.json"), "{\"mine\": true}").unwrap();
+    std::fs::write(new.join(COPIED_SO_FAR), "options.json\n").unwrap();
+    assert_eq!(
+        settings_folder(&base),
+        old,
+        "the app keeps to the old folder"
+    );
+    // that session saves its options where it reads them, with the very same time as the
+    // part copy, as a folder that keeps times to the second or two can give
+    let copy_time = std::fs::metadata(new.join("options.json"))
+        .unwrap()
+        .modified()
+        .unwrap();
+    std::fs::write(old.join("options.json"), "{\"changed\": true}").unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(old.join("options.json"))
+        .unwrap()
+        .set_modified(copy_time)
+        .unwrap();
+    // the next start brings the saved options over, not the stale copy
+    assert!(bring_over_settings(&base).unwrap());
+    assert_eq!(
+        std::fs::read_to_string(new.join("options.json")).unwrap(),
+        "{\"changed\": true}"
+    );
+    assert!(new.join(BROUGHT_OVER).exists());
+    assert!(!new.join(COPIED_SO_FAR).exists(), "the list goes once done");
+    assert_eq!(
+        settings_folder(&base),
+        new,
+        "and from then on the new folder"
+    );
+    std::fs::remove_dir_all(&base).unwrap();
+}
+
+#[test]
+fn starts_at_the_same_time_take_turns_and_bring_the_settings_over_once() {
+    use cut_craft_core::file::bring_over_settings;
+    let base = std::env::temp_dir().join(format!("pw-settings-together-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let old = base.join("cut-craft");
+    std::fs::create_dir_all(old.join("posts")).unwrap();
+    for n in 0..50 {
+        std::fs::write(old.join(format!("posts/{n}.pp")), format!("post {n}")).unwrap();
+    }
+    let starts: Vec<_> = (0..4)
+        .map(|_| {
+            let base = base.clone();
+            std::thread::spawn(move || bring_over_settings(&base).unwrap())
+        })
+        .collect();
+    let brought = starts
+        .into_iter()
+        .map(|s| s.join().unwrap())
+        .filter(|&b| b)
+        .count();
+    assert_eq!(brought, 1, "one start brings them, the others find it done");
+    for n in 0..50 {
+        assert_eq!(
+            std::fs::read_to_string(base.join(format!("powerwhittle/posts/{n}.pp"))).unwrap(),
+            format!("post {n}")
+        );
+    }
+    std::fs::remove_dir_all(&base).unwrap();
+}
+
+#[test]
+fn a_list_of_copied_files_that_cannot_be_read_stops_the_bring_over() {
+    use cut_craft_core::file::{BROUGHT_OVER, COPIED_SO_FAR, bring_over_settings, settings_folder};
+    let base = std::env::temp_dir().join(format!("pw-settings-list-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let (old, new) = (base.join("cut-craft"), base.join("powerwhittle"));
+    std::fs::create_dir_all(&old).unwrap();
+    std::fs::write(old.join("options.json"), "{}").unwrap();
+    std::fs::create_dir_all(&new).unwrap();
+    std::fs::write(new.join(COPIED_SO_FAR), [0xff, 0xfe, b'\n']).unwrap();
+    assert!(bring_over_settings(&base).is_err());
+    assert!(!new.join(BROUGHT_OVER).exists(), "not taken as done");
+    assert_eq!(
+        settings_folder(&base),
+        old,
+        "the app keeps to the old folder"
+    );
+    std::fs::remove_dir_all(&base).unwrap();
+}

@@ -1,4 +1,4 @@
-# Cut Craft for Linux (x86-64): .tar.gz, AppImage, Flatpak, .deb and .rpm, each started or
+# PowerWhittle for Linux (x86-64): .tar.gz, AppImage, Flatpak, .deb and .rpm, each started or
 # installed where it is meant to run. It runs when the packaging changes on a pushed branch,
 # from the Actions tab, and on a release tag; each build is the run's artifact.
 # Each computer is built by its own workflow (builds-linux.yml, builds-windows.yml,
@@ -62,9 +62,12 @@ jobs:
       - name: Package the program
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-          name="cut-craft-${version}-linux-x86_64"
+          name="powerwhittle-${version}-linux-x86_64"
           mkdir -p "dist/$name"
-          cp -r target/release/cut-craft README.md LICENSE credits "dist/$name/"
+          cp target/release/cut-craft "dist/$name/powerwhittle"
+          # the same program under its old name too, for copies from before the rename, whose updater looks only for that name
+          cp target/release/cut-craft "dist/$name/cut-craft"
+          cp -r README.md LICENSE credits "dist/$name/"
           tar -C dist -czf "dist/$name.tar.gz" "$name"
       - uses: actions/upload-artifact@v4
         with:
@@ -114,9 +117,9 @@ jobs:
       - name: Pack the AppImage and the Flatpak
         run: |
           tar -C built -xzf built/*.tar.gz
-          scripts/linux-packages built/cut-craft-*-linux-x86_64/cut-craft appimage-libs
+          scripts/linux-packages built/powerwhittle-*-linux-x86_64/powerwhittle appimage-libs
       - name: Pack the .deb and the .rpm
-        run: scripts/linux-distro-packages built/cut-craft-*-linux-x86_64/cut-craft
+        run: scripts/linux-distro-packages built/powerwhittle-*-linux-x86_64/powerwhittle
       # each installs and starts where it is meant to: the oldest Ubuntu the program runs on,
       # and Fedora
       - name: Install the .deb and the .rpm
@@ -125,9 +128,9 @@ jobs:
           docker run --rm -v "$PWD/dist:/dist:ro" ubuntu:22.04 bash -c \
             "sed -i 's#security.ubuntu.com#archive.ubuntu.com#' /etc/apt/sources.list \
              && apt-get -o Acquire::Retries=5 update -qq && apt-get -o Acquire::Retries=5 install -y -qq \
-             /dist/cut-craft_${version}_amd64.deb >/dev/null && cut-craft --version"
+             /dist/powerwhittle_${version}_amd64.deb >/dev/null && powerwhittle --version"
           docker run --rm -v "$PWD/dist:/dist:ro" fedora:latest bash -c \
-            "dnf install -y -q --setopt=retries=10 /dist/cut-craft-${version}-1.x86_64.rpm && cut-craft --version"
+            "dnf install -y -q --setopt=retries=10 /dist/powerwhittle-${version}-1.x86_64.rpm && powerwhittle --version"
       # A bare Ubuntu, the oldest supported, without the window's libraries or a screen: the
       # AppImage must print its version, and a start must say why the window can't open (the
       # library it lacks, and the package to install) rather than fail silently.
@@ -137,11 +140,11 @@ jobs:
           bare() {
             docker run --rm -v "$PWD/dist:/dist:ro" -e APPIMAGE_EXTRACT_AND_RUN=1 "$@"
           }
-          image=dist/CutCraft-${version}-x86_64.AppImage
+          image=dist/PowerWhittle-${version}-x86_64.AppImage
           out=$(bare ubuntu:22.04 "/$image" --version)
           echo "$out"
-          if [[ $out != "Cut Craft $version" ]]; then
-            echo "::error::--version printed '$out', not 'Cut Craft $version'"
+          if [[ $out != "PowerWhittle $version" ]]; then
+            echo "::error::--version printed '$out', not 'PowerWhittle $version'"
             exit 1
           fi
           # no X server: the X11 libraries are the first thing missing

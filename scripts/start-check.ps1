@@ -20,7 +20,7 @@ if ($text -match '(?i)vcruntime140(_1)?\.dll') {
 $env:APPDATA = Join-Path $env:RUNNER_TEMP 'start-check-appdata'
 Remove-Item -Recurse -Force $env:APPDATA -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $env:APPDATA | Out-Null
-$folder = Join-Path $env:APPDATA 'cut-craft'
+$folder = Join-Path $env:APPDATA 'powerwhittle'
 $log = Join-Path $folder 'cut-craft.log'
 $crash = Join-Path $folder 'crash.log'
 
@@ -30,11 +30,11 @@ $process.Refresh()
 if (Test-Path $log) { Write-Host "--- cut-craft.log"; Get-Content $log }
 if ($process.HasExited) {
     if (Test-Path $crash) { Write-Host "--- crash.log"; Get-Content $crash }
-    Write-Error "Cut Craft stopped within $Seconds s (exit code $($process.ExitCode))"
+    Write-Error "PowerWhittle stopped within $Seconds s (exit code $($process.ExitCode))"
 }
 $up = (Test-Path $log) -and (Select-String -Path $log -Pattern 'GPU:' -Quiet)
 Stop-Process -Id $process.Id -Force
 if (-not $up) {
-    Write-Error "Cut Craft is running but never set up its window (no GPU line in its log); a start-up message box may be waiting"
+    Write-Error "PowerWhittle is running but never set up its window (no GPU line in its log); a start-up message box may be waiting"
 }
-Write-Host "Cut Craft started and kept running for $Seconds s"
+Write-Host "PowerWhittle started and kept running for $Seconds s"

@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-27
+reviewed: 2026-11-28
 see-also: web_api, contents, settings, backups
 ---
 
@@ -116,11 +116,12 @@ can paste it into a terminal:
 - **Flatpak**: download the new `.flatpak` file from the release page, then open it, or run
   `flatpak install --user` with its name in the folder you saved it to.
 - **Mac**: PowerWhittle tells you when a new version's `.dmg` is ready. Download it and drag
-  PowerWhittle to Applications again.
+  PowerWhittle to Applications again. If Applications still has **Cut Craft**, this app's old
+  name, move that one to the Trash: your settings and jobs stay where they are.
 - **Built from the source code**: `git pull`, then `cargo build --release`.
 
 The AppImage, the Linux `.tar.gz` and the Windows `.zip` replace themselves. An AppImage
-named for its version (`CutCraft-0.6.13-x86_64.AppImage`) takes the new version's name, and
+named for its version (`PowerWhittle-0.7.9-x86_64.AppImage`) takes the new version's name, and
 the shortcuts that started the old one (in `~/.local/bin` and the application menu) start
 the new one.
 

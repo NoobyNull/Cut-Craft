@@ -1,9 +1,9 @@
 #!/bin/bash
-# The AppImage's entry: Cut Craft, its icons built in.
+# The AppImage's entry: PowerWhittle, its icons built in.
 here="$(dirname "$(readlink -f "$0")")"
 # usr/lib holds the keyboard libraries the window loads (libxkbcommon, libxkbcommon-x11 and
 # libxcb-xkb), which minimal installs can lack. They are used only when the system is missing
-# one: otherwise the system's own copies serve Cut Craft and the programs it starts (file
+# one: otherwise the system's own copies serve PowerWhittle and the programs it starts (file
 # dialogs, the web browser), which may need newer ones.
 cache=$(PATH="$PATH:/sbin:/usr/sbin" ldconfig -p 2>/dev/null)
 for lib in "$here"/usr/lib/*.so.*; do
@@ -13,4 +13,4 @@ for lib in "$here"/usr/lib/*.so.*; do
         break
     fi
 done
-exec "$here/usr/bin/cut-craft" "$@"
+exec "$here/usr/bin/powerwhittle" "$@"

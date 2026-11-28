@@ -30,15 +30,15 @@ if [[ $(uname) == Darwin ]]; then
   if ! kill -0 "$pid" 2>/dev/null; then
     status=0
     wait "$pid" || status=$?
-    echo "::error::Cut Craft on Metal stopped within $seconds s (exit $status)"
+    echo "::error::PowerWhittle on Metal stopped within $seconds s (exit $status)"
     cat "$home/out.txt"
     failed=1
   elif ! grep -q "GPU:" "$log" 2>/dev/null; then
-    echo "::error::Cut Craft on Metal never set up its window (no GPU line in its log)"
+    echo "::error::PowerWhittle on Metal never set up its window (no GPU line in its log)"
     cat "$home/out.txt"
     failed=1
   else
-    echo "Cut Craft on Metal kept running for $seconds s"
+    echo "PowerWhittle on Metal kept running for $seconds s"
   fi
   kill "$pid" 2>/dev/null || true
   rm -rf "$home"
@@ -55,7 +55,7 @@ for backend in vulkan gl; do
   cat "$log" 2>/dev/null || true
   # timeout's 124: still running when the time was up, as it should be
   if [[ $status != 124 ]]; then
-    echo "::error::Cut Craft on $backend stopped within $seconds s (exit $status)"
+    echo "::error::PowerWhittle on $backend stopped within $seconds s (exit $status)"
     cat "$home/out.txt"
     failed=1
   elif ! grep -q "GPU:" "$log" 2>/dev/null; then

@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-25
+reviewed: 2026-11-28
 see-also: settings, updates, first_time_setup, interface_layout
 ---
 
@@ -64,7 +64,7 @@ They are kept in a `backups` folder inside PowerWhittle's settings folder:
 |---|---|
 | Windows | `%APPDATA%\powerwhittle\backups` |
 | Mac | `~/Library/Application Support/powerwhittle/backups` |
-| Linux | `~/.config/powerwhittle/backups` |
+| Linux | `~/.config/powerwhittle/backups` (`$XDG_CONFIG_HOME/powerwhittle/backups` if you set `XDG_CONFIG_HOME`) |
 
 ## Options ▸ Backups
 

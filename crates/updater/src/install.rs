@@ -50,12 +50,12 @@ const PACKAGED: &str = "This copy of PowerWhittle was installed by your system's
 /// A package's note longer than this is not a sentence for the user.
 const MAX_NOTE: usize = 400;
 
-/// Where a system package puts its note on how it is updated: `<prefix>/lib/cut-craft/
-/// packaged-by`, for a program in `<prefix>/bin` or in `<prefix>/lib/cut-craft` itself.
+/// Where a system package puts its note on how it is updated: `<prefix>/lib/powerwhittle/
+/// packaged-by`, for a program in `<prefix>/bin` or in `<prefix>/lib/powerwhittle` itself.
 pub fn packaged_note_path(exe: &Path) -> Option<PathBuf> {
     let dir = exe.parent()?;
     let lib = if dir.file_name()? == "bin" {
-        dir.parent()?.join("lib").join("cut-craft")
+        dir.parent()?.join("lib").join("powerwhittle")
     } else {
         dir.to_path_buf()
     };
@@ -124,7 +124,7 @@ impl Install {
     /// How a Flatpak copy installs `version`: the bundle to download and the command that
     /// installs it over this one.
     pub fn flatpak_steps(version: &semver::Version) -> String {
-        let bundle = format!("cut-craft-{version}-x86_64.flatpak");
+        let bundle = format!("powerwhittle-{version}-x86_64.flatpak");
         format!(
             "This copy of PowerWhittle is a Flatpak, which cannot replace itself. Download \
              {bundle} from the release page, then open it in your software centre, or run \
@@ -283,12 +283,12 @@ mod tests {
     #[test]
     fn the_note_sits_in_lib_beside_the_programs_bin() {
         assert_eq!(
-            packaged_note_path(Path::new("/usr/bin/cut-craft")),
-            Some(PathBuf::from("/usr/lib/cut-craft/packaged-by"))
+            packaged_note_path(Path::new("/usr/bin/powerwhittle")),
+            Some(PathBuf::from("/usr/lib/powerwhittle/packaged-by"))
         );
         assert_eq!(
-            packaged_note_path(Path::new("/usr/lib/cut-craft/cut-craft")),
-            Some(PathBuf::from("/usr/lib/cut-craft/packaged-by"))
+            packaged_note_path(Path::new("/usr/lib/powerwhittle/powerwhittle")),
+            Some(PathBuf::from("/usr/lib/powerwhittle/packaged-by"))
         );
     }
 
@@ -305,7 +305,7 @@ mod tests {
         );
         let steps = Install::flatpak_steps(&semver::Version::new(0, 6, 14));
         assert!(
-            steps.contains("`flatpak install --user cut-craft-0.6.14-x86_64.flatpak`"),
+            steps.contains("`flatpak install --user powerwhittle-0.6.14-x86_64.flatpak`"),
             "{steps}"
         );
         let mac = Install::detect(&probe("/Applications/x", "macos", NOTHING));

@@ -5,13 +5,13 @@ Every release (`.github/workflows/builds-linux.yml`) attaches, besides the AppIm
 
 | File | What it is |
 |---|---|
-| `/usr/bin/cut-craft` | the program |
+| `/usr/bin/powerwhittle` | the program |
 | `/usr/share/applications/family.yax.CutCraft.desktop` | the menu entry |
 | `/usr/share/icons/hicolor/*/apps/family.yax.CutCraft.*` | the icon (SVG, and PNGs at 48, 128 and 256) |
-| `/usr/share/doc/cut-craft/copyright` (.deb), `/usr/share/licenses/cut-craft/LICENSE` (.rpm) | the licence |
-| `/usr/lib/cut-craft/packaged-by` | one sentence on how this package is updated |
+| `/usr/share/doc/powerwhittle/copyright` (.deb), `/usr/share/licenses/powerwhittle/LICENSE` (.rpm) | the licence |
+| `/usr/lib/powerwhittle/packaged-by` | one sentence on how this package is updated |
 
-`packaged-by` tells Cut Craft that a package manager owns it: the updater
+`packaged-by` tells PowerWhittle that a package manager owns it: the updater
 (`crates/updater/src/install.rs`) then never replaces the program, doesn't check for updates
 at startup, and Help ▸ Check for Updates shows that sentence. A program anywhere in `/usr`
 is treated the same way even without the note.

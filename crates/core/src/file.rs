@@ -39,25 +39,76 @@ pub const OLD_SETTINGS_FOLDER: &str = "cut-craft";
 
 /// Where the app keeps its settings: `%APPDATA%\powerwhittle` on Windows,
 /// `~/Library/Application Support/powerwhittle` on macOS, elsewhere
-/// `$XDG_CONFIG_HOME/powerwhittle`, else `~/.config/powerwhittle`.
+/// `$XDG_CONFIG_HOME/powerwhittle`, else `~/.config/powerwhittle`. Until
+/// [`bring_over_settings`] has finished, the old folder instead ([`settings_folder`]).
 pub fn config_dir() -> Option<PathBuf> {
-    config_base().map(|dir| dir.join(SETTINGS_FOLDER))
+    config_base().map(|base| settings_folder(&base))
 }
 
-/// On the first start after the rename, copies the old settings folder in `base` to the new
+/// The settings folder in `base`: the new one, unless the old one is there and has not all
+/// come over yet. Then the old one, so nothing the app saves can shadow a setting still to come
+/// over, and the next start brings everything across, changes and all.
+pub fn settings_folder(base: &Path) -> PathBuf {
+    let (old, new) = (base.join(OLD_SETTINGS_FOLDER), base.join(SETTINGS_FOLDER));
+    if old.is_dir() && !new.join(BROUGHT_OVER).exists() {
+        old
+    } else {
+        new
+    }
+}
+
+/// Left in the new settings folder once everything from the old one is in it.
+pub const BROUGHT_OVER: &str = ".brought-over-from-cut-craft";
+/// Locked in the new settings folder while a bring-over runs.
+const BRINGING_OVER: &str = ".bringing-over.lock";
+/// The files a bring-over not yet finished has copied, one path under the folder a line.
+pub const COPIED_SO_FAR: &str = ".brought-over-so-far";
+
+/// On the first start after the rename, copies the old settings folder in `base` into the new
 /// one, so everything set before carries on. The old folder is left as it was, so going back
-/// to an older copy still finds its settings. Whether anything was copied: nothing is when
-/// the new folder is there already or there was never an old one.
+/// to an older copy still finds its settings. A start that stopped part way is finished the
+/// next time: the files it copied are copied again, with whatever was saved meanwhile in the
+/// old folder ([`settings_folder`]), while a file put in the new folder by hand first stays.
+/// [`BROUGHT_OVER`] marks it done only once every file is in. Two starts at once take turns,
+/// and the second finds it done. Whether anything was copied: nothing is once it is done, or
+/// when there was never an old folder.
 pub fn bring_over_settings(base: &Path) -> std::io::Result<bool> {
     let (old, new) = (base.join(OLD_SETTINGS_FOLDER), base.join(SETTINGS_FOLDER));
-    if new.exists() || !old.is_dir() {
+    if !old.is_dir() || new.join(BROUGHT_OVER).exists() {
         return Ok(false);
     }
-    // copied beside, then renamed into place: a copy cut short is never taken as done
-    let part = base.join(format!("{SETTINGS_FOLDER}.copying"));
-    let _ = std::fs::remove_dir_all(&part);
-    copy_folder(&old, &part)?;
-    std::fs::rename(&part, &new)?;
+    // one bring-over at a time, so none replaces a file after another has finished and the
+    // app has saved over it; the lock goes with the file when this returns
+    std::fs::create_dir_all(&new)?;
+    // opened without emptying it: Windows refuses to empty a file another start has locked
+    let lock = std::fs::File::options()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(new.join(BRINGING_OVER))?;
+    lock.lock()?;
+    if new.join(BROUGHT_OVER).exists() {
+        return Ok(false);
+    }
+    let list = new.join(COPIED_SO_FAR);
+    let mut copied = Copied {
+        // a list that is there but cannot be read stops the bring-over, rather than taking
+        // the files it names for ones put there by hand
+        before: match std::fs::read_to_string(&list) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+            read => read?,
+        }
+        .lines()
+        .map(str::to_owned)
+        .collect(),
+        list: std::fs::File::options()
+            .append(true)
+            .create(true)
+            .open(&list)?,
+    };
+    copy_over(&old, &new, "", &mut copied)?;
+    std::fs::write(new.join(BROUGHT_OVER), "")?;
+    let _ = std::fs::remove_file(&list);
     Ok(true)
 }
 
@@ -66,16 +117,38 @@ pub fn bring_over_old_settings() -> std::io::Result<bool> {
     config_base().map_or(Ok(false), |base| bring_over_settings(&base))
 }
 
-fn copy_folder(from: &Path, to: &Path) -> std::io::Result<()> {
+/// What the bring-overs so far have copied: the list as this one found it, and the list.
+struct Copied {
+    before: std::collections::HashSet<String>,
+    list: std::fs::File,
+}
+
+/// Copies from `from` into `to` each file `to` lacks or an earlier bring-over copied, `under`
+/// being their path below the settings folder. Each is listed before it is copied, so one cut
+/// short is copied again, and written beside its place and renamed into it, so a part copy is
+/// never taken for the whole file.
+fn copy_over(from: &Path, to: &Path, under: &str, copied: &mut Copied) -> std::io::Result<()> {
     std::fs::create_dir_all(to)?;
     for entry in std::fs::read_dir(from)? {
         let entry = entry?;
-        let target = to.join(entry.file_name());
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let (target, path) = (to.join(entry.file_name()), format!("{under}{name}"));
         if entry.file_type()?.is_dir() {
-            copy_folder(&entry.path(), &target)?;
-        } else {
-            std::fs::copy(entry.path(), target)?;
+            copy_over(&entry.path(), &target, &format!("{path}/"), copied)?;
+            continue;
         }
+        if target.exists() && !copied.before.contains(&path) {
+            continue;
+        }
+        std::io::Write::write_all(&mut copied.list, format!("{path}\n").as_bytes())?;
+        copied.list.sync_data()?;
+        let mut part = target.clone().into_os_string();
+        part.push(format!(".copying-{}", std::process::id()));
+        let done = std::fs::copy(entry.path(), &part).and_then(|_| std::fs::rename(&part, &target));
+        if done.is_err() {
+            let _ = std::fs::remove_file(&part);
+        }
+        done?;
     }
     Ok(())
 }

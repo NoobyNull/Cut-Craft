@@ -1,4 +1,4 @@
-# Cut Craft for macOS: a DMG with one app for Apple Silicon and Intel, started on the runner
+# PowerWhittle for macOS: a DMG with one app for Apple Silicon and Intel, started on the runner
 # to check it runs. It runs when the packaging changes on a pushed branch, from the Actions
 # tab, and on a release tag; the DMG is the run's artifact. Not signed or notarized by Apple
 # (no Apple Developer account): macOS asks before the first open.
@@ -57,7 +57,7 @@ jobs:
         run: scripts/macos-dmg
       # the app in the DMG keeps running with its window set up, on Metal
       - name: Start the program
-        run: scripts/start-check "dist/Cut Craft.app/Contents/MacOS/cut-craft"
+        run: scripts/start-check "dist/PowerWhittle.app/Contents/MacOS/powerwhittle"
       - uses: actions/upload-artifact@v4
         with:
           name: cut-craft-macos
