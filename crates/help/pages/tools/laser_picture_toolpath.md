@@ -15,15 +15,15 @@ see-also: laser_cut_fill_toolpath, photo_vcarve_toolpath
 
    ![Step 2](pictures/laser_picture_toolpath/step-2.png)
 
-3. Set the **Power** for black. Light parts get less.
+3. On the **Laser Picture** tab, set the **Power** for black. Light parts get less.
 
    ![Step 3](pictures/laser_picture_toolpath/step-3.png)
 
-4. Tick **Dither image** for materials that only burn or don't (such as some plastics): the laser switches fully on and off in tiny dots to give the greys.
+4. On the **Laser Picture** tab, tick **Dither image** for materials that only burn or don't (such as some plastics): the laser switches fully on and off in tiny dots to give the greys.
 
    ![Step 4](pictures/laser_picture_toolpath/step-4.png)
 
-5. Set the **Line spacing**: closer lines give more detail but take longer. Then press **Calculate**.
+5. On the **Laser Picture** tab, set the **Line spacing**: closer lines give more detail but take longer. Then press **Calculate**.
 
    ![Step 5](pictures/laser_picture_toolpath/step-5.png)
 

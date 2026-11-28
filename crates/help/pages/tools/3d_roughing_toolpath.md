@@ -15,11 +15,11 @@ see-also: 3d_finishing_toolpath, create_shape
 
    ![Step 2](pictures/3d_roughing_toolpath/step-2.png)
 
-3. Set the **Allowance**: the wood left on the model for the finishing toolpath to take off cleanly.
+3. On the **Finishing** tab, set the **Allowance**: the wood left on the model for the finishing toolpath to take off cleanly.
 
    ![Step 3](pictures/3d_roughing_toolpath/step-3.png)
 
-4. Choose the **Strategy**: **Z level** clears flat steps, one pass depth at a time; **3D raster** rides over the model in rows.
+4. On the **3D Roughing** tab, choose the **Strategy**: **Z level** clears flat steps, one pass depth at a time; **3D raster** rides over the model in rows.
 
    ![Step 4](pictures/3d_roughing_toolpath/step-4.png)
 

@@ -15,11 +15,11 @@ see-also: drilling_toolpath, profile_toolpath
 
    ![Step 2](pictures/keyhole_toolpath/step-2.png)
 
-3. Choose which way the slot runs from the hole (**Direction**). For a sign hung on the wall, the slot runs up, so the screw head slides to its top.
+3. On the **Keyhole** tab, choose which way the slot runs from the hole (**Direction**). For a sign hung on the wall, the slot runs up, so the screw head slides to its top.
 
    ![Step 3](pictures/keyhole_toolpath/step-3.png)
 
-4. Set the **Slot Length** and the **Slot Depth**: deep enough that the cutter's wide part is below the surface.
+4. On the **Keyhole** tab, set the **Slot Length** and the **Slot Depth**: deep enough that the cutter's wide part is below the surface.
 
    ![Step 4](pictures/keyhole_toolpath/step-4.png)
 

@@ -491,6 +491,7 @@ fn edit_tabs_adds_tabs_by_number_off_the_corners_and_sets_2d_or_3d() {
     h.invoke("profile_toolpath");
     h.frame(vec![]);
     h.frame(vec![]);
+    h.form_tab(crate::form::form_tabs::FormTab::Movement);
     // down the form to its Tabs, the button at their foot (the form is on the Toolpaths page,
     // to the right; the Design page's tip box names the tool in hand too)
     let over = h
@@ -558,6 +559,7 @@ fn the_cutting_window_sets_how_a_pocket_cuts_and_draws_it() {
     h.invoke("pocket_toolpath");
     h.frame(vec![]);
     h.frame(vec![]);
+    h.form_tab(crate::form::form_tabs::FormTab::Own);
     // down the form to its Clear Pocket, the picture and Cutting… at its foot; the form's
     // heading, not the Design page's tip naming the tool
     let over = h.form_heading("Pocket Toolpath");
@@ -886,6 +888,8 @@ fn the_profile_form_keeps_tab_and_tool_settings_in_their_windows() {
         h.form_settings()["tab"]["spacing"] == "automatic",
         "kept with the toolpath"
     );
+    // tabs are on the form's Movement tab
+    h.form_tab(crate::form::form_tabs::FormTab::Movement);
     let over = h.form_heading("Profile Toolpath") + egui::vec2(0.0, 200.0);
     scroll_above_foot(&mut h, over, "Edit Tabs…");
     let summary = h.shapes.iter().any(|clipped| {

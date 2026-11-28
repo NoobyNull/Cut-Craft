@@ -15,11 +15,11 @@ see-also: laser_picture_toolpath, profile_toolpath
 
    ![Step 2](pictures/laser_cut_fill_toolpath/step-2.png)
 
-3. Choose the **Strategy**: cut outside, inside or on the line (the beam's width is allowed for), or **Hatch fill** to mark the inside with lines.
+3. On the **Laser** tab, choose the **Strategy**: cut outside, inside or on the line (the beam's width is allowed for), or **Hatch fill** to mark the inside with lines.
 
    ![Step 3](pictures/laser_cut_fill_toolpath/step-3.png)
 
-4. Set the **Power** and the number of **Passes**: more passes cut through thicker material. Try them on a scrap first.
+4. On the **Laser** tab, set the **Power** and the number of **Passes**: more passes cut through thicker material. Try them on a scrap first.
 
    ![Step 4](pictures/laser_cut_fill_toolpath/step-4.png)
 

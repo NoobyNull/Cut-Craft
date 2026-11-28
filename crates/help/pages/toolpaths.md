@@ -52,6 +52,35 @@ form's text, so they stay easy to read however small the drawing is. On a narrow
 drawing sits above the settings instead. For bigger drawings across the form, set
 **Options ▸ Appearance ▸ Form pictures** to **Full width** (see
 [Changing settings](help:settings)).
+## The tabs across a toolpath's form
+
+A toolpath's form is split into tabs across its top, the same on every toolpath, so its
+settings are a few short pages instead of one long list:
+
+- **Bit & Depth**: the bit, the bigger bits that clear first, how deep it cuts, and which side
+  of the line.
+- **The toolpath's own tab**, named for it (**Pocket**, **Profile**, **V-Carve**…): how it
+  clears, its pattern or its strategy.
+- **Where**: what is cut and what is left alone: the Vector Selector, rest machining, a
+  boundary, and Project onto 3D Model.
+- **Movement**: how the bit gets in and moves: ramps, leads, order, start points, corners
+  and tabs.
+- **Finishing**: what is left on for a last, cleaner pass.
+- **Defaults**: the toolpath's name, Save Settings… and Load Settings…, and **Reset**, which
+  puts every setting back to PowerWhittle's own and keeps the bit.
+
+A tab with nothing on it for this toolpath is left out. The form opens on **Bit & Depth**.
+
+A **red dot** on a tab means a warning at the foot of the form is about a setting on it, and
+the form turns to that tab when the warning comes. A **blue dot** means a setting on it is
+changed from what a new form opens with; that setting has a thin blue bar at its left.
+**Calculate**, Close and the warnings stay at the foot of every tab.
+
+To have the whole form on one page instead, set **Options ▸ Appearance ▸ Tool forms** to
+**One page**. To have **Calculate** only on the last tab, with **Next** on the others, set
+**Options ▸ Appearance ▸ Calculate button** to **Last tab only** (see
+[Changing settings](help:settings)).
+
 ## Pressing Calculate again
 
 A toolpath's form stays open after Calculate, so it is easy to press Calculate a second

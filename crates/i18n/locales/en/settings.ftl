@@ -478,6 +478,24 @@ setting-beside-the-fields-77877d = Beside the fields
 setting-small-at-the-right-of-2d911c = Small, at the right of the settings they mark
 setting-full-width-582e90 = Full width
 setting-across-the-form-above-the-e8fcef = Across the form, above the settings they mark
+setting-tool-forms-4b135c = Tool forms
+setting-how-a-toolpath-form-s-6b047d =
+    How a toolpath form's settings are laid out. Tabs: a few short pages across the top
+    (Bit & Depth, the toolpath's own, Where, Movement, Finishing, Defaults), a dot on a
+    tab with a warning or a changed setting. One page: every setting in one long list
+setting-tabs-c4824d = Tabs
+setting-a-few-short-pages-across-000665 = A few short pages across the top
+setting-one-page-5ca60e = One page
+setting-every-setting-in-one-long-4aaacd = Every setting in one long list
+setting-calculate-button-d67e49 = Calculate button
+setting-where-a-tabbed-form-s-4139fd =
+    Where a tabbed form's Calculate button is. Under every tab: always there, so a
+    change on any tab can be calculated at once. Last tab only: the other tabs have Next
+    instead, to go through every tab before calculating
+setting-under-every-tab-ce29fd = Under every tab
+setting-always-there-whichever-tab-is-f39c8c = Always there, whichever tab is open
+setting-last-tab-only-5007b0 = Last tab only
+setting-on-the-last-tab-the-456044 = On the last tab; the others have Next
 setting-mouse-and-shortcuts-0e0f82 = Mouse and Shortcuts
 setting-the-mouse-in-the-2d-ecb865 = The mouse in the 2D and 3D views, and the shortcuts set in place of PowerWhittle's own.
 setting-tilting-the-wheel-left-or-0d309e = Tilting the wheel left or right
@@ -1170,7 +1188,6 @@ setting-positive-leaves-the-part-bigger-128788 = Positive leaves the part bigger
 setting-machine-vectors-101156 = Machine Vectors…
 setting-add-tabs-to-toolpath-fa593e = Add tabs to toolpath
 setting-bridges-left-to-hold-the-377a08 = Bridges left to hold the part in place
-setting-tabs-c4824d = Tabs
 setting-no-tabs-the-part-comes-119090 = No tabs: the part comes loose when cut through
 setting-2d-tabs-a75ac9 = 2D Tabs
 setting-up-at-the-start-of-3aca35 = Up at the start of each tab, across, and down at its end

@@ -15,11 +15,11 @@ see-also: photo_vcarve_toolpath, quick_engrave_toolpath
 
    ![Step 2](pictures/sketch_carving_toolpath/step-2.png)
 
-3. Choose the **Source**: the picture, or the 3D model's dips and edges.
+3. On the **Sketch** tab, choose the **Source**: the picture, or the 3D model's dips and edges.
 
    ![Step 3](pictures/sketch_carving_toolpath/step-3.png)
 
-4. Set the **Line thickness**: heavier lines, but less detail, as it goes up.
+4. On the **Sketch** tab, set the **Line thickness**: heavier lines, but less detail, as it goes up.
 
    ![Step 4](pictures/sketch_carving_toolpath/step-4.png)
 

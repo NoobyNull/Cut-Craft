@@ -19,7 +19,7 @@ see-also: inlay_toolpath, vcarve_engrave_toolpath
 
    ![Step 3](pictures/vcarve_inlay_toolpath/step-3.png)
 
-4. Set the **Glue Gap**: the space left under the plug for glue once it is pressed home.
+4. On the **V-Carve Inlay** tab, set the **Glue Gap**: the space left under the plug for glue once it is pressed home.
 
    ![Step 4](pictures/vcarve_inlay_toolpath/step-4.png)
 

@@ -15,11 +15,11 @@ see-also: job_setup, 3d_roughing_toolpath
 
    ![Step 2](pictures/rounding_toolpath/step-2.png)
 
-3. Say what you start from (**Blank**: square or round) and its **Blank size**.
+3. On the **Rounding** tab, say what you start from (**Blank**: square or round) and its **Blank size**.
 
    ![Step 3](pictures/rounding_toolpath/step-3.png)
 
-4. Choose the **Method**: round the cylinder as it turns, or along it in rows.
+4. On the **Rounding** tab, choose the **Method**: round the cylinder as it turns, or along it in rows.
 
    ![Step 4](pictures/rounding_toolpath/step-4.png)
 

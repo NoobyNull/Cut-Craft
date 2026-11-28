@@ -19,7 +19,7 @@ see-also: pocket_toolpath, fluting_toolpath, stepover
 
    ![Step 3](pictures/texture_toolpath/step-3.png)
 
-4. Set the **Stepover** (the gap between rows) and the rows' **Angle**.
+4. On the **Texture** tab, set the **Stepover** (the gap between rows) and the rows' **Angle**.
 
    ![Step 4](pictures/texture_toolpath/step-4.png)
 

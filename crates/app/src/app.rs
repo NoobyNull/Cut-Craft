@@ -30,6 +30,7 @@ mod fit_import;
 mod follow;
 mod form_apply;
 mod form_panel;
+mod form_tab_strip;
 mod gcode_view;
 mod generate_border;
 mod gestures_2d;
@@ -581,6 +582,8 @@ struct OpenForm {
     note: Option<(Value, String)>,
     /// Setup Material: Job Setup showing only the job type and the material's size.
     brief: bool,
+    /// The tab a tabbed form shows, and the warnings it last turned to ([`form_tab_strip`]).
+    tabs: form_tab_strip::Shown,
 }
 
 /// See [`CutCraftApp::sketch_areas`].

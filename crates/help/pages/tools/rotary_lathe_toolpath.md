@@ -24,15 +24,15 @@ finished piece off.
 
    ![Step 3](pictures/rotary_lathe_toolpath/step-3.png)
 
-4. Choose what it does: **Face** an end down to a stub, **Turn** the part round to its outline, or **Part off** with one groove.
+4. On the **Lathe** tab, choose what it does: **Face** an end down to a stub, **Turn** the part round to its outline, or **Part off** with one groove.
 
    ![Step 4](pictures/rotary_lathe_toolpath/step-4.png)
 
-5. Say where along the part it cuts with **Start** and **End**, measured from the chuck end.
+5. On the **Where** tab, say where along the part it cuts with **Start** and **End**, measured from the chuck end.
 
    ![Step 5](pictures/rotary_lathe_toolpath/step-5.png)
 
-6. **Holding stub** is how thick a stub is left on the axis, keeping the part joined on until it is cut free. If [Job Setup](help:job_setup) leaves centre stock (Holding the Part), Face and Turn leave at least that much; Part off cuts through it, as it is meant to cut the part free.
+6. On the **Lathe** tab, **Holding stub** is how thick a stub is left on the axis, keeping the part joined on until it is cut free. If [Job Setup](help:job_setup) leaves centre stock (Holding the Part), Face and Turn leave at least that much; Part off cuts through it, as it is meant to cut the part free.
 
    ![Step 6](pictures/rotary_lathe_toolpath/step-6.png)
 

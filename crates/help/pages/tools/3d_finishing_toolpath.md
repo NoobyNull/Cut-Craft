@@ -15,7 +15,7 @@ see-also: 3d_roughing_toolpath, create_shape, stepover
 
    ![Step 2](pictures/3d_finishing_toolpath/step-2.png)
 
-3. Choose the **Strategy**: **Raster** rows back and forth, or **Offset** rings following the outline.
+3. On the **3D Finishing** tab, choose the **Strategy**: **Raster** rows back and forth, or **Offset** rings following the outline.
 
    ![Step 3](pictures/3d_finishing_toolpath/step-3.png)
 

@@ -219,6 +219,7 @@ fn three_d_pencil_picks_the_bits_that_finished_before_in_the_tool_database() {
     h.pin(Page::Toolpaths);
     h.frame(vec![]);
     h.frame(vec![]);
+    h.form_tab(crate::form::form_tabs::FormTab::Where);
     assert!(
         h.text_at("Bits that finished before").is_some(),
         "its own list, under its own heading"

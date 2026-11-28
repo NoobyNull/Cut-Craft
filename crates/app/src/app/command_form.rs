@@ -6,6 +6,7 @@ use super::{
     CutCraftApp, OpenForm, SECTION_PICTURE_ROWS, Value, brush_dialog, egui, form,
     locked_face_section, rest_section, saving_path, selector_section, texture_dialog, tool_picker,
 };
+use crate::form::form_tabs::FormTab;
 use cut_craft_bug_report::hint::HoverHint;
 use cut_craft_i18n::tr;
 
@@ -19,8 +20,13 @@ impl CutCraftApp {
         let form = self.form.as_ref().map_or("none", |f| f.label);
         cut_craft_bug_report::mark(ui, &format!("Tool form: {form}"));
         let slots = self.slots();
-        self.form_heading(ui);
-        self.way_picker(ui);
+        // a tabbed form's heading and tabs stand above its scrolling settings
+        let tab = self.form_tab();
+        if tab.is_none() {
+            self.form_heading(ui);
+            self.way_picker(ui);
+        }
+        self.note_changed_settings(ui.ctx());
         let reach = self.form_reach();
         let room = self.placement_room();
         let Some(open) = &mut self.form else { return };
@@ -117,6 +123,7 @@ impl CutCraftApp {
             });
         };
         let stock = form_stock(&self.doc, &open.params, units, bed(&self.machines));
+        open.dirty |= super::tabs::through_as_depth(&mut open.params, stock);
         // Scale to Fit Material is pressed inside Model Size, and worked out once it is drawn
         let fit_asked = std::cell::Cell::new(false);
         let group_end = |ui: &mut egui::Ui, group: &str, params: &mut Value| {
@@ -137,13 +144,20 @@ impl CutCraftApp {
         let icon = |path: &str| self.icons.find(path, "").map(|p| self.icons.image(p));
         // Trace Bitmap's settings are in its trace window, beside the preview
         if open.id != "trace_bitmap" {
-            open.dirty |= show_form(ui, open, &look, &self.doc.job, &icon);
+            open.dirty |= show_form(ui, open, tab, &look, &self.doc.job, &icon);
             if fit_asked.get() {
                 open.dirty |= scale_to_fit(open, &self.doc.job);
             }
         }
         open.dirty |= listed.get();
-        self.form_extras(ui, form_id);
+        // what a form adds under its settings goes on its own tab (Profile's Edit Tabs
+        // window, open from Movement, stands whichever tab is shown)
+        if matches!(tab, None | Some(FormTab::Own)) || form_id == "profile_toolpath" {
+            self.form_extras(ui, form_id);
+        }
+        if tab == Some(FormTab::Defaults) {
+            self.defaults_tab(ui);
+        }
         if let Some(ask) = asked.get() {
             let name = self
                 .form
@@ -711,13 +725,20 @@ pub(super) fn texture_buttons(ui: &mut egui::Ui) -> (bool, bool) {
 pub(super) fn show_form(
     ui: &mut egui::Ui,
     open: &mut OpenForm,
+    tab: Option<FormTab>,
     look: &form::Look,
     job: &cut_craft_core::document::Job,
     icon: &dyn Fn(&str) -> Option<egui::Image<'static>>,
 ) -> bool {
     // what the pointer was on last frame; the fields note it again this frame
     form::forget_help(ui.ctx());
-    let changed = form::show(ui, &open.fields, &mut open.params, look);
+    let changed = match tab {
+        Some(tab) => {
+            let shown = form::form_tabs::on_tab(&open.fields, tab);
+            form::show_some(ui, &shown, &mut open.params, look)
+        }
+        None => form::show(ui, &open.fields, &mut open.params, look),
+    };
     changed | align_in_material(ui, open, job, icon) | update_undercuts(ui, open)
 }
 

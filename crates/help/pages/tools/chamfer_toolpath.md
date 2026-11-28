@@ -15,11 +15,11 @@ see-also: profile_toolpath, prism_toolpath, moulding_toolpath
 
    ![Step 2](pictures/chamfer_toolpath/step-2.png)
 
-3. Set the **Width** across the slope. With a V-bit, its angle sets how steep the slope is.
+3. On the **Chamfer** tab, set the **Width** across the slope. With a V-bit, its angle sets how steep the slope is.
 
    ![Step 3](pictures/chamfer_toolpath/step-3.png)
 
-4. Choose the **Side**: **Outside** slopes the edge of a part you cut out, **Inside** slopes the rim of a hole or recess.
+4. On the **Chamfer** tab, choose the **Side**: **Outside** slopes the edge of a part you cut out, **Inside** slopes the rim of a hole or recess.
 
    ![Step 4](pictures/chamfer_toolpath/step-4.png)
 

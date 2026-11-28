@@ -11,7 +11,7 @@ Import Toolpaths (G-code)...**.
 
 ![The steps, one after another](pictures/import_toolpaths/tour.gif)
 
-1. Choose **File ▸ Import ▸ Import Toolpaths (G-code)...** and pick a G-code file your machine runs.
+1. Choose **File ▸ Import ▸ Import Toolpaths (G-code)...** and pick a G-code file your machine runs; the file is on the form's **Import** tab.
 
    ![Step 1](pictures/import_toolpaths/step-1.png)
 

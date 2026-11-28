@@ -15,7 +15,7 @@ see-also: vcarve_engrave_toolpath, drag_knife_toolpath, draw_text
 
    ![Step 2](pictures/quick_engrave_toolpath/step-2.png)
 
-3. Choose **Outline** to run along the lines, or **Fill** to mark the whole inside with rings or hatching.
+3. On the **Engrave** tab, choose **Outline** to run along the lines, or **Fill** to mark the whole inside with rings or hatching.
 
    ![Step 3](pictures/quick_engrave_toolpath/step-3.png)
 

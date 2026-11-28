@@ -35,12 +35,12 @@ nick the side of a narrow ridge. This one keeps the bit clear of all of it.
 
    ![Step 3](pictures/rotary_machining_toolpath/step-3.png)
 
-4. Say where along the part the rings **Start** and **End**, clear of the chuck and the
+4. On the **Where** tab, say where along the part the rings **Start** and **End**, clear of the chuck and the
    tailstock.
 
    ![Step 4](pictures/rotary_machining_toolpath/step-4.png)
 
-5. Tick **Registration mark** for a small notch at A=0, so the part can go back exactly as it
+5. On the **Rotary** tab, tick **Registration mark** for a small notch at A=0, so the part can go back exactly as it
    was if the job is started again.
 
    ![Step 5](pictures/rotary_machining_toolpath/step-5.png)

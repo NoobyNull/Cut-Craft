@@ -750,8 +750,8 @@ pub(super) const TOURS: &[Tour] = &[
         tool: "import_toolpaths",
         steps: &[
             Step {
-                caption: "Choose **File ▸ Import ▸ Import Toolpaths...** and pick a G-code \
-                          file your machine runs.",
+                caption: "Choose **File ▸ Import ▸ Import Toolpaths...** and pick a G-code file your \
+                          machine runs; the file is on the form's **Import** tab.",
                 setup: |app, ctx| {
                     fresh_job(app, ctx);
                     let file = gcode_file();

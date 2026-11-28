@@ -273,8 +273,8 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("field:side"),
             },
             Step {
-                caption: "Add **Tabs**: small bridges that hold the part in the board until the \
-                          last pass, so it cannot fly loose.",
+                caption: "On the **Movement** tab, add **Tabs**: small bridges that hold the part \
+                          in the board until the last pass, so it cannot fly loose.",
                 setup: |_, _| {},
                 mark: Mark::At("field:tabs"),
             },
@@ -380,8 +380,8 @@ pub(super) const TOURS: &[Tour] = &[
                 mark: Mark::At("field:depth"),
             },
             Step {
-                caption: "Turn on **Peck** for deep holes: the bit lifts out now and then to \
-                          clear the chips, so it does not jam or burn.",
+                caption: "On the **Movement** tab, turn on **Peck** for deep holes: the bit lifts \
+                          out now and then to clear the chips, so it does not jam or burn.",
                 setup: |_, _| {},
                 mark: Mark::At("field:peck"),
             },

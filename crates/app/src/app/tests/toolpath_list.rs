@@ -203,6 +203,7 @@ fn an_older_pocket_with_a_rest_list_still_shows_it() {
     h.set_form_settings(older);
     h.frame(vec![]);
     h.frame(vec![]);
+    h.form_tab(crate::form::form_tabs::FormTab::Where);
     assert!(
         h.text_at("Rest Machining").is_some(),
         "kept, so it can be changed"

@@ -261,6 +261,15 @@ impl Harness {
             .unwrap_or_else(|| panic!("{text}"))
     }
 
+    /// Turns the open form to its tab `tab`, as a click on it would.
+    fn form_tab(&mut self, tab: crate::form::form_tabs::FormTab) {
+        if let Some(form) = self.app.form.as_mut() {
+            form.tabs.tab = tab;
+        }
+        self.frame(vec![]);
+        self.frame(vec![]);
+    }
+
     /// Presses Apply on the changes waiting in the Options window.
     fn apply_options(&mut self) {
         self.app

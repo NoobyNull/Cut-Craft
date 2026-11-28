@@ -320,6 +320,13 @@ pub(super) fn grid(
                     })
                     .response
                     .rect;
+                // changed from what a new form opens with: a thin blue bar at its left
+                if super::form_tabs::changed_now(ui.ctx()).contains(&f.key) {
+                    let x = label_rect.left() - ui.spacing().item_spacing.x * 0.5;
+                    let bar = egui::Rect::from_x_y_ranges(x - 1.5..=x + 1.5, label_rect.y_range());
+                    let colour = super::form_tabs::changed_colour(ui.visuals().dark_mode);
+                    ui.painter().rect_filled(bar, 1.0, colour);
+                }
                 // a picture named by the fields beside it reads them as they were this frame
                 let around = match &f.kind {
                     Kind::Choice(
