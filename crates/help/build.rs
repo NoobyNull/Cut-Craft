@@ -35,7 +35,7 @@ fn main() {
     }
     table.push_str("];\n");
     let pictures_dir = root.join("pictures");
-    let pictures = under(&pictures_dir, &["png", "gif", "jpg", "webp"]);
+    let pictures = under(&pictures_dir, &["png", "gif", "jpg", "webp", "svg"]);
     table.push_str(
         "/// Every picture under `pictures/`: its path there, with `/`, and its bytes.\n\
          pub static PICTURES: &[(&str, &[u8])] = &[\n",

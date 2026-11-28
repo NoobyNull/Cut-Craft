@@ -1522,3 +1522,32 @@ fn the_callout_letters_match_the_pictures_and_stand_out_in_both_themes() {
         assert!(ratio >= 4.5, "dark {dark}: {ratio:.2} to 1");
     }
 }
+
+/// Every picture a form names (`x-diagram`), with the fields inside groups.
+fn diagrams<'a>(fields: &'a [Field], out: &mut Vec<(&'a str, &'a str)>) {
+    for f in fields {
+        if let Some(d) = f.diagram.as_deref() {
+            out.push((f.key.as_str(), d));
+        }
+        if let Kind::Group(inner) = &f.kind {
+            diagrams(inner, out);
+        }
+    }
+}
+
+#[test]
+fn every_form_picture_is_drawn_sharp_as_an_svg() {
+    // one look for every diagram: sharp lines at any size, magenta measurements, hairlines
+    let mut found = vec![];
+    for (form, schema) in every_form() {
+        let all = fields(&schema);
+        let mut named = vec![];
+        diagrams(&all, &mut named);
+        for (key, picture) in named {
+            if !crate::icons::is_svg(picture) {
+                found.push(format!("{form}: {key} shows {picture}, not an SVG"));
+            }
+        }
+    }
+    assert!(found.is_empty(), "{}", found.join("\n"));
+}

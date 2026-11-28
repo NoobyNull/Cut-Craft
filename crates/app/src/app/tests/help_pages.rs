@@ -1270,3 +1270,21 @@ fn help_pages_live_in_the_help_crate_not_the_app() {
         "move these to crates/help/pages (or crates/help/pictures): {strays:?}"
     );
 }
+
+#[test]
+fn the_help_pictures_drawn_as_svg_go_with_the_app_and_draw() {
+    // diagrams in the help are sharp SVGs, drawn by the same reader as the forms' pictures
+    let svgs: Vec<_> = cut_craft_help::PICTURES
+        .iter()
+        .filter(|(name, _)| crate::icons::is_svg(name))
+        .collect();
+    assert!(
+        svgs.iter()
+            .any(|(name, _)| *name == "vcarve_engrave_toolpath/style-light-passes.svg"),
+        "the V-Carve style pictures are SVGs"
+    );
+    for (name, bytes) in svgs {
+        let tree = resvg::usvg::Tree::from_data(bytes, &resvg::usvg::Options::default());
+        assert!(tree.is_ok(), "{name} does not draw: {:?}", tree.err());
+    }
+}

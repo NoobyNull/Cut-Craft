@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 224" width="448" height="224">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.8 L10,5 L0,8.2 Z" fill="#B0187E"/></marker><marker id="b" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.6 L10,5 L0,8.4 Z" fill="#3F6FB8"/></marker><marker id="g" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.5 L10,5 L0,8.5 Z" fill="#2E9E5B"/></marker><marker id="k" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.8 L10,5 L0,8.2 Z" fill="#9AA5B4"/></marker><marker id="r" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0,1.5 L10,5 L0,8.5 Z" fill="#C0392B"/></marker></defs>
+  <rect x="0.5" y="0.5" width="447" height="223" rx="10" fill="#FBFAF7" stroke="#D9D4CC"/>
+  <path d="M112.0,24.0 L133.2,86.9 L199.5,87.6 L146.2,127.1 L166.1,190.4 L112.0,152.0 L57.9,190.4 L77.8,127.1 L24.5,87.6 L90.8,86.9 Z" fill="#EBCB98" stroke="#A9814F" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M107.2,78.6 Q112.0,72.0 116.8,78.6 L127.9,94.2 L146.1,99.9 Q153.8,102.4 149.0,109.0 L137.7,124.3 L137.8,143.4 Q137.9,151.6 130.1,149.0 L112.0,143.0 L93.9,149.0 Q86.1,151.6 86.2,143.4 L86.3,124.3 L75.0,109.0 Q70.2,102.4 77.9,99.9 L96.1,94.2 Z" stroke="#3F6FB8" stroke-width="1.6" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="96.1" cy="94.2" r="3.5" fill="#B0187E"/>
+  <path d="M208.0,112.0 L240.0,112.0" stroke="#9AA5B4" stroke-width="1.5" fill="none" stroke-linejoin="round" stroke-linecap="round" marker-end="url(#k)"/>
+  <path d="M336.0,24.0 L357.2,86.9 L423.5,87.6 L370.2,127.1 L390.1,190.4 L336.0,152.0 L281.9,190.4 L301.8,127.1 L248.5,87.6 L314.8,86.9 Z" fill="#EBCB98" stroke="#A9814F" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M336.0,116.0 L336.0,24.0" stroke="#3F6FB8" stroke-width="1.6" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M336.0,56.3 L332.9,65.3 L339.1,65.3 Z" fill="#3F6FB8"/>
+  <path d="M336.0,116.0 L423.5,87.6" stroke="#3F6FB8" stroke-width="1.6" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M392.8,97.6 L383.3,97.4 L385.2,103.2 Z" fill="#3F6FB8"/>
+  <path d="M336.0,116.0 L390.1,190.4" stroke="#3F6FB8" stroke-width="1.6" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M371.1,164.3 L368.3,155.2 L363.3,158.8 Z" fill="#3F6FB8"/>
+  <path d="M336.0,116.0 L281.9,190.4" stroke="#3F6FB8" stroke-width="1.6" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M300.9,164.3 L308.7,158.8 L303.7,155.2 Z" fill="#3F6FB8"/>
+  <path d="M336.0,116.0 L248.5,87.6" stroke="#3F6FB8" stroke-width="1.6" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M279.2,97.6 L286.8,103.2 L288.7,97.4 Z" fill="#3F6FB8"/>
+  <path d="M423.5,87.6 Q374.8,86.6 336.0,116.0" stroke="#B0187E" stroke-width="1.0" fill="none" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5 3"/>
+  <path d="M390.1,190.4 Q376.0,143.8 336.0,116.0" stroke="#B0187E" stroke-width="1.0" fill="none" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5 3"/>
+  <path d="M281.9,190.4 Q321.9,162.6 336.0,116.0" stroke="#B0187E" stroke-width="1.0" fill="none" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5 3"/>
+  <path d="M248.5,87.6 Q287.3,117.0 336.0,116.0" stroke="#B0187E" stroke-width="1.0" fill="none" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5 3"/>
+  <circle cx="336.0" cy="116.0" r="3.5" fill="#B0187E"/>
+</svg>
