@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-27
+reviewed: 2026-11-28
 see-also: draw_text, save_toolpaths
 ---
 
@@ -47,7 +47,7 @@ A Fill, Inside or Outside carve deeper than the bit's pass depth goes down in pa
 **Carving style** drop-down sets how, and the picture above it shows the one picked. Every
 style carves the same shape; they differ in how many moves the G-code has and how the bit
 gets from one cut to the next. In each picture the left half is a pass on the way down and
-the right half the last pass; orange dots are where the bit goes down, dashed lines where it
+the right half the last pass; magenta dots are where the bit goes down, dashed magenta lines where it
 lifts and moves over.
 
 **Stay down** (new toolpaths): each pass on the way down cuts one ring round its floor, and
@@ -57,11 +57,11 @@ for each shape and stays down until it is done. **Order** sets which centre line
 - **Round the shape** goes round each shape the same way every time, out and back along each
   branch in turn, so every letter and point is cut alike.
 
-  ![Stay down, round the shape](pictures/vcarve_engrave_toolpath/style-stay-down-round.png)
+  ![Stay down, round the shape](pictures/vcarve_engrave_toolpath/style-stay-down-round.svg)
 
 - **Shortest path** takes the nearest cut next.
 
-  ![Stay down, shortest path](pictures/vcarve_engrave_toolpath/style-stay-down-shortest.png)
+  ![Stay down, shortest path](pictures/vcarve_engrave_toolpath/style-stay-down-shortest.svg)
 
 **Lift between cuts** cuts each stretch of centre line once, lifting between them: the
 fewest moves of all. **Direction** sets which end each stretch starts at:
@@ -69,17 +69,17 @@ fewest moves of all. **Direction** sets which end each stretch starts at:
 - **Shallow in** starts at the surface, where the shape narrows to a point, and goes down.
   The bit eases in and never plunges deep, which keeps the points from chipping.
 
-  ![Lift between cuts, shallow in](pictures/vcarve_engrave_toolpath/style-lift-shallow-in.png)
+  ![Lift between cuts, shallow in](pictures/vcarve_engrave_toolpath/style-lift-shallow-in.svg)
 
 - **Depth out** goes straight down at the deep end and comes up to the surface at the point.
 
-  ![Lift between cuts, depth out](pictures/vcarve_engrave_toolpath/style-lift-depth-out.png)
+  ![Lift between cuts, depth out](pictures/vcarve_engrave_toolpath/style-lift-depth-out.svg)
 
 **Light passes** clears the whole floor in every pass and follows every centre line in every
 pass, so no pass cuts deeper than the bit's pass depth: the most moves, for hard woods and
 light machines. Toolpaths made before there was a choice keep it.
 
-![Light passes](pictures/vcarve_engrave_toolpath/style-light-passes.png)
+![Light passes](pictures/vcarve_engrave_toolpath/style-light-passes.svg)
 
 The style new V-Carve toolpaths start with is set in Options ▸ Toolpath Settings (**V-Carve
 carving style**, with its order and direction); each toolpath keeps its own.
