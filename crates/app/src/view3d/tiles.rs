@@ -10,7 +10,7 @@
 //! on across their edges; and a frame draws one level throughout, so no cracks open where
 //! tiles of different detail would meet.
 
-use super::gpu::{self, Geometry, Tile};
+use super::gpu::{self, Geometry};
 use cut_craft_core::geometry::Point;
 use cut_craft_core::glam::DVec3;
 use cut_craft_core::simulation::Material;
@@ -102,6 +102,73 @@ pub fn spans(columns: usize, rows: usize) -> Vec<[usize; 4]> {
     spans
 }
 
+/// One tile of a tiled preview: the triangles over the quads `columns` × `rows` from
+/// (`c0`, `r0`) of a grid `across` cells wide, the quads not `shown` (each named by its
+/// first corner) left out; with `under` (where the grid's flat bottom's vertices start),
+/// the bottom under the quads shown, so the preview is closed underneath. They index the
+/// grid's own heights ([`gpu::heights`]), so neighbouring tiles share their edges and the
+/// shading and shadows run on across them.
+pub struct Tile {
+    bytes: Vec<u8>,
+}
+
+impl Tile {
+    pub fn new(
+        across: usize,
+        [c0, r0, columns, rows]: [usize; 4],
+        shown: impl Fn(usize, usize) -> bool,
+        under: Option<u32>,
+    ) -> Self {
+        let mut bytes = Vec::with_capacity(columns * rows * 24);
+        let index = |c: usize, r: usize| u32::try_from(r * across + c).expect("fits u32");
+        let mut quad = |corners: [(usize, usize); 4], from: u32| {
+            let [a, b, cc, d] = corners.map(|(c, r)| from + index(c, r));
+            for i in [a, b, cc, a, cc, d] {
+                bytes.extend_from_slice(&i.to_ne_bytes());
+            }
+        };
+        let mut all = true;
+        for r in r0..r0 + rows {
+            for c in c0..c0 + columns {
+                if shown(c, r) {
+                    quad([(c, r), (c + 1, r), (c + 1, r + 1), (c, r + 1)], 0);
+                } else {
+                    all = false;
+                }
+            }
+        }
+        // the bottom, wound the other way to face down: one quad under a whole tile
+        if let Some(under) = under {
+            let (c1, r1) = (c0 + columns, r0 + rows);
+            if all {
+                quad([(c0, r0), (c0, r1), (c1, r1), (c1, r0)], under);
+            } else {
+                for r in r0..r1 {
+                    for c in (c0..c1).filter(|&c| shown(c, r)) {
+                        quad([(c, r), (c, r + 1), (c + 1, r + 1), (c + 1, r)], under);
+                    }
+                }
+            }
+        }
+        Self { bytes }
+    }
+
+    /// Bytes on the card.
+    pub fn bytes(&self) -> usize {
+        self.bytes.len()
+    }
+
+    /// Its indices, as the card takes them.
+    pub(super) fn indices(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    /// Indices drawn.
+    pub(super) fn count(&self) -> u32 {
+        u32::try_from(self.bytes.len() / 4).expect("fits u32")
+    }
+}
+
 /// A tile: where it is, its lowest and highest points (to see whether it is in sight),
 /// and its triangles once made, with the frame it was last drawn in.
 struct Slot {
@@ -117,18 +184,35 @@ struct Level {
     origin: Point,
     cell: f64,
     columns: usize,
-    /// The cells with nothing left (none when there are none).
-    gone: Vec<bool>,
+    /// Whether the quad from each cell is drawn ([`Material::quad_shown`]); none when
+    /// all are.
+    shown: Vec<bool>,
+    /// Where the grid's flat bottom's vertices start, when the preview is closed
+    /// underneath (the block's sides shown).
+    under: Option<u32>,
     slots: Vec<Slot>,
 }
 
 impl Level {
-    fn new(m: &Material) -> Self {
-        let gone: Vec<bool> = if m.heights.iter().any(|h| h.is_nan()) {
-            m.heights.iter().map(|h| h.is_nan()).collect()
+    fn new(m: &Material, sides: bool) -> Self {
+        let (columns, rows) = (m.columns, m.rows);
+        let quad = |c: usize, r: usize| {
+            let at = |c: usize, r: usize| r * columns + c;
+            c + 1 < columns
+                && r + 1 < rows
+                && m.quad_shown([at(c, r), at(c + 1, r), at(c + 1, r + 1), at(c, r + 1)])
+        };
+        let shown: Vec<bool> = if m.heights.iter().any(|&h| h.is_nan() || m.through(h)) {
+            (0..rows)
+                .flat_map(|r| (0..columns).map(move |c| (c, r)))
+                .map(|(c, r)| quad(c, r))
+                .collect()
         } else {
             vec![]
         };
+        // after the heights, the sides' two vertices an edge cell and the bottom's corners
+        let under = sides
+            .then(|| u32::try_from(columns * rows + 4 * (columns + rows) + 4).expect("fits u32"));
         let slots = spans(m.columns, m.rows)
             .into_iter()
             .map(|span @ [c0, r0, across, up]| {
@@ -140,6 +224,9 @@ impl Level {
                             high = high.max(h);
                         }
                     }
+                }
+                if sides {
+                    low = m.bottom;
                 }
                 Slot {
                     span,
@@ -154,7 +241,8 @@ impl Level {
             origin: m.origin,
             cell: m.cell,
             columns: m.columns,
-            gone,
+            shown,
+            under,
             slots,
         }
     }
@@ -227,14 +315,15 @@ pub struct Frame {
 }
 
 impl Tiled {
-    /// `m` in tiles, keeping up to `budget` bytes of triangles on the card.
+    /// `m` in tiles, keeping up to `budget` bytes of triangles on the card; with `sides`
+    /// (the block's sides shown), closed underneath.
     #[must_use]
-    pub fn new(m: &Material, budget: usize) -> Self {
-        let mut levels = vec![Level::new(m)];
+    pub fn new(m: &Material, budget: usize, sides: bool) -> Self {
+        let mut levels = vec![Level::new(m, sides)];
         let mut at = m.clone();
         while levels.len() < LEVELS && at.columns > 2 && at.rows > 2 {
             at = halved(&at);
-            levels.push(Level::new(&at));
+            levels.push(Level::new(&at, sides));
         }
         Self {
             levels,
@@ -272,15 +361,15 @@ impl Tiled {
             .collect();
         let mut tiles = Vec::with_capacity(sight.len());
         for i in sight {
-            let (columns, gone) = (l.columns, &l.gone);
+            let (columns, shown, under) = (l.columns, &l.shown, l.under);
             let slot = &mut l.slots[i];
             let tile = if let Some((tile, seen)) = &mut slot.made {
                 *seen = frame;
                 Arc::clone(tile)
             } else {
-                let tile = Arc::new(Tile::new(columns, slot.span, |c, r| {
-                    gone.get(r * columns + c).copied().unwrap_or(false)
-                }));
+                let shown =
+                    |c: usize, r: usize| shown.get(r * columns + c).copied().unwrap_or(true);
+                let tile = Arc::new(Tile::new(columns, slot.span, shown, under));
                 slot.made = Some((Arc::clone(&tile), frame));
                 tile
             };
@@ -439,7 +528,7 @@ mod tests {
     #[test]
     fn zoomed_out_draws_a_quarter_and_zoomed_in_only_the_tiles_in_sight() {
         let m = grid(1001, 1001);
-        let mut t = Tiled::new(&m, usize::MAX);
+        let mut t = Tiled::new(&m, usize::MAX, false);
         let view = Rect::from_min_size(Pos2::ZERO, eframe::egui::vec2(600.0, 600.0));
         // the whole 1000 mm in 600 pixels: a quarter is still under a pixel apart
         let far = t.frame(above(0.6), view, 1.0).expect("in sight");
@@ -465,7 +554,7 @@ mod tests {
     fn the_nearest_tile_and_the_widest_way_round_decide_the_detail() {
         let m = grid(1001, 1001);
         let view = Rect::from_min_size(Pos2::ZERO, eframe::egui::vec2(2000.0, 2000.0));
-        let mut t = Tiled::new(&m, usize::MAX);
+        let mut t = Tiled::new(&m, usize::MAX, false);
         // nearer at the bottom: 0.2 px apart far off, 1.0 near (as in perspective)
         #[expect(clippy::cast_possible_truncation, reason = "a test's screen")]
         let leaning = |p: DVec3| {
@@ -491,7 +580,7 @@ mod tests {
     fn tiles_stay_made_and_the_oldest_go_past_the_budget() {
         let m = grid(1001, 1001);
         let view = Rect::from_min_size(Pos2::ZERO, eframe::egui::vec2(600.0, 600.0));
-        let mut t = Tiled::new(&m, usize::MAX);
+        let mut t = Tiled::new(&m, usize::MAX, false);
         let first = t.frame(above(4.0), view, 1.0).unwrap();
         let again = t.frame(above(4.0), view, 1.0).unwrap();
         assert!(
@@ -504,7 +593,7 @@ mod tests {
         );
         let one_view = t.kept();
         // a budget of one view: panning on lets the first view's tiles go
-        let mut t = Tiled::new(&m, one_view);
+        let mut t = Tiled::new(&m, one_view, false);
         let _ = t.frame(above(4.0), view, 1.0).unwrap();
         let moved = |p: DVec3| above(4.0)(p) - eframe::egui::vec2(2400.0, 0.0);
         let later = t.frame(moved, view, 1.0).unwrap();
@@ -514,12 +603,90 @@ mod tests {
             "the first corner, let go"
         );
         // zooming out keeps the full detail made, within the budget
-        let mut t = Tiled::new(&m, usize::MAX);
+        let mut t = Tiled::new(&m, usize::MAX, false);
         let _ = t.frame(above(4.0), view, 1.0).unwrap();
         let _ = t.frame(above(0.25), view, 1.0).unwrap();
         assert!(
             t.levels[0].slots[0].made.is_some(),
             "never thrown away zooming out"
+        );
+    }
+
+    fn indices(tile: &Tile) -> Vec<u32> {
+        tile.indices()
+            .chunks(4)
+            .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
+            .collect()
+    }
+
+    #[test]
+    fn a_tile_indexes_the_whole_grid_s_heights_and_leaves_out_quads_not_shown() {
+        // a grid 5 across; the tile is the 2 x 1 quads from (1, 2)
+        let tile = Tile::new(5, [1, 2, 2, 1], |_, _| true, None);
+        assert_eq!(tile.count(), 12);
+        // the quad (1,2)-(2,3): corners 11, 12, 17, 16 of the whole grid
+        assert_eq!(indices(&tile)[..6], [11, 12, 17, 11, 17, 16]);
+        let holed = Tile::new(5, [1, 2, 2, 1], |c, r| (c, r) != (2, 2), None);
+        assert_eq!(holed.count(), 6, "the quad not shown is left out");
+        assert_eq!(holed.bytes(), 24);
+    }
+
+    #[test]
+    fn a_tile_is_closed_underneath_under_the_quads_it_shows() {
+        let under = 1_000;
+        // whole: one quad under the tile, wound to face down
+        let whole = Tile::new(5, [1, 2, 2, 1], |_, _| true, Some(under));
+        assert_eq!(whole.count(), 12 + 6);
+        assert_eq!(
+            indices(&whole)[12..],
+            [1_011, 1_016, 1_018, 1_011, 1_018, 1_013]
+        );
+        // a quad not shown (cut through, or gone): no bottom under it either
+        let holed = Tile::new(5, [1, 2, 2, 1], |c, r| (c, r) != (2, 2), Some(under));
+        assert_eq!(
+            indices(&holed)[6..],
+            [1_011, 1_016, 1_017, 1_011, 1_017, 1_012]
+        );
+    }
+
+    #[test]
+    fn a_preview_cut_right_through_draws_no_floor_and_is_closed_underneath() {
+        // a slot cut right through columns 4 to 6, the left of it taken away
+        let mut m = grid(11, 5);
+        m.bottom = -10.0;
+        for (i, h) in m.heights.iter_mut().enumerate() {
+            match i % 11 {
+                0..4 => *h = f64::NAN,
+                4..7 => *h = -10.0,
+                _ => {}
+            }
+        }
+        let view = Rect::from_min_size(Pos2::ZERO, eframe::egui::vec2(1000.0, 1000.0));
+        let mut t = Tiled::new(&m, usize::MAX, true);
+        let frame = t.frame(above(40.0), view, 1.0).unwrap();
+        let all: Vec<u32> = frame.tiles.iter().flat_map(|t| indices(t)).collect();
+        let cells = 11 * 5;
+        let under = cells + 4 * (11 + 5) + 4;
+        let (top, bottom): (Vec<u32>, Vec<u32>) = all.iter().partition(|&&i| i < under);
+        let columns = |is: &[u32], from: u32| {
+            let mut c: Vec<u32> = is.iter().map(|&i| (i - from) % 11).collect();
+            c.sort_unstable();
+            c.dedup();
+            c
+        };
+        // the wall from 6 up to 7 and the part right of it; nothing over the slot
+        assert_eq!(columns(&top, 0), [6, 7, 8, 9, 10]);
+        assert_eq!(columns(&bottom, under), [6, 7, 8, 9, 10], "closed under it");
+        assert_eq!(top.len(), bottom.len());
+        // without the block's sides, the surface alone
+        let mut t = Tiled::new(&m, usize::MAX, false);
+        let frame = t.frame(above(40.0), view, 1.0).unwrap();
+        assert!(
+            frame
+                .tiles
+                .iter()
+                .flat_map(|t| indices(t))
+                .all(|i| i < under)
         );
     }
 }

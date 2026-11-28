@@ -1025,6 +1025,38 @@ fn from_below_the_block_shows_its_bottom_last() {
     );
 }
 
+#[test]
+fn a_cut_right_through_shows_no_floor_and_what_is_left_is_closed_underneath() {
+    let area = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
+    // the slot cut right through, the left of it taken away
+    let cut = |slot: f64| {
+        let mut m = slotted();
+        let columns = m.columns;
+        for (i, h) in m.heights.iter_mut().enumerate() {
+            match i % columns {
+                0..40 => *h = f64::NAN,
+                40..60 => *h = slot,
+                _ => {}
+            }
+        }
+        m
+    };
+    let through = cut(Material::new(&Job::default(), 1).bottom);
+    let taken = cut(f64::NAN);
+    let count = |m: &Material, orbit| {
+        mesh(m, orbit, Framing::default(), &plain(), area)
+            .vertices
+            .len()
+    };
+    let below = Orbit::facing(DVec3::new(0.3, -1.0, -0.5));
+    let above = Orbit::facing(DVec3::new(0.3, -1.0, 0.5));
+    // over the slot only the wall down into it (and its end on the block's side seen), no
+    // floor: as if it were gone, but the wall
+    assert_eq!(count(&through, above), count(&taken, above) + 4 * 99 + 4);
+    // underneath, a quad under each quad of the top left (40 across, 99 up)
+    assert_eq!(count(&through, below), count(&through, above) + 4 * 40 * 99);
+}
+
 /// 100 x 100 mm in 1 mm cells, its top at 0, with a 20 mm high ridge from x = 40 to 60.
 fn ridged() -> Material {
     let job = Job {

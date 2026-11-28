@@ -525,6 +525,56 @@ fn a_piece_cut_free_is_removed_whole_and_what_it_was_cut_from_stays() {
 }
 
 #[test]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "cell indices"
+)]
+fn a_cut_right_through_leaves_a_gap_the_views_show_nothing_in() {
+    let mut m = material();
+    // a 40 mm square cut right through, round (30, 30)..(70, 70)
+    let square = [
+        (30.0, 30.0, -25.0),
+        (70.0, 30.0, -25.0),
+        (70.0, 70.0, -25.0),
+        (30.0, 70.0, -25.0),
+        (30.0, 30.0, -25.0),
+    ];
+    m.cut(&toolpath(&square));
+    let (origin, cell, columns) = (m.origin, m.cell, m.columns);
+    let index = |x: f64, y: f64| {
+        let column = ((x - origin.x) / cell).floor() as usize;
+        let row = ((y - origin.y) / cell).floor() as usize;
+        (column, row)
+    };
+    let quad = |(c, r): (usize, usize)| {
+        let at = |c: usize, r: usize| r * columns + c;
+        [at(c, r), at(c + 1, r), at(c + 1, r + 1), at(c, r + 1)]
+    };
+    let kerf = index(30.0, 50.0);
+    assert!(
+        m.through(m.heights[quad(kerf)[0]]),
+        "the kerf is cut through"
+    );
+    assert!(!m.quad_shown(quad(kerf)), "no floor drawn in the kerf");
+    assert!(!m.through(0.0) && !m.through(f64::NAN));
+    assert!(m.quad_shown(quad(index(50.0, 50.0))), "the part's top");
+    assert!(m.quad_shown(quad(index(5.0, 5.0))), "the waste's top");
+    // the wall from the part's top down to the kerf is drawn
+    let wall = (0..columns)
+        .map(|c| (c, index(50.0, 50.0).1))
+        .find(|&(c, r)| {
+            let q = quad((c, r));
+            m.through(m.heights[q[1]]) && !m.through(m.heights[q[0]])
+        })
+        .expect("a wall");
+    assert!(m.quad_shown(quad(wall)));
+    // the waste taken away: nothing of it is drawn
+    m.remove_piece(Point::new(5.0, 5.0));
+    assert!(!m.quad_shown(quad(index(5.0, 5.0))));
+}
+
+#[test]
 fn the_other_side_s_cuts_show_on_the_underside_and_cut_through_leaves_nothing() {
     let mut top = material();
     top.cut(&toolpath(&[(50.0, 10.0, -1.0), (50.0, 90.0, -1.0)]));

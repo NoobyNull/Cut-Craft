@@ -35,11 +35,8 @@ pub fn mesh(material: &Material, orbit: Orbit, framing: Framing, look: &Look, ar
                 (column, row),
                 (column - 1, row),
             ];
-            // nothing is drawn where there is no model (NaN)
-            if corners
-                .iter()
-                .any(|&(c, r)| m.heights[r * m.columns + c].is_nan())
-            {
+            // nothing is drawn where there is no model (NaN), nor across a cut right through
+            if !m.quad_shown(corners.map(|(c, r)| r * m.columns + c)) {
                 continue;
             }
             let grain = |c, r| look.grain.map_or(1.0, |g| g.on_cells(m.cell).at(top(c, r)));
@@ -119,13 +116,24 @@ pub(super) fn block_faces(
         for pair in edge.windows(2) {
             let (a, b) = (top(pair[0].0, pair[0].1), top(pair[1].0, pair[1].1));
             let (fa, fb) = (floor(pair[0].0, pair[0].1), floor(pair[1].0, pair[1].1));
-            if a.z.is_nan() || b.z.is_nan() || fa.z.is_nan() || fb.z.is_nan() {
+            let gone = [a, b, fa, fb].iter().any(|p| p.z.is_nan());
+            if gone || (m.through(a.z) && m.through(b.z)) {
                 continue;
             }
             quads.push(([a, b, fb, fa], [colour; 4]));
         }
     }
-    if m.under.is_empty() {
+    let whole = || m.heights.iter().all(|&h| !h.is_nan() && !m.through(h));
+    if m.under.is_empty() && !whole() {
+        // pieces taken away or cut free: the bottom under each quad of the top left
+        if camera.faces(floor(0, 0), DVec3::NEG_Z) {
+            let shown = |c: usize, r: usize| {
+                let at = |c: usize, r: usize| r * m.columns + c;
+                m.quad_shown([at(c, r), at(c + 1, r), at(c + 1, r + 1), at(c, r + 1)])
+            };
+            quads.extend(underside(m, &floor, &shown, camera, orbit, shade, light));
+        }
+    } else if m.under.is_empty() {
         let bottom = [
             (0, 0),
             (last_column, 0),
@@ -137,16 +145,26 @@ pub(super) fn block_faces(
             quads.push((bottom, [shade(lit(DVec3::NEG_Z, light)); 4]));
         }
     } else if camera.faces(floor(0, 0), DVec3::NEG_Z) {
-        quads.extend(underside(m, &floor, camera, orbit, shade, light));
+        quads.extend(underside(
+            m,
+            &floor,
+            &|_, _| true,
+            camera,
+            orbit,
+            shade,
+            light,
+        ));
     }
     quads
 }
 
 /// The underside's quads cut from below, seen from below (it faces the viewer), lit as
-/// they face and far to near.
+/// they face and far to near; only under the quads `shown` (each named by its first
+/// corner).
 pub(super) fn underside(
     m: &Material,
     floor: &dyn Fn(usize, usize) -> DVec3,
+    shown: &dyn Fn(usize, usize) -> bool,
     camera: &Camera,
     orbit: Orbit,
     shade: &dyn Fn(f64) -> Color32,
@@ -154,7 +172,7 @@ pub(super) fn underside(
 ) -> Vec<([DVec3; 4], [Color32; 4])> {
     let mut quads = vec![];
     for row in 1..m.rows {
-        for column in 1..m.columns {
+        for column in (1..m.columns).filter(|&c| shown(c - 1, row - 1)) {
             // wound the other way round from the top, as seen from below
             let corners = [
                 (column - 1, row - 1),

@@ -939,7 +939,7 @@ impl CutCraftApp {
         let preview = self.painted(preview);
         let sheet = std::sync::Arc::new(view3d::gpu::surface(&sheet, None, sides));
         let budget = crate::preview_detail::kept_on_card(self.display.detail);
-        let tiled = view3d::tiles::Tiled::new(&preview, budget);
+        let tiled = view3d::tiles::Tiled::new(&preview, budget, sides);
         let kept = match &mut self.meshes.surface_gpu {
             Some(kept) if kept.key == key => kept,
             other => other.insert(super::super::SurfaceGpu::new(key)),

@@ -281,7 +281,8 @@ fn floor_or(c: u32, r: u32, own: f32) -> f32 {
 }
 
 // the block's sides: a top and a bottom vertex for each edge cell, the edges in turn (front,
-// back, left, right), then the bottom's four corners (or the cut underside's grid)
+// back, left, right), then the bottom's four corners (or the cut underside's grid), then
+// (where pieces are gone or cut free) the flat bottom cell by cell
 fn side_vertex(j: u32) -> Placed {
     let columns = camera.columns;
     let rows = camera.rows;
@@ -314,6 +315,10 @@ fn side_vertex(j: u32) -> Placed {
         return underside_vertex(j - 2u * perimeter);
     } else {
         let k = j - 2u * perimeter;
+        if k >= 4u {
+            // past the four corners, the bottom cell by cell (where pieces are gone)
+            return underside_vertex(k - 4u);
+        }
         let c = select(0u, columns - 1u, k == 1u || k == 2u);
         let r = select(0u, rows - 1u, k >= 2u);
         out.p = flat(c, r, camera.bottom);

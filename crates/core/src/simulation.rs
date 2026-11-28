@@ -12,6 +12,9 @@ use crate::work::{by_rows, cores};
 /// cut on a big job has thousands of cells inside the bit's width that its tip is far above.
 pub const LOOKED: f64 = 5.0;
 
+/// How near its underside a cell counts as cut right through, mm.
+pub const THROUGH: f64 = 1e-9;
+
 /// The material seen from above: a grid of square cells, each holding the height of the
 /// surface over it (0 is the top of the material, `bottom` its underside).
 #[derive(Clone, Debug, PartialEq)]
@@ -361,6 +364,21 @@ impl Material {
         left
     }
 
+    /// Whether a cell at height `h` is cut right through: down to the underside, to within
+    /// [`THROUGH`]. A cell taken away (NaN) is not.
+    pub fn through(&self, h: f64) -> bool {
+        h <= self.bottom + THROUGH
+    }
+
+    /// Whether the views draw the surface between the four cells `corners` (indices into
+    /// `heights`): not where any is taken away, nor across a cut right through (all four
+    /// at the underside), which leaves a gap to see through rather than a floor. The walls
+    /// down into such a cut are drawn.
+    pub fn quad_shown(&self, corners: [usize; 4]) -> bool {
+        let heights = corners.map(|i| self.heights[i]);
+        !heights.iter().any(|h| h.is_nan()) && !heights.iter().all(|&h| self.through(h))
+    }
+
     /// Takes away the piece of material at `p`: every cell joined to it, side to side,
     /// without a cut right through between (the preview's double-click on a part or the
     /// waste cut free of it). Taken cells hold NaN, which the views leave out. Returns how
@@ -381,8 +399,7 @@ impl Material {
         if column >= self.columns || row >= self.rows {
             return 0;
         }
-        // through means at the underside, to within a hair
-        let solid = |h: f64| !h.is_nan() && h > self.bottom + 1e-9;
+        let solid = |h: f64| !h.is_nan() && !self.through(h);
         let mut stack = vec![(column, row)];
         let mut piece = vec![];
         let mut seen = vec![false; self.heights.len()];
