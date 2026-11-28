@@ -11,8 +11,8 @@ or a note for a holiday. These come up in the **Announcements** window when Powe
 ## When one comes up
 
 An announcement is meant for certain days, or for any day until it is taken down. It opens at
-the **first start of each of those days**, going by your computer's own calendar. Start Cut
-Craft again the same day and it does not come back. On a day with an announcement, it takes
+the **first start of each of those days**, going by your computer's own calendar. Start PowerWhittle
+again the same day and it does not come back. On a day with an announcement, it takes
 the place of that start's [Did You Know?](help:tips) tip, so only one window opens.
 
 Nothing comes up during first-time setup.

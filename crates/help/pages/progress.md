@@ -46,8 +46,8 @@ A toolpath that took longer last time, or a preview with more moves to cut, gets
 share, so the bar moves at an even pace.
 
 PowerWhittle remembers how long each kind of job took in a small file, `job-times.json`, in
-its settings folder (on Linux `~/.config/cut-craft`, on Windows `%APPDATA%\cut-craft`,
-on a Mac `~/Library/Application Support/cut-craft`). Deleting it only means the first
+its settings folder (on Linux `~/.config/powerwhittle`, on Windows `%APPDATA%\powerwhittle`,
+on a Mac `~/Library/Application Support/powerwhittle`). Deleting it only means the first
 guesses start from scratch.
 
 This is the time PowerWhittle takes to work the job out on your computer. How long the

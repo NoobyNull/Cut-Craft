@@ -621,8 +621,8 @@ fn remove_question(name: &str) -> String {
     format!("Remove {name}? Its folder is deleted, so you'll need to download it again to use it.")
 }
 
-/// The tool add-ons this PowerWhittle has tools for: a tool add-on only works through a Cut
-/// Craft tool made for it (Relief from Photo for Depth, Generate Border for Borders), never
+/// The tool add-ons this PowerWhittle has tools for: a tool add-on only works through a PowerWhittle
+/// tool made for it (Relief from Photo for Depth, Generate Border for Borders), never
 /// with its own interface.
 pub const TOOLS: &[&str] = &[crate::depth::ADDON_ID, crate::borders::ADDON_ID];
 

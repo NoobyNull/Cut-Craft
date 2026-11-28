@@ -112,9 +112,9 @@ Grouped, with the reason.
 
 ## Storage
 
-- Settings stay in `options.json` in the config folder: `%APPDATA%\cut-craft` on Windows,
-  `$XDG_CONFIG_HOME/cut-craft` (or `~/.config/cut-craft`) on Linux, `~/Library/Application
-  Support/cut-craft` on macOS (`core/src/file.rs`).
+- Settings stay in `options.json` in the config folder: `%APPDATA%\powerwhittle` on Windows,
+  `$XDG_CONFIG_HOME/powerwhittle` (or `~/.config/powerwhittle`) on Linux, `~/Library/Application
+  Support/powerwhittle` on macOS (`core/src/file.rs`).
 - The Advanced section carries a checksum (keyed hash). If the file was edited outside Cut
   Craft and the checksum no longer matches, the Advanced values go back to their safe defaults
   and Cut Craft says why. Normal settings stay hand-editable.

@@ -62,9 +62,9 @@ They are kept in a `backups` folder inside PowerWhittle's settings folder:
 
 | Computer | Folder |
 |---|---|
-| Windows | `%APPDATA%\cut-craft\backups` |
-| Mac | `~/Library/Application Support/cut-craft/backups` |
-| Linux | `~/.config/cut-craft/backups` |
+| Windows | `%APPDATA%\powerwhittle\backups` |
+| Mac | `~/Library/Application Support/powerwhittle/backups` |
+| Linux | `~/.config/powerwhittle/backups` |
 
 ## Options ▸ Backups
 

@@ -751,16 +751,20 @@ fn recent_files_survive_a_restart_and_a_broken_list_is_empty() {
     assert_eq!(load_recent(&temp("no-recent.json")), Vec::<PathBuf>::new());
     let config = recent_files_path().expect("a config folder");
     assert!(
-        config.ends_with("cut-craft/recent.json"),
+        config.ends_with("powerwhittle/recent.json"),
         "{}",
         config.display()
     );
 }
 
 #[test]
-fn the_tool_database_lives_in_the_cut_craft_config_folder() {
+fn the_tool_database_lives_in_the_powerwhittle_config_folder() {
     let path = tool_database_path().expect("a config folder");
-    assert!(path.ends_with("cut-craft/tools.json"), "{}", path.display());
+    assert!(
+        path.ends_with("powerwhittle/tools.json"),
+        "{}",
+        path.display()
+    );
 }
 
 #[test]

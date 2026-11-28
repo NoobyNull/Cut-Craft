@@ -24,7 +24,7 @@ if [[ $(uname) == Darwin ]]; then
   HOME=$home "$exe" >"$home/out.txt" 2>&1 &
   pid=$!
   sleep "$seconds"
-  log="$home/Library/Application Support/cut-craft/cut-craft.log"
+  log="$home/Library/Application Support/powerwhittle/cut-craft.log"
   echo "--- metal: cut-craft.log"
   cat "$log" 2>/dev/null || true
   if ! kill -0 "$pid" 2>/dev/null; then
@@ -50,7 +50,7 @@ for backend in vulkan gl; do
   HOME=$home XDG_CONFIG_HOME=$home/.config WGPU_BACKEND=$backend \
     timeout "$seconds" xvfb-run -a -s "-screen 0 1600x1000x24" "$exe" >"$home/out.txt" 2>&1 \
     || status=$?
-  log=$home/.config/cut-craft/cut-craft.log
+  log=$home/.config/powerwhittle/cut-craft.log
   echo "--- $backend: cut-craft.log"
   cat "$log" 2>/dev/null || true
   # timeout's 124: still running when the time was up, as it should be

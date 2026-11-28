@@ -144,8 +144,8 @@ start of a line, is written in Fluent.
   doesn't have, or a missing `addon.toml` field.
 - To see it in Cut Craft without publishing it, copy your pack's files into the add-ons
   folder, in a folder named as its `id` (such as `language-de`). The add-ons folder is
-  `~/.config/cut-craft/addons/` on Linux, `%APPDATA%\cut-craft\addons\` on Windows and
-  `~/Library/Application Support/cut-craft/addons/` on a Mac. Beside the `.ftl` files, add an
+  `~/.config/powerwhittle/addons/` on Linux, `%APPDATA%\powerwhittle\addons\` on Windows and
+  `~/Library/Application Support/powerwhittle/addons/` on a Mac. Beside the `.ftl` files, add an
   `installed.json` that says where it came from:
 
   ```json

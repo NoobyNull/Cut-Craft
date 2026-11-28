@@ -10,7 +10,7 @@
 //! The filters are worked out here without opening anything, so tests check every dialog.
 
 use cut_craft_core::Registry;
-use cut_craft_core::file::{JOB_EXTENSION, JOB_EXTENSIONS, OLD_JOB_EXTENSION, TEMPLATE_EXTENSION};
+use cut_craft_core::file::{JOB_EXTENSIONS, TEMPLATE_EXTENSIONS};
 
 /// One entry in a dialog's file-type list.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -147,16 +147,13 @@ pub fn filters(dialog: Dialog<'_>, registry: &Registry) -> Vec<Filter> {
             .collect()
     };
     match dialog {
-        Dialog::OpenJob => vec![Filter::new("Cut Craft job", &JOB_EXTENSIONS)],
+        Dialog::OpenJob => vec![Filter::new("PowerWhittle job", &JOB_EXTENSIONS)],
         Dialog::SaveJob => {
-            vec![Filter::new(
-                "PowerWhittle job",
-                &[JOB_EXTENSION, OLD_JOB_EXTENSION],
-            )]
+            vec![Filter::new("PowerWhittle job", &JOB_EXTENSIONS)]
         }
         Dialog::JobTemplate => vec![Filter::new(
             "PowerWhittle job template",
-            &[TEMPLATE_EXTENSION],
+            &TEMPLATE_EXTENSIONS,
         )],
         Dialog::ImportVectorsOrPicture => {
             let ids: Vec<_> = VECTOR_IMPORTERS
@@ -318,9 +315,9 @@ mod tests {
     #[test]
     fn every_dialog_starts_on_the_type_its_action_wants() {
         let expected: Vec<(Dialog<'static>, &[&str])> = vec![
-            (Dialog::OpenJob, &["ccjob", "pwjob", "ajob"]),
-            (Dialog::SaveJob, &["ccjob", "ajob"]),
-            (Dialog::JobTemplate, &["ccjobt"]),
+            (Dialog::OpenJob, &["pwjob", "ccjob", "ajob"]),
+            (Dialog::SaveJob, &["pwjob", "ccjob", "ajob"]),
+            (Dialog::JobTemplate, &["pwjobt", "ccjobt"]),
             (
                 Dialog::ImportVectorsOrPicture,
                 &[

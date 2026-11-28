@@ -6,7 +6,7 @@ icon: common/save.png
 
 # Saving and opening jobs
 
-A job is one file (`.ccjob`) holding everything: the material, your drawing, the 3D model
+A job is one file (`.pwjob`) holding everything: the material, your drawing, the 3D model
 and the toolpaths. [Save](help:save) keeps it; [Open](help:open) brings it back. This page
 covers the ways PowerWhittle keeps your work safe in between.
 
@@ -17,9 +17,9 @@ covers the ways PowerWhittle keeps your work safe in between.
 **File ▸ Increment and Save** (**Ctrl+Alt+S**) saves a new copy with the next number on
 its name, and leaves the file you had as it was:
 
-1. Your job is `sign.ccjob`. Press **Ctrl+Alt+S**: it saves as `sign_1.ccjob`, and that is
+1. Your job is `sign.pwjob`. Press **Ctrl+Alt+S**: it saves as `sign_1.pwjob`, and that is
    the job now open.
-2. Press it again later: `sign_2.ccjob`, then `sign_3.ccjob`.
+2. Press it again later: `sign_2.pwjob`, then `sign_3.pwjob`.
 
 So you can always go back to an earlier version. A name that already ends in a number
 (`sign_4` or `sign-4`) counts on from it. A year or a date on the end, such as
@@ -63,11 +63,12 @@ changes, still marked with **\*** in the title and still kept for recovery.
 
 ## Opening a file from your file manager
 
-Open a file **with PowerWhittle** from your file manager (**Open With**, or drag it onto Cut
-Craft's icon) and PowerWhittle starts with it:
+Open a file **with PowerWhittle** from your file manager (**Open With**, or drag it onto PowerWhittle's
+icon) and PowerWhittle starts with it:
 
-- A job (`.ccjob`) opens. So does a job saved by PowerWhittle, this app's new name from
-  release 1 (`.pwjob`, and `.pwjobt` for a template): it is the same file under a new name.
+- A job (`.pwjob`) opens. So does a job saved before the app was called PowerWhittle, when
+  it was Cut Craft (`.ccjob`, and `.ccjobt` for a template): it is the very same file under
+  its old name, and it stays that name if you save it again.
 - A drawing or picture (DXF, SVG, PNG, JPG and the rest) is brought into a new, blank job.
   Change the material's size to fit it with [Setup Material](help:setup_material).
 - With **Classic Startup Flow** ticked (**Edit ▸ Options ▸ Job Defaults**), Job Setup asks
@@ -91,7 +92,7 @@ again. Only a file that is no longer there is taken off the list.
 ## Names and file types
 
 - A name you type with a dot in it keeps all of it: `plaque v1.2` saves as
-  `plaque v1.2.ccjob`. When PowerWhittle adds the extension for you and a file of that name is
+  `plaque v1.2.pwjob`. When PowerWhittle adds the extension for you and a file of that name is
   already there, it asks before replacing it. The same goes for exports, templates and
   other saved files.
 - Every file window starts on the kind of file you asked for, so the list only shows

@@ -827,14 +827,14 @@ impl CutCraftApp {
             None => dialog,
         };
         if let Some(path) = dialog.save_file()
-            && let Some(path) = saving_path(&path, &[JOB_EXTENSION])
+            && let Some(path) = saving_path(&path, &cut_craft_core::file::JOB_EXTENSIONS)
         {
             self.save_to(&path);
         }
     }
 
     /// Where Save As starts: the job's own folder and name when it has a file, else
-    /// `untitled.ccjob` wherever file dialogs open.
+    /// `untitled.pwjob` wherever file dialogs open.
     pub(super) fn save_as_suggestion(&self) -> (Option<std::path::PathBuf>, String) {
         let Some(path) = &self.session.path else {
             return (None, format!("untitled.{JOB_EXTENSION}"));
@@ -880,7 +880,7 @@ impl CutCraftApp {
                 let path = self.session.path.clone().or_else(|| {
                     filtered_dialog(Dialog::SaveJob, &self.registry)
                         .save_file()
-                        .and_then(|path| saving_path(&path, &[JOB_EXTENSION]))
+                        .and_then(|path| saving_path(&path, &cut_craft_core::file::JOB_EXTENSIONS))
                 });
                 match path {
                     Some(path) => self.save_to(&path),

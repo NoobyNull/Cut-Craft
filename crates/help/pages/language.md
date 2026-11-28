@@ -24,8 +24,8 @@ as **Translated by Ivan · 92% translated**.
 
 - **Official**: PowerWhittle checked the pack and signed it with its release key. A pack holds
   only words, so it can't run anything or change your files.
-- **Community supported**: volunteers write the words and keep them up to date, not Cut
-  Craft's author. So a pack can have the odd wrong word, and new parts of PowerWhittle show in
+- **Community supported**: volunteers write the words and keep them up to date, not PowerWhittle's
+  author. So a pack can have the odd wrong word, and new parts of PowerWhittle show in
   English until its translators catch up.
 
 **Igpay Atinlay (test)** is a pack for testing: it shows PowerWhittle in Pig Latin, the tools'
@@ -52,8 +52,8 @@ Tell the pack's translators, not PowerWhittle:
 ![Edit ▸ Options ▸ Language, with a pack picked: "Official, community supported", who translated it, how much is done, and where to report a wrong word](pictures/options-language.png)
 
 1. Open **Edit ▸ Options** and pick the **Language** page.
-2. Pick the language. Beside each pack it says who translated it and how much of Cut
-   Craft it covers, such as **Official, community supported · Translated by Ivan · 40%
+2. Pick the language. Beside each pack it says who translated it and how much of PowerWhittle
+   it covers, such as **Official, community supported · Translated by Ivan · 40%
    translated**.
 3. Press **Apply**. Like every Options page, nothing changes until then (see
    [Changing settings](help:settings)).

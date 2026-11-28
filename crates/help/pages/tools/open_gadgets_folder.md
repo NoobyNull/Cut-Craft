@@ -23,9 +23,9 @@ gadget says why in the status bar when you say yes to it. See
 
 The folder is called `gadgets`, inside PowerWhittle's settings folder:
 
-- **Linux**: `~/.config/cut-craft/gadgets`
-- **Windows**: `%APPDATA%\cut-craft\gadgets`
-- **macOS**: `~/Library/Application Support/cut-craft/gadgets`
+- **Linux**: `~/.config/powerwhittle/gadgets`
+- **Windows**: `%APPDATA%\powerwhittle\gadgets`
+- **macOS**: `~/Library/Application Support/powerwhittle/gadgets`
 
 To get gadgets other people have published on GitHub, use [Add-ons](help:addons) instead:
 it installs them for you.

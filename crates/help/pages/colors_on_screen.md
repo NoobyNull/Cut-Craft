@@ -16,8 +16,8 @@ dim screen in the workshop), pick other colors.
 
 1. Open **Edit ▸ Options ▸ Appearance**.
 2. Pick one under **Vector and toolpath colors**:
-   - **Standard**: vectors in the text color, toolpaths orange, rapid moves red, as Cut
-     Craft has always drawn them.
+   - **Standard**: vectors in the text color, toolpaths orange, rapid moves red, as PowerWhittle
+     has always drawn them.
    - **Color-blind friendly**: vectors black (white in the dark theme), toolpaths deep
      orange, rapid moves pink. They differ in how light or dark they are, not only in hue,
      so they stay apart for every kind of color blindness and in grayscale.

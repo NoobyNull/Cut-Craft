@@ -16,7 +16,7 @@ fn saved_jobs_say_what_they_are() {
     let json: serde_json::Value = serde_json::from_slice(&save_job(&sample_document())).unwrap();
     assert_eq!(json["format"], "cut-craft-job");
     assert_eq!(json["version"], 1);
-    assert_eq!(JOB_EXTENSION, "ccjob");
+    assert_eq!(JOB_EXTENSION, "pwjob");
 }
 
 #[test]
@@ -111,12 +111,55 @@ fn settings_a_newer_version_added_are_named_rather_than_dropped_silently() {
 }
 
 #[test]
-fn jobs_named_for_powerwhittle_open_as_the_very_same_file() {
-    // release 1 saves .pwjob and .pwjobt; the format inside does not change
-    assert_eq!(JOB_EXTENSIONS, ["ccjob", "pwjob", "ajob"]);
-    assert_eq!(TEMPLATE_EXTENSIONS, ["ccjobt", "pwjobt"]);
+fn jobs_save_as_pwjob_and_cut_craft_s_ccjob_open_as_the_very_same_file() {
+    // the format inside does not change with the name
+    assert_eq!(JOB_EXTENSIONS, ["pwjob", "ccjob", "ajob"]);
+    assert_eq!(TEMPLATE_EXTENSIONS, ["pwjobt", "ccjobt"]);
     assert!(is_template(Path::new("/jobs/Plate.pwjobt")));
     assert!(is_template(Path::new("/jobs/Plate.CCJOBT")));
     assert!(!is_template(Path::new("/jobs/Plate.pwjob")));
     assert!(!is_template(Path::new("/jobs/pwjobt")));
+}
+
+#[test]
+fn settings_from_before_the_rename_come_over_once_and_stay_where_they_were() {
+    use cut_craft_core::file::{OLD_SETTINGS_FOLDER, SETTINGS_FOLDER, bring_over_settings};
+    assert_eq!(
+        (OLD_SETTINGS_FOLDER, SETTINGS_FOLDER),
+        ("cut-craft", "powerwhittle")
+    );
+    let base = std::env::temp_dir().join(format!("pw-settings-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let old = base.join("cut-craft");
+    std::fs::create_dir_all(old.join("posts")).unwrap();
+    std::fs::write(old.join("options.json"), "{}").unwrap();
+    std::fs::write(old.join("posts/mine.pp"), "post").unwrap();
+    // the first start of the renamed app copies everything across
+    assert!(bring_over_settings(&base).unwrap());
+    let new = base.join("powerwhittle");
+    assert_eq!(
+        std::fs::read_to_string(new.join("options.json")).unwrap(),
+        "{}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(new.join("posts/mine.pp")).unwrap(),
+        "post"
+    );
+    assert!(
+        old.join("options.json").exists(),
+        "the old folder stays for an older copy"
+    );
+    // later starts leave the new folder alone, changes and all
+    std::fs::write(new.join("options.json"), "{\"changed\": true}").unwrap();
+    assert!(!bring_over_settings(&base).unwrap());
+    assert_eq!(
+        std::fs::read_to_string(new.join("options.json")).unwrap(),
+        "{\"changed\": true}"
+    );
+    // a fresh install has nothing to bring
+    let fresh = base.join("fresh");
+    std::fs::create_dir_all(&fresh).unwrap();
+    assert!(!bring_over_settings(&fresh).unwrap());
+    assert!(!fresh.join("powerwhittle").exists());
+    std::fs::remove_dir_all(&base).unwrap();
 }

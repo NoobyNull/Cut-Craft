@@ -63,8 +63,7 @@ screen, and only the tiles you can see:
   of memory the slider sets (more toward **More detail**); past that, the tiles you
   haven't looked at for longest are let go first, and made again when you look back.
 
-All of it is let go when you press **Reset Preview**, make a new preview, or close Cut
-Craft.
+All of it is let go when you press **Reset Preview**, make a new preview, or close PowerWhittle.
 
 ## Now and the default
 
