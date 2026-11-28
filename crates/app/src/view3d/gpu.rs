@@ -103,11 +103,16 @@ pub fn surface(m: &Material, wrap: Option<super::Wrap>, sides: bool) -> Geometry
         Some(_) => (m.columns, m.rows.saturating_sub(1)),
         None => (m.columns.saturating_sub(1), m.rows.saturating_sub(1)),
     };
+    // flat, a cut right through is a gap (no floor); round the axis it is the axis
+    let shown = |corners: [(usize, usize); 4]| match wrap {
+        None => m.quad_shown(corners.map(|(c, r)| r * m.columns + c)),
+        Some(_) => !corners.iter().any(|&(c, r)| height(c, r).is_nan()),
+    };
     for r in 0..rows {
         for c in 0..columns {
             let (nc, nr) = ((c + 1) % m.columns, (r + 1) % m.rows);
             let corners = [(c, r), (nc, r), (nc, nr), (c, nr)];
-            if corners.iter().any(|&(c, r)| height(c, r).is_nan()) {
+            if !shown(corners) {
                 continue;
             }
             g.quad(corners.map(|(c, r)| index(c, r)));
@@ -151,9 +156,22 @@ pub fn surface(m: &Material, wrap: Option<super::Wrap>, sides: bool) -> Geometry
                 }
             }
             g.vertices = bottom + u32::try_from(cells).expect("fits u32");
-        } else {
+        } else if m.heights.iter().all(|&h| !h.is_nan() && !m.through(h)) {
             g.quad([bottom, bottom + 1, bottom + 2, bottom + 3]);
             g.vertices = bottom + 4;
+        } else {
+            // pieces taken away or cut free: the bottom under each quad of the top left,
+            // so nothing is drawn where nothing is left and each piece is closed underneath
+            let under = bottom + 4;
+            for r in 0..m.rows.saturating_sub(1) {
+                for c in 0..m.columns.saturating_sub(1) {
+                    if shown([(c, r), (c + 1, r), (c + 1, r + 1), (c, r + 1)]) {
+                        let corners = [(c, r), (c, r + 1), (c + 1, r + 1), (c + 1, r)];
+                        g.quad(corners.map(|(c, r)| under + index(c, r)));
+                    }
+                }
+            }
+            g.vertices = under + u32::try_from(cells).expect("fits u32");
         }
     }
     g
@@ -195,52 +213,10 @@ pub fn heights(m: &Material, wrap: Option<super::Wrap>, sides: bool) -> Geometry
     g
 }
 
-/// One tile of a tiled preview: the triangles over the quads `columns` × `rows` from
-/// (`c0`, `r0`) of a grid `across` cells wide, the quads with a corner gone (`gone`) left
-/// out. They index the grid's own heights ([`heights`]), so neighbouring tiles share
-/// their edges and the shading and shadows run on across them.
-pub struct Tile {
-    bytes: Vec<u8>,
-}
-
-impl Tile {
-    pub fn new(
-        across: usize,
-        [c0, r0, columns, rows]: [usize; 4],
-        gone: impl Fn(usize, usize) -> bool,
-    ) -> Self {
-        let mut bytes = Vec::with_capacity(columns * rows * 24);
-        let index = |c: usize, r: usize| u32::try_from(r * across + c).expect("fits u32");
-        for r in r0..r0 + rows {
-            for c in c0..c0 + columns {
-                let corners = [(c, r), (c + 1, r), (c + 1, r + 1), (c, r + 1)];
-                if corners.iter().any(|&(c, r)| gone(c, r)) {
-                    continue;
-                }
-                let [a, b, cc, d] = corners.map(|(c, r)| index(c, r));
-                for i in [a, b, cc, a, cc, d] {
-                    bytes.extend_from_slice(&i.to_ne_bytes());
-                }
-            }
-        }
-        Self { bytes }
-    }
-
-    /// Bytes on the card.
-    pub fn bytes(&self) -> usize {
-        self.bytes.len()
-    }
-
-    /// Indices drawn.
-    fn count(&self) -> u32 {
-        u32::try_from(self.bytes.len() / 4).expect("fits u32")
-    }
-}
-
 /// A tiled preview's frame: one level's heights, and the tiles of it in sight.
 pub struct Tiles {
     pub draw: Draw,
-    pub tiles: Vec<Arc<Tile>>,
+    pub tiles: Vec<Arc<super::tiles::Tile>>,
 }
 
 /// An imported model's faces: three corners and whether the face is marked, each.
@@ -549,9 +525,9 @@ pub struct Gpu {
     ghost: Option<Piece>,
     /// A tiled preview's level being drawn: its heights, with no triangles of its own.
     level: Option<Piece>,
-    /// Tiles' triangles on the card, kept while the app keeps their [`Tile`]: the app's
+    /// Tiles' triangles on the card, kept while the app keeps their [`Tile`](super::tiles::Tile): the app's
     /// memory budget decides what stays.
-    tiles: Vec<(Arc<Tile>, wgpu::Buffer)>,
+    tiles: Vec<(Arc<super::tiles::Tile>, wgpu::Buffer)>,
     /// Pieces drawn lately and put aside, so going back to one (the 3D view's detail
     /// following the frame rate) uploads nothing; one whose geometry nothing else holds
     /// leaves the card.
@@ -794,7 +770,7 @@ impl Gpu {
                         .device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                             label: Some("view3d tile"),
-                            contents: &tile.bytes,
+                            contents: tile.indices(),
                             usage: wgpu::BufferUsages::INDEX,
                         });
                 self.tiles.push((Arc::clone(tile), buffer));
@@ -877,22 +853,6 @@ mod tests {
         let whole = most_points_whole(&limits);
         assert!(whole * 24 <= 256 << 20, "{whole}");
         assert!(whole > 9_000_000 && whole < most, "{whole}");
-    }
-
-    #[test]
-    fn a_tile_indexes_the_whole_grid_s_heights_and_leaves_out_gone_quads() {
-        // a grid 5 across; the tile is the 2 x 1 quads from (1, 2)
-        let tile = Tile::new(5, [1, 2, 2, 1], |_, _| false);
-        assert_eq!(tile.count(), 12);
-        let first: Vec<u32> = tile.bytes[..24]
-            .chunks(4)
-            .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
-            .collect();
-        // the quad (1,2)-(2,3): corners 11, 12, 17, 16 of the whole grid
-        assert_eq!(first, [11, 12, 17, 11, 17, 16]);
-        let holed = Tile::new(5, [1, 2, 2, 1], |c, r| (c, r) == (3, 3));
-        assert_eq!(holed.count(), 6, "the quad with a corner gone is left out");
-        assert_eq!(holed.bytes(), 24);
     }
 
     #[test]
@@ -1085,6 +1045,45 @@ mod tests {
             &[10_000, 10_002, 10_003, 10_000, 10_003, 10_001]
         );
         assert_eq!(indices.last(), Some(&10_803));
+    }
+
+    #[test]
+    fn a_cut_right_through_is_a_gap_and_the_bottom_stays_under_what_is_left() {
+        // the slot cut right through, and the left of it taken away
+        let mut m = slotted();
+        let (columns, cells) = (m.columns, m.columns * m.rows);
+        for (i, h) in m.heights.iter_mut().enumerate() {
+            match i % columns {
+                0..40 => *h = f64::NAN,
+                40..60 => *h = -20.0,
+                _ => {}
+            }
+        }
+        m.bottom = -20.0;
+        let g = surface(&m, None, true);
+        let indices = u32s(&g.indices);
+        let cells = u32::try_from(cells).unwrap();
+        let top: Vec<u32> = indices.iter().copied().filter(|&i| i < cells).collect();
+        let column = |i: u32| i as usize % columns;
+        // the walls into the slot (columns 59 to 60), not its floor nor the taken part
+        assert!(top.iter().all(|&i| column(i) >= 59), "{:?}", &top[..6]);
+        assert_eq!(
+            top.len(),
+            6 * 40 * 99,
+            "the right part's quads and the wall"
+        );
+        // under each quad left, a quad of the bottom: the bottom's vertices are after the
+        // sides' and the four corners'
+        let under = cells + 2 * 400 + 4;
+        let bottom: Vec<u32> = indices.iter().copied().filter(|&i| i >= under).collect();
+        assert_eq!(bottom.len(), top.len(), "one under each");
+        assert!(bottom.iter().all(|&i| column(i - under) >= 59));
+        assert_eq!(g.vertices, under + cells);
+        // wound the other way, to face down
+        assert_eq!(&bottom[..3], &[under + 59, under + 159, under + 160]);
+        // uncut, the bottom is one quad
+        let whole = surface(&slotted(), None, true);
+        assert_eq!(whole.vertices, cells + 2 * 400 + 4);
     }
 
     #[test]

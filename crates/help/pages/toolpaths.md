@@ -1,5 +1,5 @@
 ---
-reviewed: 2026-11-27
+reviewed: 2026-11-28
 see-also: preview_detail, rotary_machining_toolpath, rotary_locked_angles_toolpath, rotary_firmware, job_setup
 ---
 
@@ -84,7 +84,8 @@ closes the controls, as its moves are out of date: preview again to play the new
 change in Job Setup to the material's size, thickness or place clears the preview, so the
 3D view shows the new block and the next Preview cuts into that. In the 3D view,
 double-click a piece the preview has cut right free (a part, or the waste round it) to take
-it away and see what is left; Undo Last Preview brings it back. Where nothing is cut free
+it away and see what is left, solid from every side; Undo Last Preview brings it back. A cut
+right through the material shows as a gap you can see through, not a floor. Where nothing is cut free
 (uncut material, a pocket, a part held by tabs), even after another piece was taken, a
 double-click selects a component or fits the view as usual. Going back starts from the nearest point saved
 while it played, so it is quick once played through. A jump is cut across the
