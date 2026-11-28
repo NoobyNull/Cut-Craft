@@ -141,7 +141,7 @@ pub struct Params {
         extend(
             "x-group" = "Carving Style",
             "x-widget" = "drop-down",
-            "x-diagram" = "diagrams/vcarve_{}.png",
+            "x-diagram" = "diagrams/vcarve_{}.svg",
             "x-show-when" = {"place": ["fill", "inside", "outside"]}
         )
     )]
@@ -151,7 +151,7 @@ pub struct Params {
     #[schemars(extend(
         "x-group" = "Carving Style",
         "x-widget" = "drop-down",
-        "x-diagram" = "diagrams/vcarve_order_{}.png",
+        "x-diagram" = "diagrams/vcarve_order_{}.svg",
         "x-show-when" = {"style": "stay_down", "place": ["fill", "inside", "outside"]}
     ))]
     pub order: Order,
@@ -160,7 +160,7 @@ pub struct Params {
     #[schemars(extend(
         "x-group" = "Carving Style",
         "x-widget" = "drop-down",
-        "x-diagram" = "diagrams/vcarve_direction_{}.png",
+        "x-diagram" = "diagrams/vcarve_direction_{}.svg",
         "x-show-when" = {"style": "lift", "place": ["fill", "inside", "outside"]}
     ))]
     pub direction: Direction,
