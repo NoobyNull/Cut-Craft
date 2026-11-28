@@ -100,6 +100,18 @@ and that address still leads there, so older copies keep finding updates with no
 on your side. Every download is checked against PowerWhittle's own signature before anything is
 installed.
 
+## Settings from Cut Craft
+
+The first time PowerWhittle starts after the update from Cut Craft, it copies Cut Craft's
+settings folder into its own (`cut-craft` into `powerwhittle`, in the places listed under
+[Backups](help:backups)). The old folder is left as it was. A link in it, such as a `fonts`
+link to a folder somewhere else, comes over as the same link, even if that folder has since
+been deleted. On Windows, which makes links only in Developer Mode or for an administrator, a
+link it cannot make is left behind, and PowerWhittle uses the rest.
+
+If the copy stops part way, PowerWhittle keeps using the old folder and tries again at the
+next start, so nothing is lost.
+
 ## Copies that update another way
 
 Some copies of PowerWhittle are looked after by something else, which owns their files. For

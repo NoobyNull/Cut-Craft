@@ -3,7 +3,7 @@
 
 use super::*;
 
-const HEADS_UP: &str = "PowerWhittle is becoming PowerWhittle";
+const HEADS_UP: &str = "CutCraft is becoming PowerWhittle";
 
 #[expect(
     clippy::unnecessary_wraps,

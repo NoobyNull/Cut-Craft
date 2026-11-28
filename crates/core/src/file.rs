@@ -126,31 +126,71 @@ struct Copied {
 /// Copies from `from` into `to` each file `to` lacks or an earlier bring-over copied, `under`
 /// being their path below the settings folder. Each is listed before it is copied, so one cut
 /// short is copied again, and written beside its place and renamed into it, so a part copy is
-/// never taken for the whole file.
+/// never taken for the whole file. A link comes over as the same link, not what it points at.
 fn copy_over(from: &Path, to: &Path, under: &str, copied: &mut Copied) -> std::io::Result<()> {
     std::fs::create_dir_all(to)?;
     for entry in std::fs::read_dir(from)? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().into_owned();
         let (target, path) = (to.join(entry.file_name()), format!("{under}{name}"));
-        if entry.file_type()?.is_dir() {
+        let kind = entry.file_type()?;
+        if kind.is_dir() {
             copy_over(&entry.path(), &target, &format!("{path}/"), copied)?;
             continue;
         }
-        if target.exists() && !copied.before.contains(&path) {
+        // a link counts as there even when it points nowhere
+        if target.symlink_metadata().is_ok() && !copied.before.contains(&path) {
             continue;
         }
         std::io::Write::write_all(&mut copied.list, format!("{path}\n").as_bytes())?;
         copied.list.sync_data()?;
         let mut part = target.clone().into_os_string();
         part.push(format!(".copying-{}", std::process::id()));
-        let done = std::fs::copy(entry.path(), &part).and_then(|_| std::fs::rename(&part, &target));
+        let made = if kind.is_symlink() {
+            // the same link, wherever it points, even to something since deleted; one this
+            // system will not make is left behind rather than stopping the bring-over
+            match copy_link(&entry.path(), Path::new(&part)) {
+                Ok(()) => Ok(()),
+                Err(_) if cfg!(windows) => continue,
+                Err(e) => Err(e),
+            }
+        } else {
+            std::fs::copy(entry.path(), &part).map(drop)
+        };
+        let done = made.and_then(|()| std::fs::rename(&part, &target));
         if done.is_err() {
             let _ = std::fs::remove_file(&part);
         }
         done?;
     }
     Ok(())
+}
+
+/// Makes `to` a link to wherever the link `from` points.
+#[cfg(unix)]
+fn copy_link(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(std::fs::read_link(from)?, to)
+}
+
+/// Makes `to` a link to wherever the link `from` points: a folder link when `from` is one.
+/// Windows makes links only with Developer Mode or as administrator.
+#[cfg(windows)]
+fn copy_link(from: &Path, to: &Path) -> std::io::Result<()> {
+    use std::os::windows::fs::FileTypeExt;
+    let points_at = std::fs::read_link(from)?;
+    if std::fs::symlink_metadata(from)?
+        .file_type()
+        .is_symlink_dir()
+    {
+        std::os::windows::fs::symlink_dir(points_at, to)
+    } else {
+        std::os::windows::fs::symlink_file(points_at, to)
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+fn copy_link(_from: &Path, _to: &Path) -> std::io::Result<()> {
+    Err(std::io::ErrorKind::Unsupported.into())
 }
 
 #[cfg(windows)]
