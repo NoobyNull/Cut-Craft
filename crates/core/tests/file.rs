@@ -300,3 +300,55 @@ fn a_list_of_copied_files_that_cannot_be_read_stops_the_bring_over() {
     );
     std::fs::remove_dir_all(&base).unwrap();
 }
+
+#[cfg(unix)]
+#[test]
+fn a_link_in_the_old_folder_comes_over_as_the_same_link_even_when_it_points_nowhere() {
+    use cut_craft_core::file::{BROUGHT_OVER, bring_over_settings, settings_folder};
+    use std::os::unix::fs::symlink;
+    let base = std::env::temp_dir().join(format!("pw-settings-links-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let (old, new) = (base.join("cut-craft"), base.join("powerwhittle"));
+    std::fs::create_dir_all(&old).unwrap();
+    std::fs::create_dir_all(base.join("my posts")).unwrap();
+    std::fs::write(old.join("options.json"), "{}").unwrap();
+    // a fonts link to a folder since deleted, and a link to a folder that is there
+    symlink(base.join("deleted fonts"), old.join("fonts")).unwrap();
+    symlink(base.join("my posts"), old.join("posts")).unwrap();
+    assert!(bring_over_settings(&base).unwrap());
+    for name in ["fonts", "posts"] {
+        assert_eq!(
+            std::fs::read_link(new.join(name)).unwrap(),
+            std::fs::read_link(old.join(name)).unwrap(),
+            "{name} is the same link"
+        );
+    }
+    assert_eq!(
+        std::fs::read_to_string(new.join("options.json")).unwrap(),
+        "{}"
+    );
+    assert!(new.join(BROUGHT_OVER).exists());
+    assert_eq!(settings_folder(&base), new);
+    std::fs::remove_dir_all(&base).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn a_link_already_in_the_new_folder_is_kept() {
+    use cut_craft_core::file::bring_over_settings;
+    use std::os::unix::fs::symlink;
+    let base = std::env::temp_dir().join(format!("pw-settings-own-link-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let (old, new) = (base.join("cut-craft"), base.join("powerwhittle"));
+    std::fs::create_dir_all(&old).unwrap();
+    std::fs::create_dir_all(&new).unwrap();
+    symlink(base.join("old fonts"), old.join("fonts")).unwrap();
+    // put there by hand before the first start, pointing nowhere yet
+    symlink(base.join("new fonts"), new.join("fonts")).unwrap();
+    assert!(bring_over_settings(&base).unwrap());
+    assert_eq!(
+        std::fs::read_link(new.join("fonts")).unwrap(),
+        base.join("new fonts")
+    );
+    std::fs::remove_dir_all(&base).unwrap();
+}
