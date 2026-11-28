@@ -1,8 +1,8 @@
 //! Laying a form out: its tabs, plain rows, grids, diagram and hover help.
 
 use super::{
-    DIAGRAM_ASPECT, DIAGRAM_ROWS, FIELD_PICTURE_ROWS, Field, HoverHint, Kind, Look, Number, Units,
-    Value, Widget, edit, egui, round, tr,
+    BESIDE_ROWS, BESIDE_SHARE, DIAGRAM_ASPECT, DIAGRAM_ROWS, FIELD_PICTURE_ROWS, FIELDS_LEAST_ROWS,
+    Field, HoverHint, Kind, Look, Number, Units, Value, Widget, edit, egui, round, tr,
 };
 
 /// [`show`] for `params` somewhere inside the form, whose top-level parameters are `top`.
@@ -37,8 +37,7 @@ pub(super) fn show_within(
             ui.group(|ui| {
                 ui.set_width(ui.available_width());
                 ui.strong(super::setting_text(group));
-                diagram(ui, block, params, look);
-                let mut changed = plain(ui, block, params, look, top);
+                let mut changed = with_diagram(ui, block, params, look, top);
                 if let Some(end) = look.group_end {
                     changed |= end(ui, group, params);
                 }
@@ -46,20 +45,103 @@ pub(super) fn show_within(
             })
             .inner
         } else {
-            diagram(ui, block, params, look);
-            plain(ui, block, params, look, top)
+            with_diagram(ui, block, params, look, top)
         };
         rest = after;
     }
     changed
 }
 
-/// The picture of `fields` (`x-diagram`), as wide as there is room for, up to
-/// [`DIAGRAM_ROWS`] tall, at [`DIAGRAM_ASPECT`]: the last one's that has one, so a choice
-/// shown only for another choice draws the two together; `{}` in it stands for the field's
-/// value in `params` (a picture of what is picked).
-pub(super) fn diagram(ui: &mut egui::Ui, fields: &[&Field], params: &Value, look: &Look) {
-    let Some(picture) = fields
+/// The least share of its width a picture beside its settings may be squeezed to before it
+/// goes above them instead.
+const CROWDED_SHARE: f32 = 0.7;
+
+/// `fields` ([`plain`]) with their picture ([`diagram`]): beside them, small, or across the
+/// form above them, as Options ▸ Appearance ▸ Form pictures says ([`super::set_pictures`]).
+/// Either way its letters are the form's text size ([`crate::lettered`]).
+fn with_diagram(
+    ui: &mut egui::Ui,
+    fields: &[&Field],
+    params: &mut Value,
+    look: &Look,
+    top: &Value,
+) -> bool {
+    use crate::lettered::{Fit, aspect, show};
+    let Some(picture) = diagram(fields, params, look) else {
+        return plain(ui, fields, params, look, top);
+    };
+    let row = ui.spacing().interact_size.y;
+    let room = ui.available_width();
+    if super::pictures(ui.ctx()) == crate::options::FormPictures::FullWidth {
+        let width = room.min(row * DIAGRAM_ROWS * DIAGRAM_ASPECT);
+        show(
+            ui,
+            &picture,
+            egui::vec2(width, width / DIAGRAM_ASPECT),
+            Fit::Whole,
+        );
+        return plain(ui, fields, params, look, top);
+    }
+    let ratio = aspect(ui.ctx(), &picture, Fit::Cut).unwrap_or(DIAGRAM_ASPECT);
+    let width = (row * BESIDE_ROWS * ratio).min(room * BESIDE_SHARE);
+    let gap = ui.spacing().item_spacing.x;
+    let fields_width = room - width - gap;
+    // the room at which the settings came out too wide for the picture beside them, last time
+    let crowded_id = ui.scope_id().with(("crowded", &fields[0].key));
+    let crowded = ui
+        .data(|d| d.get_temp::<f32>(crowded_id))
+        .is_some_and(|at| room <= at + 1.0);
+    if crowded || fields_width < row * FIELDS_LEAST_ROWS {
+        // too narrow to stand side by side: small, above them
+        let width = (row * BESIDE_ROWS * ratio).min(room);
+        show(ui, &picture, egui::vec2(width, width / ratio), Fit::Cut);
+        return plain(ui, fields, params, look, top);
+    }
+    // the settings the picture marks stand beside it, those after the last one under both;
+    // a picture of what a choice picks stands beside that choice
+    let marked = fields
+        .iter()
+        .rposition(|f| f.dim.is_some())
+        .map_or(1, |last| last + 1);
+    let (beside, under) = fields.split_at(marked.min(fields.len()));
+    let start = ui.cursor().min;
+    let mut changed = false;
+    let used = ui
+        .scope(|ui| {
+            ui.set_max_width(fields_width);
+            changed = plain(ui, beside, params, look, top);
+        })
+        .response
+        .rect;
+    // a field wider than its share pushes the picture right, smaller, never over it
+    let right = start.x + room;
+    let left = (used.right() + gap).max(right - width);
+    let wanted = width;
+    let width = (right - left).clamp(0.0, width);
+    if width < wanted * CROWDED_SHARE {
+        // squeezed: from the next frame, above them, until the form is given more room
+        ui.data_mut(|d| d.insert_temp(crowded_id, room));
+        ui.ctx().request_repaint();
+    }
+    let place =
+        egui::Rect::from_min_size(egui::pos2(left, start.y), egui::vec2(width, width / ratio));
+    crate::lettered::paint(ui, &picture, place, Fit::Cut);
+    let short = place.bottom() - ui.cursor().min.y;
+    if short > 0.0 {
+        ui.add_space(short);
+    }
+    ui.expand_to_include_rect(place);
+    if !under.is_empty() {
+        changed |= plain(ui, under, params, look, top);
+    }
+    changed
+}
+
+/// The picture of `fields` (`x-diagram`): the last one's that has one, so a choice shown
+/// only for another choice draws the two together; `{}` in it stands for the field's value
+/// in `params` (a picture of what is picked).
+fn diagram(fields: &[&Field], params: &Value, look: &Look) -> Option<egui::Image<'static>> {
+    fields
         .iter()
         .rev()
         .filter_map(|f| {
@@ -70,12 +152,6 @@ pub(super) fn diagram(ui: &mut egui::Ui, fields: &[&Field], params: &Value, look
             ))
         })
         .find_map(|path| (look.picture)(&path))
-    else {
-        return;
-    };
-    let tallest = ui.spacing().interact_size.y * DIAGRAM_ROWS;
-    let width = ui.available_width().min(tallest * DIAGRAM_ASPECT);
-    ui.add(picture.fit_to_exact_size(egui::vec2(width, width / DIAGRAM_ASPECT)));
 }
 
 /// A measurement's callout letter, as the picture above it marks it.

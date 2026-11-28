@@ -25,6 +25,30 @@ const FACES_PICTURE_ROWS: f32 = 4.0;
 const DIAGRAM_ROWS: f32 = 7.0;
 /// A measurements picture's width over its height (they are drawn 448 x 224).
 const DIAGRAM_ASPECT: f32 = 2.0;
+/// How tall a measurements picture is beside the fields it marks (Options ▸ Appearance ▸
+/// Form pictures), in rows of the theme's interactive height.
+// ponytail: fixed ratio until a preferences dialog exists
+const BESIDE_ROWS: f32 = 3.5;
+/// The most of a form's width a picture beside the fields takes.
+const BESIDE_SHARE: f32 = 0.45;
+/// The least room the fields keep beside a picture, in rows of the theme's interactive
+/// height; narrower, the picture goes above them, still small.
+const FIELDS_LEAST_ROWS: f32 = 7.0;
+
+/// Where measurement pictures go, as Options ▸ Appearance ▸ Form pictures says: kept in
+/// egui's memory, so every form, and every window a form opens, follows it.
+pub fn set_pictures(ctx: &egui::Context, pictures: crate::options::FormPictures) {
+    ctx.data_mut(|d| d.insert_temp(pictures_id(), pictures));
+}
+
+/// Where measurement pictures go (see [`set_pictures`]).
+fn pictures(ctx: &egui::Context) -> crate::options::FormPictures {
+    ctx.data(|d| d.get_temp(pictures_id())).unwrap_or_default()
+}
+
+fn pictures_id() -> egui::Id {
+    egui::Id::unique("form_pictures")
+}
 /// The callout letters' colour: the pictures' magenta (`assets/icons/diagrams`) in the light
 /// theme, a lighter magenta on the dark theme's panel, where the pictures' own would be faint.
 /// Magenta stays apart from the wood and the blue bit with any kind of colour blindness.

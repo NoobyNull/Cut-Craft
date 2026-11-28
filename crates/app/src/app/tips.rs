@@ -325,7 +325,13 @@ impl CutCraftApp {
             let gap = (wide / 2.0 - high) / 2.0;
             ui.add_space(gap);
             ui.vertical_centered(|ui| {
-                ui.add(picture.fit_to_exact_size(egui::vec2(wide, high)));
+                // a measurement picture's letters stay the size of the words under it
+                crate::lettered::show(
+                    ui,
+                    &picture,
+                    egui::vec2(wide, high),
+                    crate::lettered::Fit::Whole,
+                );
             });
             ui.add_space(gap);
             ui.add_space(ui.spacing().item_spacing.y);
