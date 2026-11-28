@@ -92,11 +92,15 @@ pub fn bring_over_settings(base: &Path) -> std::io::Result<bool> {
     }
     let list = new.join(COPIED_SO_FAR);
     let mut copied = Copied {
-        before: std::fs::read_to_string(&list)
-            .unwrap_or_default()
-            .lines()
-            .map(str::to_owned)
-            .collect(),
+        // a list that is there but cannot be read stops the bring-over, rather than taking
+        // the files it names for ones put there by hand
+        before: match std::fs::read_to_string(&list) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+            read => read?,
+        }
+        .lines()
+        .map(str::to_owned)
+        .collect(),
         list: std::fs::File::options()
             .append(true)
             .create(true)

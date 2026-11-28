@@ -280,3 +280,23 @@ fn starts_at_the_same_time_take_turns_and_bring_the_settings_over_once() {
     }
     std::fs::remove_dir_all(&base).unwrap();
 }
+
+#[test]
+fn a_list_of_copied_files_that_cannot_be_read_stops_the_bring_over() {
+    use cut_craft_core::file::{BROUGHT_OVER, COPIED_SO_FAR, bring_over_settings, settings_folder};
+    let base = std::env::temp_dir().join(format!("pw-settings-list-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let (old, new) = (base.join("cut-craft"), base.join("powerwhittle"));
+    std::fs::create_dir_all(&old).unwrap();
+    std::fs::write(old.join("options.json"), "{}").unwrap();
+    std::fs::create_dir_all(&new).unwrap();
+    std::fs::write(new.join(COPIED_SO_FAR), [0xff, 0xfe, b'\n']).unwrap();
+    assert!(bring_over_settings(&base).is_err());
+    assert!(!new.join(BROUGHT_OVER).exists(), "not taken as done");
+    assert_eq!(
+        settings_folder(&base),
+        old,
+        "the app keeps to the old folder"
+    );
+    std::fs::remove_dir_all(&base).unwrap();
+}
