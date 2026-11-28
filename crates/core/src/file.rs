@@ -69,8 +69,8 @@ pub fn bring_over_old_settings() -> std::io::Result<bool> {
 }
 
 /// Copies what `to` lacks from `from`. Each file is written beside its place first and then
-/// renamed into it, so a copy cut short is never taken for the whole file, and two windows
-/// started together don't step on each other's copies.
+/// linked into it, so a copy cut short is never taken for the whole file, and two windows
+/// started together never write over each other's files.
 fn copy_missing(from: &Path, to: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(to)?;
     for entry in std::fs::read_dir(from)? {
@@ -82,11 +82,16 @@ fn copy_missing(from: &Path, to: &Path) -> std::io::Result<()> {
             let mut part = target.clone().into_os_string();
             part.push(format!(".copying-{}", std::process::id()));
             std::fs::copy(entry.path(), &part)?;
-            if target.exists() {
-                std::fs::remove_file(&part)?;
-            } else {
-                std::fs::rename(&part, &target)?;
-            }
+            // a link is made only where there is no file yet, never over one, so a setting
+            // another window has saved meanwhile is never replaced by the old one
+            let linked = match std::fs::hard_link(&part, &target) {
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+                // a folder that cannot link files
+                Err(_) if !target.exists() => std::fs::rename(&part, &target),
+                done => done,
+            };
+            let _ = std::fs::remove_file(&part);
+            linked?;
         }
     }
     Ok(())
