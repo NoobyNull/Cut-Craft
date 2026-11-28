@@ -119,10 +119,6 @@ pub struct BugReports {
     #[serde(default)]
     #[schemars(title = "Send bug reports")]
     pub send_with: SendWith,
-    /// The GitHub name typed in the last bug report, offered in the next one.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    #[schemars(skip)]
-    pub github_name: String,
     /// A random number for this install, made when a crash or bug report is first sent, so
     /// the report services can tell one install from another. Nothing about the person.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -136,7 +132,6 @@ impl Default for BugReports {
             crash_logs: CrashLogs::default(),
             computer_details: true,
             send_with: SendWith::default(),
-            github_name: String::new(),
             install_id: None,
         }
     }
@@ -146,8 +141,8 @@ impl Default for BugReports {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SendWith {
-    /// Through PowerWhittle's bug-report service: no GitHub account needed. Your pictures and
-    /// report become a public GitHub issue
+    /// Through PowerWhittle's bug-report service: no GitHub account needed, and nothing in the
+    /// issue names you. Your pictures and report become a public GitHub issue
     #[default]
     #[schemars(title = "PowerWhittle's bug-report service")]
     Service,

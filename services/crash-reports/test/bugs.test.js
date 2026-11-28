@@ -41,7 +41,7 @@ const send = (e, body, ip = '', at = now) => handle(new Request('https://w.examp
 
 test('a bug report puts its pictures in the pictures repo, then opens the issue', async () => {
   const gh = fakeGitHub();
-  const r = await send(env(gh), bug({ reporter: '@Ray-1961' }));
+  const r = await send(env(gh), bug({ reporter: 'Ray-1961' }));
   assert.equal(r.status, 201);
   assert.deepEqual(await r.json(), { url: 'https://github.com/pw/app/issues/42' });
   const [picture, issue] = gh.calls;
@@ -54,7 +54,8 @@ test('a bug report puts its pictures in the pictures repo, then opens the issue'
   assert.equal(issue.body.title, 'Apply does nothing');
   assert.deepEqual(issue.body.labels, ['bug']);
   assert.match(issue.body.body, /!\[screenshot\.png\]\(https:\/\/github\.com\/pw\/pics\/blob\/main\/.*1-screenshot\.png\?raw=true\)/);
-  assert.match(issue.body.body, /Reported by @Ray-1961\./);
+  assert.ok(!issue.body.body.includes('Ray-1961'), 'a name sent is never put in the issue');
+  assert.match(issue.body.body, /_Sent anonymously from PowerWhittle's Report a Bug\._\n$/);
 });
 
 test('a repository without the bug label still gets the issue', async () => {
@@ -83,12 +84,11 @@ test('without its tokens the service says bug reports are not set up', async () 
   assert.equal(r.status, 503);
 });
 
-test('the report text cannot ping anyone but the reporter', () => {
+test('the report text cannot ping anyone', () => {
   assert.equal(quiet('ask @someone or mail a@b.c'), 'ask @​someone or mail a@​b.c');
-  const body = issueBody({ text: 'cc @everyone', reporter: 'ray' }, []);
+  const body = issueBody({ text: 'cc @everyone' }, []);
   assert.ok(body.includes('@​everyone'));
-  assert.ok(body.includes('Reported by @ray.'));
-  assert.ok(body.trimEnd().endsWith("_Sent from PowerWhittle's Report a Bug._"));
+  assert.ok(body.trimEnd().endsWith("_Sent anonymously from PowerWhittle's Report a Bug._"));
 });
 
 test('bad fields are refused before GitHub is called', async () => {
@@ -98,7 +98,6 @@ test('bad fields are refused before GitHub is called', async () => {
     bug({ title: '' }),
     bug({ title: 'two\nlines' }),
     bug({ install_id: 'x' }),
-    bug({ reporter: 'not a name!' }),
     bug({ pictures: [{ name: '../evil.png', data: PNG }] }),
     bug({ pictures: [{ name: 'a.png', data: 'not base64!' }] }),
     bug({ pictures: Array(7).fill({ name: 'a.png', data: PNG }) }),

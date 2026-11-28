@@ -124,14 +124,13 @@ fn prove_from(start: &str, bits: u32) -> String {
 }
 
 /// A bug report for the service's `/v1/bug`: it puts the pictures in its pictures repository
-/// and opens the issue, so the person needs no GitHub account.
+/// and opens the issue, so the person needs no GitHub account. It is anonymous: nothing names
+/// the person.
 pub struct Bug<'a> {
     pub title: &'a str,
     /// The issue's text, without its pictures ([`crate::github::details`]).
     pub text: &'a str,
     pub install: &'a str,
-    /// The person's GitHub name, to be named in the issue; empty for none.
-    pub reporter: &'a str,
     /// Each picture's name and bytes.
     pub pictures: &'a [(String, Vec<u8>)],
 }
@@ -167,7 +166,6 @@ pub fn bug_payload(bug: &Bug, day: &str, bits: u32) -> serde_json::Value {
         "title": bug.title,
         "text": bug.text,
         "install_id": bug.install,
-        "reporter": bug.reporter.trim().trim_start_matches('@'),
         "pictures": pictures,
         "work": prove_from(&bug_work_text(bug, day, ""), bits),
     })
@@ -443,7 +441,6 @@ mod tests {
             title: "t",
             text: "b",
             install: "install-1",
-            reporter: " @Ray-1961 ",
             pictures: &pictures,
         };
         // the same text services/crash-reports/test/bugs.test.js expects
@@ -457,7 +454,7 @@ mod tests {
         let sent = bug_payload(&bug, "2026-11-28", 8);
         assert_eq!(sent["pictures"][0]["name"], "screenshot.png");
         assert_eq!(sent["pictures"][0]["data"], "AQID");
-        assert_eq!(sent["reporter"], "Ray-1961");
+        assert!(sent.get("reporter").is_none(), "reports are anonymous");
         let work = sent["work"].as_str().unwrap();
         let hash = Sha256::digest(bug_work_text(&bug, "2026-11-28", work).as_bytes());
         assert!(leading_zeros(&hash) >= 8);
@@ -470,7 +467,6 @@ mod tests {
             title: "t",
             text: "b",
             install: "install-1",
-            reporter: "",
             pictures: &pictures,
         };
         let filed = |_: &str, _: &str| Ok(r#"{"url":"https://github.com/pw/app/issues/9"}"#.into());

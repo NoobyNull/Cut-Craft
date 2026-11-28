@@ -29,8 +29,6 @@ pub struct Sending<'a> {
     /// Whether the browser and the kept folder may be opened when the report cannot go.
     pub browser: bool,
     pub install: &'a str,
-    /// The person's GitHub name, for the issue to name them; empty for none.
-    pub reporter: &'a str,
     pub work_bits: u32,
     pub post_bug: relay::PostBug<'a>,
     pub run: github::Run<'a>,
@@ -54,7 +52,6 @@ fn through_service(report: &Report, url: &str, s: &Sending) -> Result<String, St
         title: &report.title,
         text: &text,
         install: s.install,
-        reporter: s.reporter,
         pictures: &pictures,
     };
     relay::send_bug(url, &bug, s.work_bits, s.post_bug)
@@ -129,7 +126,6 @@ mod tests {
             keep,
             browser: true,
             install: "install-1",
-            reporter: "Ray-1961",
             work_bits: 1,
             post_bug,
             run,
@@ -162,7 +158,7 @@ mod tests {
             "{}",
             posted[0]
         );
-        assert!(posted[0].contains(r#""reporter":"Ray-1961""#));
+        assert!(!posted[0].contains("reporter"), "reports are anonymous");
         assert!(posted[0].contains("supposed to be solid"));
         assert!(w.gh.borrow().is_empty(), "the GitHub CLI is not used");
         assert!(w.opened.borrow().is_empty());

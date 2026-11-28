@@ -56,9 +56,8 @@ Nothing of a bug report is kept here but a count per network hash, for the caps.
 | Field | Rule |
 | --- | --- |
 | `title` | 1–200 characters on one line |
-| `text` | the issue's text, up to 60 KB; every `@name` in it is made so it pings nobody |
+| `text` | the issue's text, up to 60 KB; every `@name` in it is made so it pings nobody. Reports are anonymous: any `reporter` field is ignored and nothing names the sender |
 | `install_id` | as for crashes |
-| `reporter` | optional GitHub user name; the issue says "Reported by @name", so they hear of answers |
 | `pictures` | up to 6 of `{name, data}`: `name` of `A-Z a-z 0-9 . _ -`, `data` base64, up to 10 MB each |
 | `work` | proof of work over `cutcraft-bug-v1\n<day>\n<install_id>\n<sha256 of title\ntext>\n<nonce>`, `POW_BITS` zero bits |
 

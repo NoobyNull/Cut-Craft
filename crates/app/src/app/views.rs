@@ -319,11 +319,6 @@ impl CutCraftApp {
         let message = reporter.frame(ctx, &host);
         self.reporter = reporter;
         if let Some(message) = message {
-            // the GitHub name typed is offered again in the next report
-            if self.options.bug_reports.github_name != self.reporter.github_name {
-                self.options.bug_reports.github_name = self.reporter.github_name.clone();
-                self.save_options();
-            }
             self.status.set_message(&message);
         }
     }
@@ -346,9 +341,6 @@ impl CutCraftApp {
             (crate::options::SendWith::Service, Some(url)) => Route::Service(url),
             _ => Route::Cli,
         };
-        if self.reporter.github_name.is_empty() && !self.reporter.is_open() {
-            self.reporter.github_name.clone_from(&reports.github_name);
-        }
         if matches!(self.reporter.route, Route::Service(_)) && self.reporter.install.is_empty() {
             let fresh = self.options.bug_reports.install_id.is_none();
             self.reporter.install = (self.options.bug_reports.install_id)

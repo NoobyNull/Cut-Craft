@@ -566,9 +566,9 @@ setting-how-report-a-bug-sends-200a13 =
     need write access to PowerWhittle's repository, so it suits only the people who work on
     PowerWhittle. Either way, a report that can't be sent opens in your browser to finish
 setting-powerwhittle-s-bug-report-service-42ee9b = PowerWhittle's bug-report service
-setting-through-powerwhittle-s-bug-report-5c11be =
-    Through PowerWhittle's bug-report service: no GitHub account needed. Your pictures and
-    report become a public GitHub issue
+setting-through-powerwhittle-s-bug-report-a0cb62 =
+    Through PowerWhittle's bug-report service: no GitHub account needed, and nothing in the
+    issue names you. Your pictures and report become a public GitHub issue
 setting-my-github-cli-df5df4 = My GitHub CLI
 setting-with-the-github-cli-gh-f0afc8 =
     With the GitHub CLI (gh) signed in on this computer, as you. Pictures need write access

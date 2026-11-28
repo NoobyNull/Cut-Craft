@@ -383,9 +383,6 @@ pub struct Reporter {
     /// This install's random number ([`relay::new_install_id`]), which the service limits
     /// reports by.
     pub install: String,
-    /// The person's GitHub name, typed in the form and kept for the next report; empty for
-    /// none.
-    pub github_name: String,
     /// A crash log on its way to the service, and how that went.
     crash_sending: Option<(String, mpsc::Receiver<Result<(), relay::Failure>>)>,
     /// [`Host::translation`], as it said when the form opened (`translation_asked`).
@@ -434,7 +431,6 @@ impl Reporter {
             route: send::Route::Cli,
             post_bug: relay::post_bug_https,
             install: String::new(),
-            github_name: String::new(),
             crash_sending: None,
             translation: None,
             translation_asked: false,
@@ -643,7 +639,6 @@ impl Reporter {
         }
         let translation = self.translation.clone();
         let sending = self.sending.is_some();
-        let (route, github_name) = (&self.route, &mut self.github_name);
         let (mut open, mut submit_now, mut cancel) = (true, false, false);
         let size = ctx.content_rect().size() * egui::vec2(FORM_SHARE, DIALOG_HEIGHT_SHARE);
         let id = egui::Id::unique("report_a_bug");
@@ -664,18 +659,6 @@ impl Reporter {
                     .desired_width(f32::INFINITY),
             );
             what_is_sent(ui, draft);
-            if matches!(route, send::Route::Service(_)) {
-                ui.horizontal(|ui| {
-                    ui.label(cut_craft_i18n::t!("Your GitHub name (if you have one)"));
-                    ui.add(
-                        egui::TextEdit::singleline(github_name)
-                            .hint_text(cut_craft_i18n::t!("optional")),
-                    )
-                    .on_hover_text(cut_craft_i18n::t!(
-                        "The issue names you, so GitHub tells you when someone answers it. Leave it empty to send it without a name"
-                    ));
-                });
-            }
             ui.horizontal(|ui| {
                 if ui.button(cut_craft_i18n::t!("Add Pictures…")).clicked() {
                     draft.pictures.extend((host.pick_pictures)());
@@ -736,12 +719,7 @@ impl Reporter {
             self.keep_dir.clone(),
             self.browser,
         );
-        let (install, reporter, bits, post) = (
-            self.install.clone(),
-            self.github_name.trim().to_owned(),
-            self.work_bits,
-            self.post_bug,
-        );
+        let (install, bits, post) = (self.install.clone(), self.work_bits, self.post_bug);
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
         std::thread::spawn(move || {
@@ -752,7 +730,6 @@ impl Reporter {
                 keep: keep.as_deref(),
                 browser,
                 install: &install,
-                reporter: &reporter,
                 work_bits: bits,
                 post_bug: &post,
                 run: &github::run_gh,

@@ -24,14 +24,13 @@ sends that log, or offers it to you in the same form, as you chose in
 2. Give the report a short **title**, and say what you did and what went wrong.
 3. Look at what PowerWhittle would send with it, and **untick** anything you would rather keep
    to yourself (see below).
-4. If you have a GitHub account, type your **GitHub name**. The issue names you, so GitHub
-   tells you when someone answers. You can leave it empty: the report still goes.
-5. Press **Submit to GitHub**. The report and its pictures become a public issue on GitHub that
+4. Press **Submit to GitHub**. The report and its pictures become a public issue on GitHub that
    the people fixing PowerWhittle read. When it has gone, the status bar shows the issue's
    address, and it is copied so you can paste it into your browser.
 
 You don't need a GitHub account or anything installed: PowerWhittle's bug-report service
-files the issue for you.
+files the issue for you. It is **anonymous**: nothing in the issue says who sent it. To follow
+it, open the address shown, and comment there if you have a GitHub account.
 
 ## If the report can't be sent
 

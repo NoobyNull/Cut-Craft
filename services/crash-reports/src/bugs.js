@@ -14,9 +14,8 @@ export const MAX_PICTURE_BYTES = 10 * 1024 * 1024;
 export const MAX_PICTURES = 6;
 /** The ip_counts "signature" bug reports are counted under (crash IDs all start `cc-`). */
 export const BUG_COUNT = 'bug-report';
-const GITHUB_LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
 const PICTURE_NAME = /^[A-Za-z0-9._-]{1,80}$/;
-const FOOTER = "_Sent from PowerWhittle's Report a Bug._";
+const FOOTER = "_Sent anonymously from PowerWhittle's Report a Bug._";
 
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 const sha256 = async (text) => new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
@@ -39,12 +38,6 @@ export function validateBug(body) {
   if (typeof install !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(install)) {
     return { status: 400, error: 'install_id must be 8 to 64 letters, digits or dashes.' };
   }
-  let reporter = null;
-  if (body.reporter != null && body.reporter !== '') {
-    const name = String(body.reporter).trim().replace(/^@/, '');
-    if (!GITHUB_LOGIN.test(name)) return { status: 400, error: 'reporter is not a GitHub user name.' };
-    reporter = name;
-  }
   const list = body.pictures ?? [];
   if (!Array.isArray(list) || list.length > MAX_PICTURES) {
     return { status: 400, error: `pictures must be a list of at most ${MAX_PICTURES}.` };
@@ -64,7 +57,8 @@ export function validateBug(body) {
     }
     pictures.push({ name: p.name, data: p.data });
   }
-  return { bug: { title, text: body.text, install_id: install, reporter, pictures } };
+  // reports are anonymous: any name sent is ignored, never put in the issue
+  return { bug: { title, text: body.text, install_id: install, pictures } };
 }
 
 /**
@@ -89,23 +83,20 @@ export async function checkBugWork(bug, nonce, bits, now) {
 
 /**
  * `text` with every @name made into one that pings nobody (a zero-width space after the @), so
- * the relay can't be used to notify people. Only the reporter's own name, which the relay adds,
- * pings.
+ * the relay can't be used to notify people.
  */
 export function quiet(text) {
   return text.replace(/@(?=[A-Za-z0-9])/g, '@​');
 }
 
-/** The issue's text: the report, its pictures, who sent it, then the footer. */
+/** The issue's text: the report, its pictures, then the footer saying it is anonymous. */
 export function issueBody(bug, links) {
   let body = quiet(bug.text.trim() || '_No description._');
   if (links.length) {
     body += '\n\n### Pictures\n\n';
     body += links.map(({ name, url }) => `![${name}](${url}?raw=true)`).join('\n');
   }
-  body += '\n\n';
-  if (bug.reporter) body += `Reported by @${bug.reporter}.\n\n`;
-  return `${body}${FOOTER}\n`;
+  return `${body}\n\n${FOOTER}\n`;
 }
 
 /** Calls the GitHub REST API with the relay's token; the parsed answer, or throws. */
