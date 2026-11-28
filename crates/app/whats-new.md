@@ -1,3 +1,4 @@
-- The 3D view cube is a bevelled dice you can click
-- Home, turn and nudge buttons beside the view cube
-- An empty Favourites bar stays hidden until its first tool
+- Cut Craft is now PowerWhittle: same app, same settings, new name
+- New jobs save as .pwjob; your .ccjob files open just as before
+- V-Carve carving styles that make far fewer G-code lines
+- Sharper measurement pictures in tool forms
