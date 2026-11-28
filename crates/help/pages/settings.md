@@ -5,7 +5,7 @@ see-also: toolbars, backups, view_2d, performance, setup_material, job_setup, we
 
 # Changing settings
 
-**Edit ▸ Options** holds Cut Craft's settings, page by page down the left: how it looks,
+**Edit ▸ Options** holds PowerWhittle's settings, page by page down the left: how it looks,
 the mouse and shortcuts, toolpath previews, the [language](help:language), the Web API
 and more.
 
@@ -26,7 +26,7 @@ A change you make there does **not** take effect straight away. It waits until y
 While changes are waiting, the foot of the window says **● Changes not applied yet**. Once
 everything is applied it says **No changes waiting**.
 
-**Reset to defaults** on each page puts that page's settings back as Cut Craft first had
+**Reset to defaults** on each page puts that page's settings back as PowerWhittle first had
 them. That is a change too: press **Apply** to use it.
 
 ## When you close with changes waiting
@@ -52,11 +52,11 @@ Changing them, and pressing **Apply**, changes the **next** job you start, never
 To change the open job, use [Setup Material](help:setup_material) and its **More settings
 for this job…**.
 
-At the top, **Classic Startup Flow** brings back the old start: Cut Craft opens on its start
+At the top, **Classic Startup Flow** brings back the old start: PowerWhittle opens on its start
 page (recent files, the sample project), and **New** asks for every setting before the job
-opens. Left off, Cut Craft opens straight to a blank job and New makes another.
+opens. Left off, PowerWhittle opens straight to a blank job and New makes another.
 
-**Reset to defaults** on this page puts back Cut Craft's own starting job: 600 × 400 × 20 mm,
+**Reset to defaults** on this page puts back PowerWhittle's own starting job: 600 × 400 × 20 mm,
 single sided, Z zero on top, X0 Y0 at the bottom left.
 
 ## Performance: keeping the computer responsive
@@ -99,7 +99,7 @@ moving the views: see [Moving the views](help:view_controls).
 
 ## How the window looks: four layouts, light or dark
 
-Cut Craft can arrange its tools four ways: **Ribbon** (the one it starts with), **Rail**,
+PowerWhittle can arrange its tools four ways: **Ribbon** (the one it starts with), **Rail**,
 **Canvas** and **Classic**. Press [Interface Layout](help:interface_layout) under 2D View Control to see
 each and pick one, or use **View ▸ Window Layout** or **Options ▸ General ▸ Window layout**.
 Every tool is in every layout; only where the buttons sit changes. **Ctrl+K** finds a tool by
@@ -108,8 +108,8 @@ name whichever you use.
 **General ▸ Customize Toolbars...**, at the top of the page, opens
 [Customize Toolbars](help:customize_toolbars) at once, to build your own toolbars.
 
-**General ▸ Show a tip when Cut Craft starts** shows a [Did You Know?](help:tips) tip you have
-not seen yet each time Cut Craft opens. Which tips you have seen is kept with these settings,
+**General ▸ Show a tip when PowerWhittle starts** shows a [Did You Know?](help:tips) tip you have
+not seen yet each time PowerWhittle opens. Which tips you have seen is kept with these settings,
 on this computer only.
 
 Each layout also comes light or dark: **Options ▸ Appearance ▸ Theme** picks **Light**,
@@ -193,7 +193,7 @@ To pick another layout, use [Interface Layout](help:interface_layout).
 
 ## Backups
 
-**Options ▸ Backups** lists the backups Cut Craft has made by itself, and sets how often and
+**Options ▸ Backups** lists the backups PowerWhittle has made by itself, and sets how often and
 how many. **Help ▸ Back Up Settings** saves everything set up here, and more, in one file. See
 [Backing up your settings](help:backups).
 

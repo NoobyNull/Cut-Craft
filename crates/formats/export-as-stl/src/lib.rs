@@ -278,7 +278,7 @@ pub fn binary_stl(triangles: &[[DVec3; 3]]) -> Vec<u8> {
     let mut out = Vec::with_capacity(84 + 50 * triangles.len());
     // the header must not start with "solid", which marks text STL
     let mut header = [0u8; 80];
-    let title = b"Cut Craft model, mm";
+    let title = b"PowerWhittle model, mm";
     header[..title.len()].copy_from_slice(title);
     out.extend(header);
     let count = u32::try_from(triangles.len()).expect("fewer than 4 billion triangles");
@@ -476,7 +476,7 @@ mod tests {
     #[test]
     fn the_header_says_what_made_it() {
         let stl = ExportStl::export(&doc()).unwrap();
-        assert!(stl.starts_with(b"Cut Craft model, mm"));
+        assert!(stl.starts_with(b"PowerWhittle model, mm"));
     }
 
     #[test]

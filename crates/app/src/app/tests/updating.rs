@@ -1,4 +1,4 @@
-//! Updating Cut Craft: the version's right-click menu, and Install Now keeping the work that
+//! Updating PowerWhittle: the version's right-click menu, and Install Now keeping the work that
 //! is open for the new version to open again.
 
 use super::*;
@@ -15,7 +15,10 @@ fn right_clicking_the_version_offers_check_for_updates() {
     h.right_click(at);
     // a new menu is drawn unseen for a frame while egui sizes it
     h.frame(vec![]);
-    assert!(h.text_at("About Cut Craft").is_some(), "{version}'s menu");
+    assert!(
+        h.text_at("About PowerWhittle").is_some(),
+        "{version}'s menu"
+    );
     // About is the Help menu's own item
     assert!(
         gui::version_menu()

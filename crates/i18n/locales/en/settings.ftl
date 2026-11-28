@@ -7,7 +7,7 @@
 
 ## Edit ▸ Options
 setting-3d-view-settings-f58828 = 3D View Settings
-setting-what-the-3d-view-draws-de993e = What the 3D view draws when Cut Craft starts.
+setting-what-the-3d-view-draws-fca750 = What the 3D view draws when PowerWhittle starts.
 setting-draw-origin-5a6fbb = Draw origin
 setting-draw-material-block-c31ae5 = Draw material block
 setting-draw-vectors-in-3d-view-b510fa = Draw vectors in 3D view
@@ -271,13 +271,13 @@ setting-each-toolbar-c3e5f3 = Each toolbar
 setting-add-to-each-toolbar-by-8c1045 = Add to each toolbar by its name; past six toolbars, under Add to Toolbar
 setting-under-add-to-toolbar-88996c = Under add to toolbar
 setting-always-under-add-to-toolbar-3226f5 = Always under Add to Toolbar
-setting-show-a-tip-when-cut-8faee5 = Show a tip when Cut Craft starts
-setting-open-a-short-did-you-06c331 =
-    Open a short Did You Know? tip each time Cut Craft starts, a different one each
+setting-show-a-tip-when-powerwhittle-a99a89 = Show a tip when PowerWhittle starts
+setting-open-a-short-did-you-2f79bf =
+    Open a short Did You Know? tip each time PowerWhittle starts, a different one each
     time. Help ▸ Did You Know? shows them whenever you like
 setting-performance-517045 = Performance
-setting-how-hard-cut-craft-works-41daba =
-    How hard Cut Craft works the computer: how much of it calculations may use, and how much
+setting-how-hard-powerwhittle-works-the-a1cbc6 =
+    How hard PowerWhittle works the computer: how much of it calculations may use, and how much
     detail the previews and the 3D view are drawn with. Toward speed or toward detail, each.
 setting-limit-calculations-so-other-programs-05ef5e = Limit calculations so other programs stay smooth
 setting-while-ticked-calculations-toolpaths-previews-903129 =
@@ -329,17 +329,17 @@ setting-show-the-3d-view-s-b60ff9 =
     Show the 3D view's detail and frames a second at the foot of the window, to see what
     the setting above does
 setting-language-73db9b = Language
-setting-the-language-cut-craft-s-6d6e4d =
-    The language Cut Craft's words are in: English, built in, or a language pack
+setting-the-language-powerwhittle-s-words-6d34a9 =
+    The language PowerWhittle's words are in: English, built in, or a language pack
     installed from Gadgets ▸ Add-ons.
 setting-job-defaults-1d7eee = Job Defaults
-setting-how-cut-craft-starts-and-3868af =
-    How Cut Craft starts, and what every new job starts with: the material, where X0 Y0
+setting-how-powerwhittle-starts-and-what-ef49d9 =
+    How PowerWhittle starts, and what every new job starts with: the material, where X0 Y0
     and Z zero are, the rapid heights and home (the job settings under it).
 setting-classic-startup-flow-cf3436 = Classic Startup Flow
-setting-start-with-the-start-page-42a7ad =
+setting-start-with-the-start-page-d9a7fb =
     Start with the start page (recent files, the sample project) and fill in every job
-    setting before a new job opens, as Cut Craft used to. Off opens a blank job straight
+    setting before a new job opens, as PowerWhittle used to. Off opens a blank job straight
     away, made with the settings below; Setup Material changes its size any time
 setting-confirmation-choices-cade2c = Confirmation Choices
 setting-what-happens-when-something-looks-a51fa3 = What happens when something looks wrong.
@@ -406,7 +406,7 @@ setting-how-thick-the-lines-are-480fa5 =
     1/72 inch). Thicker shows better on paper; laser and vinyl cutter software often
     wants a hairline, so set it thin for those
 setting-appearance-018b9f = Appearance
-setting-how-cut-craft-looks-f82647 = How Cut Craft looks.
+setting-how-powerwhittle-looks-cc6219 = How PowerWhittle looks.
 setting-theme-af7c92 = Theme
 setting-light-dark-or-the-desktop-3f9d93 = Light, dark, or the desktop's own
 setting-dark-570065 = Dark
@@ -415,15 +415,15 @@ setting-light-whatever-the-desktop-s-f67391 = Light, whatever the desktop's them
 setting-system-3184bc = System
 setting-the-desktop-s-own-light-657a2c = The desktop's own light or dark theme
 setting-use-the-desktop-s-title-d0baca = Use the desktop's title bar
-setting-the-desktop-s-own-title-47df26 = The desktop's own title bar above the menus, rather than Cut Craft's in the menu bar
+setting-the-desktop-s-own-title-90772e = The desktop's own title bar above the menus, rather than PowerWhittle's in the menu bar
 setting-vector-and-toolpath-colors-8e46d4 = Vector and toolpath colors
-setting-the-colors-vectors-toolpaths-and-04583b =
-    The colors vectors, toolpaths and rapid moves are drawn in. Standard: as Cut Craft
+setting-the-colors-vectors-toolpaths-and-530651 =
+    The colors vectors, toolpaths and rapid moves are drawn in. Standard: as PowerWhittle
     has always drawn them. Color-blind friendly: colors told apart by how light or dark
     they are, not only by their hue. My own colors: pick each one below, for each theme
 setting-standard-16ab68 = Standard
-setting-vectors-in-the-text-color-631895 =
-    Vectors in the text color, toolpaths orange, rapid moves red: as Cut Craft has
+setting-vectors-in-the-text-color-213755 =
+    Vectors in the text color, toolpaths orange, rapid moves red: as PowerWhittle has
     always drawn them
 setting-color-blind-friendly-639a49 = Color-blind friendly
 setting-vectors-black-white-in-the-ee67a7 =
@@ -466,7 +466,7 @@ setting-how-big-text-buttons-and-a5d892 =
     How big text, buttons and lines are, as a percentage: larger is easier to read and to
     click, smaller fits more on a small screen (from the next start)
 setting-mouse-and-shortcuts-0e0f82 = Mouse and Shortcuts
-setting-the-mouse-in-the-2d-772333 = The mouse in the 2D and 3D views, and the shortcuts set in place of Cut Craft's own.
+setting-the-mouse-in-the-2d-ecb865 = The mouse in the 2D and 3D views, and the shortcuts set in place of PowerWhittle's own.
 setting-tilting-the-wheel-left-or-0d309e = Tilting the wheel left or right
 setting-what-tilting-the-mouse-wheel-beb2a5 =
     What tilting the mouse wheel left or right does over the 2D and 3D views. Holding
@@ -514,45 +514,45 @@ setting-invert-spin-bcac0f = Invert spin
 setting-invert-roll-free-rotation-only-2cb4ad = Invert roll (Free rotation only)
 setting-updates-3075a5 = Updates
 setting-help-check-for-updates-and-827231 = Help ▸ Check for Updates, and the check at startup.
-setting-check-for-updates-when-cut-a5a721 = Check for updates when Cut Craft starts
-setting-every-time-cut-craft-starts-933f9f =
-    Every time Cut Craft starts, ask GitHub whether there is a new version,
+setting-check-for-updates-when-powerwhittle-1a2b5d = Check for updates when PowerWhittle starts
+setting-every-time-powerwhittle-starts-ask-895e09 =
+    Every time PowerWhittle starts, ask GitHub whether there is a new version,
     and say so if there is. Nothing is downloaded or installed until you choose Install Now
-setting-show-announcements-when-cut-craft-f5db9f = Show announcements when Cut Craft starts
-setting-open-a-short-announcement-from-1c2ef8 =
+setting-show-announcements-when-powerwhittle-starts-947e8f = Show announcements when PowerWhittle starts
+setting-open-a-short-announcement-from-2693e2 =
     Open a short announcement from the team at the first start of a day it is meant for,
     such as news of the program or a holiday note, until you tick Don't show this again.
-    Cut Craft looks on GitHub for new ones as it starts; turning this off stops that too.
+    PowerWhittle looks on GitHub for new ones as it starts; turning this off stops that too.
     Help ▸ Announcements shows the current ones whenever you like
 setting-backups-ddaf64 = Backups
-setting-options-backups-the-backups-cut-f962c7 =
-    Options ▸ Backups: the backups Cut Craft makes by itself. Help ▸ Back Up Settings makes one
+setting-options-backups-the-backups-powerwhittle-38531f =
+    Options ▸ Backups: the backups PowerWhittle makes by itself. Help ▸ Back Up Settings makes one
     any time.
 setting-back-up-every-week-df868c = Back up every week
-setting-also-back-up-once-a-74b2df =
-    Also back up once a week, when Cut Craft starts. A backup is always made before an
+setting-also-back-up-once-a-008345 =
+    Also back up once a week, when PowerWhittle starts. A backup is always made before an
     update is installed, before the window layout changes, before first-time setup is run
-    again, and before Cut Craft rewrites a library itself
+    again, and before PowerWhittle rewrites a library itself
 setting-backups-to-keep-73979e = Backups to keep
 setting-how-many-automatic-backups-to-3abf39 =
     How many automatic backups to keep. When there are more, the oldest is removed.
     Backups you save yourself are never removed
 setting-bug-reports-1ebb86 = Bug Reports
-setting-bug-reports-and-what-happens-5d7ed1 = Bug reports, and what happens after Cut Craft closes because of an error.
-setting-if-cut-craft-crashes-62c84b = If Cut Craft crashes
-setting-if-cut-craft-closes-because-5b412a =
-    If Cut Craft closes because of an error, it keeps a crash log saying what it was
+setting-bug-reports-and-what-happens-bb1929 = Bug reports, and what happens after PowerWhittle closes because of an error.
+setting-if-powerwhittle-crashes-d9902f = If PowerWhittle crashes
+setting-if-powerwhittle-closes-because-of-0fcaa6 =
+    If PowerWhittle closes because of an error, it keeps a crash log saying what it was
     doing. The next time it starts it can open a bug report with that log, for you to
     read and send. Your user name and home folder are left out of it, and nothing is sent
     until you press Submit.
 setting-send-the-crash-log-074c31 = Send the crash log
-setting-send-the-crash-log-to-c713f4 =
-    Send the crash log to Cut Craft's crash-report service by itself (your user name,
+setting-send-the-crash-log-to-c38d00 =
+    Send the crash log to PowerWhittle's crash-report service by itself (your user name,
     folders and file names left out). Where that can't be done, open a bug report with it ticked
 setting-ask-me-each-time-55bf0e = Ask me each time
 setting-open-a-bug-report-and-081306 = Open a bug report, and ask each time whether the crash log goes with it
 setting-don-t-send-crash-logs-b641b9 = Don't send crash logs
-setting-don-t-open-a-report-1d9346 = Don't open a report: the crash log is kept in Cut Craft's settings folder
+setting-don-t-open-a-report-859234 = Don't open a report: the crash log is kept in PowerWhittle's settings folder
 setting-send-details-of-my-computer-877051 = Send details of my computer
 setting-send-which-system-and-version-053caa =
     Send which system and version this computer runs (Windows 11 23H2, macOS 14 Sonoma,
@@ -560,12 +560,12 @@ setting-send-which-system-and-version-053caa =
     bug reports: some bugs happen only on some computers. Never the computer's name or
     your user name. Off: only the report and its log are sent
 setting-web-api-782851 = Web API
-setting-options-web-api-lets-a-06e152 =
-    Options ▸ Web API: lets a script, a test or Claude drive Cut Craft over HTTP, the way you
+setting-options-web-api-lets-a-de4638 =
+    Options ▸ Web API: lets a script, a test or Claude drive PowerWhittle over HTTP, the way you
     do with the mouse. Off until switched on.
 setting-turn-on-the-web-api-443912 = Turn on the Web API
-setting-let-programs-on-this-computer-f0f347 =
-    Let programs on this computer drive Cut Craft: select vectors, run tools, press any
+setting-let-programs-on-this-computer-d31fa9 =
+    Let programs on this computer drive PowerWhittle: select vectors, run tools, press any
     button. Calls from this computer need nothing more; other computers need the access
     token. The status bar shows WEB API Running in green while it is listening, or in red if
     it could not start and why
@@ -579,10 +579,10 @@ setting-the-number-programs-call-it-234e18 =
     The number programs call it on, the 7340 in localhost:7340. Pick another if a different
     program already uses this one
 setting-advanced-f3de7b = Advanced
-setting-settings-that-change-how-hard-fcc0e0 =
-    Settings that change how hard Cut Craft works the computer, or how exactly it cuts: listed
+setting-settings-that-change-how-hard-2338dc =
+    Settings that change how hard PowerWhittle works the computer, or how exactly it cuts: listed
     only once Show advanced settings is ticked, and put back to their defaults when the file
-    was changed outside Cut Craft.
+    was changed outside PowerWhittle.
 setting-use-wayland-directly-no-file-3ed07e = Use Wayland directly (no file drag and drop)
 setting-on-a-wayland-desktop-open-f4501d =
     On a Wayland desktop, open the window there directly rather than through `XWayland`;
@@ -600,8 +600,8 @@ setting-the-library-stops-listing-after-37a8c1 =
     The Library stops listing after this many files, so adding a whole drive can't stall
     it. More lists bigger collections, but uses more memory and time on every read
 setting-library-keep-unused-previews-for-a92d7f = Library: keep unused previews for
-setting-saved-library-previews-not-used-9bcd2b =
-    Saved Library previews not used for this long are deleted when Cut Craft starts. Longer
+setting-saved-library-previews-not-used-0840db =
+    Saved Library previews not used for this long are deleted when PowerWhittle starts. Longer
     keeps more of them on disk, so folders open faster (from the next start)
 setting-library-previews-kept-on-the-da12f0 = Library: previews kept on the graphics card
 setting-how-many-library-previews-are-5db573 =
@@ -634,9 +634,9 @@ setting-the-most-filler-parts-one-1b8804 =
     The most filler parts one nesting places. More fills big sheets with small parts, but
     slows nesting down
 setting-gadgets-most-work-million-steps-ee0cea = Gadgets: most work (million steps)
-setting-how-much-work-a-gadget-5d3750 =
+setting-how-much-work-a-gadget-054176 =
     How much work a gadget may do, in millions of Lua steps, before it is stopped as
-    stuck. Higher lets big gadgets finish; a gadget caught in a loop then freezes Cut Craft
+    stuck. Higher lets big gadgets finish; a gadget caught in a loop then freezes PowerWhittle
     for longer before it is stopped
 setting-gadgets-most-memory-585836 = Gadgets: most memory
 setting-how-much-memory-a-gadget-c8fec0 =
@@ -2320,8 +2320,8 @@ setting-text-in-a-box-1acdab = Text in a box
 setting-text-scaled-to-fit-a-faa404 = Text scaled to fit a box whose lower-left corner is the anchor point
 setting-each-line-of-text-is-e857e4 = Each line of text is a line of the block
 setting-font-7a5eb0 = Font
-setting-single-line-fonts-vectric-font-a0021e =
-    Single-line fonts (Vectric font `.vfont` files in Cut Craft's fonts folder) come first,
+setting-single-line-fonts-vectric-font-5d85f2 =
+    Single-line fonts (Vectric font `.vfont` files in PowerWhittle's fonts folder) come first,
     then the system's TrueType fonts
 setting-bold-768d96 = Bold
 setting-truetype-fonts-only-f22427 = TrueType fonts only
@@ -3714,8 +3714,8 @@ setting-name-only-070c94 = Name only
 setting-just-the-part-s-name-d65df8 = Just the part's name, such as "Side"
 setting-number-only-5f06b2 = Number only
 setting-just-the-part-s-number-7d7fc2 = Just the part's number, such as "3"
-setting-single-line-fonts-vectric-font-4746ed =
-    Single-line fonts (Vectric font `.vfont` files in Cut Craft's fonts folder) engrave
+setting-single-line-fonts-vectric-font-c28989 =
+    Single-line fonts (Vectric font `.vfont` files in PowerWhittle's fonts folder) engrave
     fastest; TrueType fonts work too
 setting-the-height-of-a-capital-b863c3 =
     The height of a capital letter; smaller parts get smaller text. Text under 2 mm

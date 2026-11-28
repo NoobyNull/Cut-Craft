@@ -37,7 +37,7 @@ fn options_show_one_category_at_a_time() {
     );
     assert!(
         h.text_at("Bug reports go to").is_none(),
-        "reports always go to Cut Craft's repository"
+        "reports always go to PowerWhittle's repository"
     );
 }
 
@@ -57,7 +57,7 @@ fn a_crash_last_time_opens_its_report_with_the_crash_log() {
     );
     assert!(h.text_at("The crash log").is_some());
     assert!(
-        h.text_at("May Cut Craft send these with your report?")
+        h.text_at("May PowerWhittle send these with your report?")
             .is_some()
     );
 }
@@ -703,7 +703,7 @@ fn first_time_setup_picks_the_machine_units_and_material_for_new_jobs() {
     // a window sizes itself unseen on its first frame
     h.frame(vec![]);
     h.frame(vec![]);
-    assert!(h.text_at("Welcome to Cut Craft").is_some());
+    assert!(h.text_at("Welcome to PowerWhittle").is_some());
     h.edit_first_run(|setup| setup.pick_maker(Maker::Named("Sienci".into())));
     let longmill = h
         .first_run()
@@ -714,14 +714,14 @@ fn first_time_setup_picks_the_machine_units_and_material_for_new_jobs() {
     h.edit_first_run(|setup| setup.pick_model(longmill));
     h.frame(vec![]);
     h.frame(vec![]);
-    let start = h.text_at("Start using Cut Craft").unwrap();
+    let start = h.text_at("Start using PowerWhittle").unwrap();
     h.click(start, Modifiers::NONE);
     h.frame(vec![]);
     assert!(!h.first_run_open(), "closed");
     assert!(h.options().first_run_done);
     let machine = h.machine().expect("the machine set up");
     assert_eq!(machine.name, "Sienci LongMill MK2 30x30");
-    assert_eq!(machine.post(), Some("Cut Craft GRBL Arcs (inch) (*.nc)"));
+    assert_eq!(machine.post(), Some("PowerWhittle GRBL Arcs (inch) (*.nc)"));
     assert_eq!(h.tool_database().groups[0].path, "Imperial Bits");
     // a new job starts as answered
     h.invoke("new");
@@ -774,7 +774,7 @@ fn first_time_setup_again_starts_from_the_answers_and_corrects_my_machine() {
     assert_eq!(h.machines().len(), 1, "not added twice");
     let machine = h.machine().unwrap();
     assert_eq!((machine.width, machine.height), (800.0, 600.0));
-    assert_eq!(machine.post(), Some("Cut Craft GRBL Arcs (mm) (*.nc)"));
+    assert_eq!(machine.post(), Some("PowerWhittle GRBL Arcs (mm) (*.nc)"));
     assert_eq!(h.options().bug_reports.crash_logs, CrashLogs::Send);
 }
 
@@ -791,7 +791,7 @@ fn first_time_setup_again_keeps_the_posts_added_to_my_machine() {
     });
     h.finish_first_run();
     // a post added and made the default in Machine Configuration
-    let extra = "Cut Craft GRBL Arcs (mm) (*.nc)".to_owned();
+    let extra = "PowerWhittle GRBL Arcs (mm) (*.nc)".to_owned();
     h.edit_machine(|mine| {
         mine.posts.push(extra.clone());
         mine.default_post = Some(extra.clone());
@@ -1146,7 +1146,7 @@ fn the_save_toolpaths_form_can_view_its_gcode_too() {
 #[test]
 fn save_toolpaths_window_steps_aside_while_the_save_asks_then_comes_back() {
     // a 0.6.11 user found the save dialog behind a window: Save Toolpaths is a window of its
-    // own, in front of Cut Craft's, which the system's dialogs belong to
+    // own, in front of PowerWhittle's, which the system's dialogs belong to
     let mut h = ready_for_output();
     h.invoke("save_toolpaths");
     let form = h.save_form();
@@ -1280,7 +1280,10 @@ fn the_notes_in_g_code_name_the_post_the_file_is_made_through() {
         d.notes_in_gcode = true;
     });
     let form = h.default_save_form();
-    let other = h.posts().load("Cut Craft Mach3 Arcs (mm) (*.tap)").unwrap();
+    let other = h
+        .posts()
+        .load("PowerWhittle Mach3 Arcs (mm) (*.tap)")
+        .unwrap();
     let default = h.form_post(&form).unwrap();
     assert_ne!(
         other.name, default.name,

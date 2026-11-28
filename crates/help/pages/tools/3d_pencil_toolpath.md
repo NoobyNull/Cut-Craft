@@ -49,5 +49,5 @@ takes minutes, not the hours a second full finish with a small bit would.
   radius. Pick a smaller pencil bit for a sharper corner.
 - Programs can make it through the [Web API](help:web_api), as `3d_pencil_toolpath`.
 
-Pencil passes are a feature of high-end CAM programs; Cut Craft finds the valleys with
+Pencil passes are a feature of high-end CAM programs; PowerWhittle finds the valleys with
 its own method.

@@ -1,13 +1,13 @@
-+ Cut Craft's post for Mach3 (and Mach4), millimetres, with Mach3's tool change (T M6).
-+ Written for Cut Craft from the documented .pp format (re/SPEC.md).
++ PowerWhittle's post for Mach3 (and Mach4), millimetres, with Mach3's tool change (T M6).
++ Written for PowerWhittle from the documented .pp format (re/SPEC.md).
 
 + History
 + Who        When       What
 + ========== ========== ==========================================
-+ Cut Craft  2026-10-27 First version: arcs, tool change with T M6
-+ Cut Craft  2026-10-31 Dwell written as G4
++ PowerWhittle  2026-10-27 First version: arcs, tool change with T M6
++ PowerWhittle  2026-10-31 Dwell written as G4
 
-POST_NAME = "Cut Craft Mach3 Arcs (mm) (*.tap)"
+POST_NAME = "PowerWhittle Mach3 Arcs (mm) (*.tap)"
 FILE_EXTENSION = "tap"
 UNITS = "MM"
 LINE_ENDING = "[10]"

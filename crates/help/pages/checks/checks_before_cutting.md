@@ -7,7 +7,7 @@ see-also: toolpaths, save_toolpaths, protect_the_machine
 
 ![Save Toolpaths checking each thing in turn](pictures/checks/checks-running.png)
 
-Before Cut Craft saves your toolpaths or sends them to the machine, it checks them for the
+Before PowerWhittle saves your toolpaths or sends them to the machine, it checks them for the
 things that break bits, spoil the work or stop the machine half-way. It does this in
 **Save Toolpaths** and on the Toolpaths page's **Analyse** tab (the **Checks** tab in the
 Rail and Ribbon [window layouts](help:settings)).
@@ -18,7 +18,7 @@ While the checks run, every check is listed by name:
 - a spinner while it runs
 - a grey ✔ once it has been checked
 
-A big 3D toolpath takes a little while, because Cut Craft cuts the whole job in order from
+A big 3D toolpath takes a little while, because PowerWhittle cuts the whole job in order from
 a block of material to look for crashes. **Cancel** stops it; **Check Again** runs it again.
 
 ## When the checks are done

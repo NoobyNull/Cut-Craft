@@ -9,7 +9,7 @@ use std::path::Path;
 fn reason(e: &Error) -> &'static str {
     match e.kind() {
         ErrorKind::PermissionDenied | ErrorKind::ReadOnlyFilesystem => {
-            "Cut Craft is not allowed to use that folder or file"
+            "PowerWhittle is not allowed to use that folder or file"
         }
         ErrorKind::NotFound => "that file or its folder is not there",
         ErrorKind::StorageFull | ErrorKind::QuotaExceeded => "the disk is full",
@@ -54,8 +54,8 @@ pub fn could_not_read(path: &Path, e: &Error) -> String {
 /// The picked file `path` is not a machine package (the parser's own words are logged).
 pub fn not_a_machine_package(path: &Path) -> String {
     format!(
-        "The file {} is not a machine package Cut Craft can read. Pick a machine package: a .json file \
-         from the machines folder, or one shared from another Cut Craft.",
+        "The file {} is not a machine package PowerWhittle can read. Pick a machine package: a .json file \
+         from the machines folder, or one shared from another PowerWhittle.",
         path.display()
     )
 }
@@ -64,7 +64,7 @@ pub fn not_a_machine_package(path: &Path) -> String {
 pub fn cannot_keep_words(path: &Path, e: &Error) -> String {
     log::warn!("cannot keep the words in {}: {e}", path.display());
     format!(
-        "The word is checked as spelt right until Cut Craft closes, but could not be kept in \
+        "The word is checked as spelt right until PowerWhittle closes, but could not be kept in \
          {}: {}. Check that folder can be written to.",
         path.display(),
         reason(e)

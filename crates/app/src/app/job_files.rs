@@ -327,8 +327,8 @@ impl CutCraftApp {
                 // said again as it happens: the opening warning is long gone by now
                 if !self.session.newer_settings.is_empty() {
                     saved = format!(
-                        "{saved}. Warning: settings this version of Cut Craft does not know \
-                         were left out ({}). Update Cut Craft (Help ▸ Check for Updates) and \
+                        "{saved}. Warning: settings this version of PowerWhittle does not know \
+                         were left out ({}). Update PowerWhittle (Help ▸ Check for Updates) and \
                          open the original to keep them",
                         self.session.newer_settings.join(", ")
                     );
@@ -400,9 +400,9 @@ impl CutCraftApp {
                 let mut opened = format!("Opened {}", super::file_name(path));
                 if !self.session.newer_settings.is_empty() {
                     opened = format!(
-                        "{opened}. Warning: it was saved by a newer version of Cut Craft, and \
+                        "{opened}. Warning: it was saved by a newer version of PowerWhittle, and \
                          this one does not know some of its settings ({}): saving it here \
-                         leaves them out. Update Cut Craft (Help ▸ Check for Updates) to keep \
+                         leaves them out. Update PowerWhittle (Help ▸ Check for Updates) to keep \
                          them",
                         self.session.newer_settings.join(", ")
                     );
@@ -414,7 +414,7 @@ impl CutCraftApp {
             Err(e) => {
                 self.status.set_message(&e);
                 // only a file that has gone leaves Recent Files: a damaged one (perhaps a
-                // sync still going) or one needing a newer Cut Craft stays to try again
+                // sync still going) or one needing a newer PowerWhittle stays to try again
                 if !path.exists() && self.recent.iter().any(|p| p == path) {
                     self.recent.retain(|p| p != path);
                     self.save_recent();
@@ -516,7 +516,7 @@ impl CutCraftApp {
         self.autosaved.0 = self.history.revision();
     }
 
-    /// Install Now is closing Cut Craft to start the new version: unsaved work is written to
+    /// Install Now is closing PowerWhittle to start the new version: unsaved work is written to
     /// this run's recovery copy, with a note of the job's own file, for the new version to
     /// open just as it was, still unsaved; the job's own file is not touched. Nothing is
     /// written when nothing is unsaved, and the work is not kept when the copy cannot be
@@ -697,7 +697,7 @@ impl CutCraftApp {
         self.status.current_tool = self.tool_label("select");
     }
 
-    /// What Cut Craft shows once it has started: the file named on the command line, if
+    /// What PowerWhittle shows once it has started: the file named on the command line, if
     /// one was; else a blank job, unless Classic Startup Flow asks for the start page or a
     /// job is already open (recovered work).
     pub(super) fn open_at_start(&mut self, given: Option<&std::path::Path>) {

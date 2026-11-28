@@ -41,9 +41,9 @@ pub(super) const CARVE_AREA_ALPHA: f32 = 0.35;
 /// Orientate 3D Model's rotation rings round the model, as a share of its longest side.
 pub(super) const RING_SHARE: f64 = 0.6;
 
-/// Where every Report a Bug Here… goes: Cut Craft's own repository.
+/// Where every Report a Bug Here… goes: PowerWhittle's own repository.
 pub(super) const BUG_REPO: &str = "NoobyNull/Cut-Craft";
-/// Cut Craft's crash-report service, where the crash logs of people who said yes go: a
+/// PowerWhittle's crash-report service, where the crash logs of people who said yes go: a
 /// Cloudflare Worker that groups them by cause for the maintainer and clears them out once
 /// dealt with (`services/crash-reports`).
 pub(super) const CRASH_SERVICE: &str =
@@ -69,7 +69,7 @@ pub(super) struct ShortcutCapture {
 pub(super) enum Info {
     About,
     Shortcuts,
-    /// Credits: the libraries, pictures and icons Cut Craft is built with.
+    /// Credits: the libraries, pictures and icons PowerWhittle is built with.
     Credits,
     /// Toolpath Summary: estimated machining times.
     Summary,
@@ -104,7 +104,7 @@ pub(in super::super) struct SaveForm {
     pub(super) mode: files::SaveMode,
     /// Visible to multiple files: toolpaths in a row using one tool share a file.
     pub(super) group: bool,
-    /// The post, by name in the library; `None` is the machine's default (Cut Craft's own
+    /// The post, by name in the library; `None` is the machine's default (PowerWhittle's own
     /// without a machine).
     pub(super) post: Option<String>,
     /// Double-sided jobs: Top or Bottom on the end of each file name.
@@ -277,10 +277,10 @@ pub(super) const WHATS_NEW: &str = include_str!("../../whats-new.md");
 /// The repository's contributors on GitHub (login, commits, profile), one a line in
 /// `contributors.tsv`; Help ▸ About lists them.
 pub(super) const CONTRIBUTORS: &str = include_str!("../../contributors.tsv");
-/// Machine ▸ Search for Machine Online: the machine packages in Cut Craft's repository.
+/// Machine ▸ Search for Machine Online: the machine packages in PowerWhittle's repository.
 pub(super) const MACHINES_ONLINE: &str =
     "https://github.com/NoobyNull/Cut-Craft/tree/main/machines";
-/// Where Cut Craft is found online, in Help ▸ Community (GitHub on the start page too): label,
+/// Where PowerWhittle is found online, in Help ▸ Community (GitHub on the start page too): label,
 /// address and icon (the social ones are placeholders: each site's home page).
 pub(crate) const LINKS: [(&str, &str, &str); 7] = [
     (
@@ -411,11 +411,11 @@ pub(super) fn side_panel(panel: egui::Panel, ctx: &egui::Context) -> egui::Panel
 /// Size of a form section's picture, in rows of the theme's interactive height.
 // ponytail: fixed ratio until a preferences dialog exists
 pub(super) const SECTION_PICTURE_ROWS: f32 = 3.0;
-/// The Cut Craft mark, shown with no job open.
+/// The PowerWhittle mark, shown with no job open.
 /// How much of the middle of the window the mark takes, by its shorter side.
 // ponytail: fixed share until there is a preferences dialog
 pub(super) const SPLASH_SHARE: f32 = 1.0 / 3.0;
-pub(super) const APP_NAME: &str = "Cut Craft";
+pub(super) const APP_NAME: &str = "PowerWhittle";
 /// How the desktop knows the window: the same name as the launcher, `cut-craft.desktop`,
 /// so the taskbar shows its icon.
 pub(super) const APP_ID: &str = "cut-craft";

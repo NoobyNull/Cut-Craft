@@ -178,7 +178,7 @@ const SCENES: &[Scene] = &[
     ("post-capabilities", |app, _| {
         if let Some(w) = &mut app.post_window {
             *w.filter_mut() = cut_craft_machines::Filter::all();
-            w.edit_capabilities(&app.posts, "Cut Craft GRBL Arcs (mm) (*.nc)");
+            w.edit_capabilities(&app.posts, "PowerWhittle GRBL Arcs (mm) (*.nc)");
         }
     }),
     // Help: The 4th axis and your firmware (standard GRBL: the 4th axis greyed out)
@@ -238,7 +238,7 @@ const SCENES: &[Scene] = &[
         app.options_editor.open_at("confirmations");
         ctx.set_embed_viewports(true);
     }),
-    // Help: Using Cut Craft in another language (Options ▸ Language)
+    // Help: Using PowerWhittle in another language (Options ▸ Language)
     ("options-language", |app, ctx| {
         everyday(app);
         app.options_editor.open_at("language");
@@ -433,7 +433,7 @@ fn checks_job(app: &mut CutCraftApp, ctx: &egui::Context) {
     }
     app.acknowledged.clear();
     app.save_form = Some(app.default_save_form());
-    // its window drawn inside Cut Craft's, where the picture is taken
+    // its window drawn inside PowerWhittle's, where the picture is taken
     ctx.set_embed_viewports(true);
 }
 
@@ -459,7 +459,7 @@ fn options_not_applied(app: &mut CutCraftApp, ctx: &egui::Context) {
     let mut edited = app.options.clone();
     edited.appearance.theme = crate::options::Theme::Dark;
     app.options_edited(edited);
-    // its window drawn inside Cut Craft's, where the picture is taken
+    // its window drawn inside PowerWhittle's, where the picture is taken
     ctx.set_embed_viewports(true);
 }
 
@@ -677,7 +677,7 @@ fn update_offer(ready: Result<(), String>) -> crate::update::Phase {
         release: cut_craft_updater::Release {
             tag: format!("v{version}"),
             version,
-            notes: "- Install Now downloads, installs and reopens Cut Craft on your job\n\
+            notes: "- Install Now downloads, installs and reopens PowerWhittle on your job\n\
                     - Pocket and Profile remember the last bit you picked"
                 .into(),
             page: cut_craft_updater::RELEASES_PAGE.into(),
@@ -1104,7 +1104,7 @@ fn view_gcode(app: &mut CutCraftApp, ctx: &egui::Context) {
         .position(|t| t.name == "Output")
         .unwrap_or_default();
     app.view_gcode(app.default_save_form());
-    // its window drawn inside Cut Craft's, where the picture is taken
+    // its window drawn inside PowerWhittle's, where the picture is taken
     ctx.set_embed_viewports(true);
 }
 

@@ -37,9 +37,9 @@ this job's settings. Changing either leaves the job that is open as it is.
 
 ## Classic Startup Flow
 
-Cut Craft opens straight to a blank job. If you would rather start each job by filling in
-Job Setup, as Cut Craft used to, tick **Classic Startup Flow** on the Job Defaults page:
-Cut Craft then opens on the start page, and **New** asks for every setting here, with **OK**
+PowerWhittle opens straight to a blank job. If you would rather start each job by filling in
+Job Setup, as PowerWhittle used to, tick **Classic Startup Flow** on the Job Defaults page:
+PowerWhittle then opens on the start page, and **New** asks for every setting here, with **OK**
 and **Cancel**, before the job opens.
 
 Next, draw what you want to cut: [Draw Rectangle](help:draw_rectangle), [Draw Circle](help:draw_circle) or [Draw Text](help:draw_text).

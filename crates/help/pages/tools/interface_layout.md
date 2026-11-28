@@ -3,8 +3,8 @@ reviewed: 2026-11-27
 see-also: layout_ribbon, layout_rail, layout_canvas, layout_classic, favourites, find_tool, settings
 ---
 
-Cut Craft can arrange its window four ways. Every tool is in every layout: only where the
-buttons sit changes. Cut Craft starts in **Ribbon**.
+PowerWhittle can arrange its window four ways. Every tool is in every layout: only where the
+buttons sit changes. PowerWhittle starts in **Ribbon**.
 
 ## Steps
 
@@ -22,7 +22,7 @@ buttons sit changes. Cut Craft starts in **Ribbon**.
 
    ![Step 3](pictures/interface_layout/step-3.png)
 
-The window changes at once and Cut Craft remembers your choice. **Cancel** leaves it as it
+The window changes at once and PowerWhittle remembers your choice. **Cancel** leaves it as it
 was. **View ▸ Window Layout** and **Edit ▸ Options ▸ General ▸ Window layout** pick a layout
 too.
 
@@ -49,13 +49,13 @@ page on the right, and tabs down the sides.
 
 ![The Classic layout, light theme on the left and dark on the right](pictures/layouts/classic-light-and-dark.png)
 
-## When Cut Craft asks
+## When PowerWhittle asks
 
-First-time setup asks which layout you want, with Ribbon picked. If you used Cut Craft
+First-time setup asks which layout you want, with Ribbon picked. If you used PowerWhittle
 before this question existed, it asks once after you update. **Keep** leaves your window as
 it was.
 
-Before the layout changes, Cut Craft [backs up your settings](help:backups), so the layout and
+Before the layout changes, PowerWhittle [backs up your settings](help:backups), so the layout and
 favourites you had are kept.
 
 Not sure where a tool went? Press **Ctrl+K** for [Find Tool](help:find_tool) and type part

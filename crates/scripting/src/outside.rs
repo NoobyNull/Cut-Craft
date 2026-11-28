@@ -1,7 +1,7 @@
 //! Gadgets that reach outside the job: an add-on that declares the web hosts it uses can
 //! fetch from them, save downloads in its own folder and keep a few settings between runs.
 //!
-//! These gadgets never touch the document, so they are not commands: Cut Craft runs one only
+//! These gadgets never touch the document, so they are not commands: PowerWhittle runs one only
 //! when the person asks, never for a preview. Everything else about the sandbox stays the same:
 //! no files outside the add-on's folder, no programs, no other hosts, no plain `http://`.
 //!

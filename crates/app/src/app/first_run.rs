@@ -1,7 +1,7 @@
 //! First-time setup: five questions asked on the first run (which machine, millimetres or
 //! inches, the material usually cut, whether crash logs may be sent, and the window layout)
 //! that add the machine, set the job new files start with, put the starter tools in those
-//! units first, keep the crash-log answer in Options ▸ Bug Reports and arrange the window. Cut Craft's own (see
+//! units first, keep the crash-log answer in Options ▸ Bug Reports and arrange the window. PowerWhittle's own (see
 //! `re/SPEC.md`, First-time setup). Help ▸ Run First-Time Setup Again asks them again.
 
 use super::CutCraftApp;
@@ -17,7 +17,7 @@ const MM_PER_INCH: f64 = 25.4;
 /// The thickness offered to start with: 18 mm, or 3/4 inch (common plywood and MDF).
 const THICKNESS_MM: f64 = 18.0;
 const THICKNESS_INCH: f64 = 0.75 * MM_PER_INCH;
-/// The working area offered for a machine not listed, until one is typed: Cut Craft's usual
+/// The working area offered for a machine not listed, until one is typed: PowerWhittle's usual
 /// job, or 24 × 16 inches.
 const BED_MM: [f64; 2] = [600.0, 400.0];
 const BED_INCH: [f64; 2] = [24.0 * MM_PER_INCH, 16.0 * MM_PER_INCH];
@@ -28,7 +28,7 @@ const IMPERIAL_TOOLS: &str = cut_craft_core::toolpath::STARTER_IMPERIAL;
 const MY_MACHINE: &str = "My Machine";
 
 /// Whether to ask: never asked (nor skipped) before, with no machine and no default job kept,
-/// so someone who set Cut Craft up before this setup existed is not asked.
+/// so someone who set PowerWhittle up before this setup existed is not asked.
 pub(super) fn wanted(options: &crate::options::Options, machines: &Machines) -> bool {
     !options.first_run_done && machines.machines.is_empty() && options.default_job.is_none()
 }
@@ -384,7 +384,7 @@ impl CutCraftApp {
         ui.weak(tr!("first-run-layout-note"));
     }
 
-    /// Start using Cut Craft, or Skip for Now.
+    /// Start using PowerWhittle, or Skip for Now.
     fn first_run_buttons(ui: &mut egui::Ui, setup: &Setup) -> Option<Finish> {
         let mut finish = None;
         ui.horizontal(|ui| {
@@ -498,7 +498,7 @@ impl CutCraftApp {
         }
     }
 
-    /// Start using Cut Craft: the machine added and made active, new jobs set to start as
+    /// Start using PowerWhittle: the machine added and made active, new jobs set to start as
     /// answered, and the starter tools in those units first.
     pub(super) fn finish_first_run(&mut self, setup: &Setup) {
         // run again, setup rewrites My Machine and the layout: what was there is kept first
@@ -587,7 +587,7 @@ impl CutCraftApp {
         self.machines_changed("Machine set up");
     }
 
-    /// Skip for now: today's start (no machine, Cut Craft's usual job), not asked again.
+    /// Skip for now: today's start (no machine, PowerWhittle's usual job), not asked again.
     pub(super) fn skip_first_run(&mut self) {
         // the layout in use (Ribbon on a new install) is kept, and not asked again
         super::layout_choice::answer(&mut self.options, None);
@@ -650,7 +650,7 @@ mod tests {
         assert!(job.width <= 762.0 && job.height <= 762.0, "{job:?}");
         assert!((job.thickness - 19.05).abs() < 1e-9, "3/4 in to start");
         let machine = setup.machine().unwrap();
-        assert_eq!(machine.post(), Some("Cut Craft GRBL Arcs (inch) (*.nc)"));
+        assert_eq!(machine.post(), Some("PowerWhittle GRBL Arcs (inch) (*.nc)"));
     }
 
     #[test]
@@ -663,7 +663,7 @@ mod tests {
         assert!(setup.ready());
         let machine = setup.machine().unwrap();
         assert_eq!((machine.width, machine.height), (500.0, 300.0));
-        assert_eq!(machine.post(), Some("Cut Craft Mach3 Arcs (mm) (*.tap)"));
+        assert_eq!(machine.post(), Some("PowerWhittle Mach3 Arcs (mm) (*.tap)"));
         assert_eq!(machine.name, MY_MACHINE);
         setup.bed[0] = 0.0;
         assert!(!setup.ready(), "a working area is needed");

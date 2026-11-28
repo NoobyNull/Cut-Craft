@@ -5,7 +5,7 @@ fn asked_once_after_updating_but_not_with_first_time_setup_or_once_answered() {
     let mut options = Options::default();
     assert!(
         asks_after_update(&options, false),
-        "an install that had Cut Craft before"
+        "an install that had PowerWhittle before"
     );
     assert!(
         !asks_after_update(&options, true),

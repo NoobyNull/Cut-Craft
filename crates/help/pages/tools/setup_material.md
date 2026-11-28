@@ -7,7 +7,7 @@ see-also: job_setup, material_setup, new, settings
 
 ![The steps, one after another](pictures/setup_material/tour.gif)
 
-1. Cut Craft opens with a blank job, made with your Job Defaults. To change this job's material, press **Setup Material** (under File Operations, at the top of the Design page).
+1. PowerWhittle opens with a blank job, made with your Job Defaults. To change this job's material, press **Setup Material** (under File Operations, at the top of the Design page).
 
    ![Step 1](pictures/setup_material/step-1.png)
 

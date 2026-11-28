@@ -108,7 +108,7 @@ impl Harness {
         self.app.announcements.fetch = github;
     }
 
-    /// Cut Craft starting: the tip or announcements it opens, then GitHub's answer.
+    /// PowerWhittle starting: the tip or announcements it opens, then GitHub's answer.
     pub(in super::super) fn start_cut_craft(&mut self) {
         self.app.tip = None;
         self.app.announcements.open = None;
@@ -131,7 +131,7 @@ impl Harness {
         self.frame(vec![]);
     }
 
-    /// Whether Cut Craft is asking GitHub for announcements.
+    /// Whether PowerWhittle is asking GitHub for announcements.
     pub(in super::super) fn asking_github(&self) -> bool {
         self.app.announcements.asking()
     }
@@ -159,7 +159,7 @@ impl Harness {
         self.app.tip = None;
     }
 
-    /// Cut Craft starting: the tip it shows then, unless turned off.
+    /// PowerWhittle starting: the tip it shows then, unless turned off.
     pub(in super::super) fn tip_at_startup(&mut self) {
         self.app.tip_at_startup();
     }

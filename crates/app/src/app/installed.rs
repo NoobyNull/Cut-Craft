@@ -6,7 +6,7 @@ use super::CutCraftApp;
 
 /// The tools section of what the user installed.
 pub(super) const GADGETS: &str = "Gadgets";
-/// After the name of a gadget or add-on that is not signed with Cut Craft's release key.
+/// After the name of a gadget or add-on that is not signed with PowerWhittle's release key.
 const NOT_OFFICIAL: &str = "\u{26a0} (not official)";
 
 impl CutCraftApp {
@@ -55,7 +55,7 @@ impl CutCraftApp {
         self.start_menus.set_my_gadgets(&items);
     }
 
-    /// Whether gadget `id` may run: Cut Craft's own and signed ones always; an unsigned one
+    /// Whether gadget `id` may run: PowerWhittle's own and signed ones always; an unsigned one
     /// once the user has said yes to it ([`crate::trust`]), asked now if they have not. One
     /// still unread is read now, and takes its own name in the menus; one that turns out
     /// broken says why in the status bar.
@@ -117,8 +117,8 @@ impl CutCraftApp {
     }
 
     /// Gadgets ▸ My Gadgets: the gadgets, then the add-ons, each with the action that runs
-    /// it; an add-on whose tool Cut Craft does not know opens Add-ons. One that is not
-    /// official (not signed with Cut Craft's release key) is marked so.
+    /// it; an add-on whose tool PowerWhittle does not know opens Add-ons. One that is not
+    /// official (not signed with PowerWhittle's release key) is marked so.
     pub(super) fn installed_items(&self) -> Vec<(String, String)> {
         let named = |name: &str, official: bool| {
             if official {

@@ -144,7 +144,7 @@ pub struct Clipart {
 /// What a file is, for the Show filter.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
-    /// STL, OBJ, Cut Craft clipart
+    /// STL, OBJ, PowerWhittle clipart
     Model,
     /// SVG, DXF and other vector files
     Drawing,

@@ -7,7 +7,7 @@ see-also: toolpath_summary, create_job_sheet, progress, toolpaths, web_api
 
 The **Toolpath Summary**, the job sheet, the notes' **Run time** variables and the Web API
 all tell you how long the machine will take to cut the job. This is the time at the machine,
-not the time Cut Craft takes to work the toolpaths out. That one shows in the progress
+not the time PowerWhittle takes to work the toolpaths out. That one shows in the progress
 window: see [Long jobs and the time left](help:progress).
 
 ![The Toolpath Summary: each toolpath's time and the whole job's](pictures/toolpath_summary/step-3.png)
@@ -38,7 +38,7 @@ A real machine cannot jump straight to its feed rate. It speeds up at the start 
 move, slows down at the end, and slows for corners. A job with lots of short moves, such as
 a 3D finish or a V-carve, can take far longer than its feed rates suggest.
 
-Cut Craft plans the moves the way the machine's controller does:
+PowerWhittle plans the moves the way the machine's controller does:
 
 1. Each move's top speed is its feed rate, held to the **Max rate** of every axis it uses.
    Rapids run at the axes' Max rates.

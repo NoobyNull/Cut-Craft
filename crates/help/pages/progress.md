@@ -7,7 +7,7 @@ see-also: toolpaths, web_api, contents, performance
 
 Some jobs take a while: calculating a 3D or Adaptive toolpath, Recalculate All, previewing
 with Animate Preview off, the checks before saving toolpaths, opening or importing a big
-file. Cut Craft does them in the background and, once one takes longer than a moment,
+file. PowerWhittle does them in the background and, once one takes longer than a moment,
 shows a progress window over the job.
 
 ![The progress window: what it is calculating, the step it is on, a bar at 20%, "1 s so far, about 2 minutes left" and Cancel](pictures/progress-window.png)
@@ -31,7 +31,7 @@ The time left is a guess, and it gets better as the job goes on:
 
 - **At first** it says it is **working out how long it will take**, because a job's first
   moments say little about the rest.
-- **When you have done this kind of job before**, Cut Craft starts from how long it took last
+- **When you have done this kind of job before**, PowerWhittle starts from how long it took last
   time, so you get a guess straight away. Then it follows how fast this job is really going.
 - **The guess counts down with the clock** and changes gently. When a step is slower than
   the ones before, the time left goes up a little at a time, not in a sudden jump.
@@ -45,12 +45,12 @@ When you recalculate or preview several toolpaths, each one gets its own share o
 A toolpath that took longer last time, or a preview with more moves to cut, gets a bigger
 share, so the bar moves at an even pace.
 
-Cut Craft remembers how long each kind of job took in a small file, `job-times.json`, in
+PowerWhittle remembers how long each kind of job took in a small file, `job-times.json`, in
 its settings folder (on Linux `~/.config/cut-craft`, on Windows `%APPDATA%\cut-craft`,
 on a Mac `~/Library/Application Support/cut-craft`). Deleting it only means the first
 guesses start from scratch.
 
-This is the time Cut Craft takes to work the job out on your computer. How long the
+This is the time PowerWhittle takes to work the job out on your computer. How long the
 machine will take to cut is a different time: see [How long the job takes to cut](help:cutting_time),
 and the line under the preview's controls, which gives the machine time left as it plays.
 

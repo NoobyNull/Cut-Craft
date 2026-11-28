@@ -1,6 +1,6 @@
-//! Did You Know?: short tips for someone new to CAD/CAM, one shown when Cut Craft starts
+//! Did You Know?: short tips for someone new to CAD/CAM, one shown when PowerWhittle starts
 //! (Edit ▸ Options ▸ General turns that off) and all of them from Help ▸ Did You Know? and
-//! the Help window's own page of them. Cut Craft's own (see `re/SPEC.md`, Did You Know?).
+//! the Help window's own page of them. PowerWhittle's own (see `re/SPEC.md`, Did You Know?).
 
 use super::{CutCraftApp, Info, SPLASH_LOGO, egui};
 use crate::options::WindowLayout;
@@ -52,7 +52,7 @@ impl Area {
 pub(super) enum Picture {
     /// A scene drawn for this tip alone, in `assets/icons/tips`.
     Scene(&'static str),
-    /// A tool's button icon (by the tool's id), or another of Cut Craft's icons (by its path),
+    /// A tool's button icon (by the tool's id), or another of PowerWhittle's icons (by its path),
     /// so the tool can be found by it.
     Icon(&'static str),
 }
@@ -198,12 +198,12 @@ pub(super) fn startup_tip(layout: WindowLayout, seen: &mut Vec<u64>, roll: u64) 
 pub(super) fn markdown() -> String {
     let mut md = String::from(
         "[Contents](help:contents)\n\n# Did You Know?\n\nShort tips for getting more out of \
-         Cut Craft. One is shown each time Cut Craft starts, one you have not seen yet (a few \
+         PowerWhittle. One is shown each time PowerWhittle starts, one you have not seen yet (a few \
          come up more often than others), until you have seen them all and they come round \
          again; turn that off in the tip's window or in **Edit ▸ Options ▸ General**. A tip \
          counts as seen once it is on screen, from **Next** or **Previous** too. Which you \
-         have seen is kept with your settings on this computer and goes nowhere else. The tip's window stays in front of Cut Craft \
-         until you close it (see [Windows that open beside Cut Craft](help:contents)). Each \
+         have seen is kept with your settings on this computer and goes nowhere else. The tip's window stays in front of PowerWhittle \
+         until you close it (see [Windows that open beside PowerWhittle](help:contents)). Each \
          tip's **Tell me more** opens the help page about it.\n",
     );
     for area in Area::ALL {

@@ -5,7 +5,7 @@ see-also: settings, checks_before_cutting, check_missed_spots, vector_validator,
 
 # Confirmation Choices
 
-**Edit ▸ Options ▸ Confirmation Choices** decides what Cut Craft does when something looks
+**Edit ▸ Options ▸ Confirmation Choices** decides what PowerWhittle does when something looks
 wrong: ask you, fix it a set way, or let it go. Each starts on the safe choice, so most
 people never need to change them.
 
@@ -40,7 +40,7 @@ or stop), **Open vector validator** straight away with the crossing vectors pick
 
 ## Ask to recalculate out-of-date toolpaths
 
-After an edit leaves toolpaths out of date, Cut Craft asks whether to recalculate them
+After an edit leaves toolpaths out of date, PowerWhittle asks whether to recalculate them
 all. Untick it and it stops asking. The toolpaths are still marked ⚠ in the Toolpaths list,
 and [saving them](help:save_toolpaths) still asks first, so an old toolpath is never cut
 by mistake.

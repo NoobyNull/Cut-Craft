@@ -13,7 +13,7 @@ use cut_craft_core::glam::DVec3;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-/// The Library folder generated borders are saved in, under the person's Cut Craft folder.
+/// The Library folder generated borders are saved in, under the person's PowerWhittle folder.
 pub const FOLDER: [&str; 2] = ["Generated", "Borders"];
 
 /// What a recipe file's `format` always says.
@@ -340,7 +340,7 @@ pub fn read_recipe(path: &Path) -> Result<Recipe, String> {
         .map_err(|e| format!("{}: not a border tile's recipe: {e}", path.display()))?;
     if r.format != FORMAT_NAME || r.version > VERSION {
         return Err(format!(
-            "{}: not a border tile this version of Cut Craft reads",
+            "{}: not a border tile this version of PowerWhittle reads",
             path.display()
         ));
     }

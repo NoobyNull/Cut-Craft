@@ -576,7 +576,7 @@ fn the_window_title_sits_in_the_menu_bar_unless_the_desktop_s_is_chosen() {
     let file = h.text_at("File").expect("the File menu");
     let at = h
         .text_at(&title)
-        .expect("the title in Cut Craft's own title bar");
+        .expect("the title in PowerWhittle's own title bar");
     assert!((at.y - file.y).abs() < 1.0, "in the menus' row");
     assert!(at.x > file.x, "after the menus");
     h.given_options(|o| o.appearance.system_title_bar = true);
@@ -942,7 +942,7 @@ fn every_label_character_has_a_glyph() {
     );
 }
 
-/// Every character the language packs in the source use has a glyph in Cut Craft's fonts,
+/// Every character the language packs in the source use has a glyph in PowerWhittle's fonts,
 /// so a pack never shows empty boxes (a language whose letters the fonts lack needs a font
 /// added first).
 #[test]

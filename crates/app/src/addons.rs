@@ -1,7 +1,7 @@
 //! Gadgets ▸ Add-ons: the official add-ons with an Install button each, and Install from
 //! GitHub for any other, each from its repository's newest release. Installs and updates
 //! run on a thread of their own so the window keeps drawing; an add-on that is not signed
-//! with Cut Craft's release key is installed only after a warning. The work is
+//! with PowerWhittle's release key is installed only after a warning. The work is
 //! [`cut_craft_updater::addon`]'s.
 
 use cut_craft_i18n::tr;
@@ -70,7 +70,7 @@ pub struct Addons {
     languages: Languages,
     /// The languages with a pack to download, once asked: each its own install.
     offered: Option<Result<Vec<String>, String>>,
-    /// How much of Cut Craft each installed language pack covers, by id, with the version it
+    /// How much of PowerWhittle each installed language pack covers, by id, with the version it
     /// was worked out for: read once, not every frame.
     coverage: std::cell::RefCell<HashMap<String, (String, u32)>>,
 }
@@ -123,7 +123,7 @@ impl Addons {
         let (name, gadget) = self.about(id);
         self.phase = match addon::remove(dir, id) {
             Ok(()) if gadget => Phase::Done(format!(
-                "{name} is removed. It leaves the Gadgets menu when Cut Craft restarts."
+                "{name} is removed. It leaves the Gadgets menu when PowerWhittle restarts."
             )),
             Ok(()) => Phase::Done(format!("{name} is removed.")),
             Err(e) => Phase::Failed(e),
@@ -209,7 +209,7 @@ impl Addons {
     /// Installs what was found (the user has said yes if it is not signed).
     fn start(&mut self, ctx: &egui::Context, offer: Offer) {
         let Some(dir) = self.dir.clone() else {
-            self.phase = Phase::Failed("Cut Craft has no settings folder to put it in".into());
+            self.phase = Phase::Failed("PowerWhittle has no settings folder to put it in".into());
             return;
         };
         self.phase = Phase::Installing {
@@ -512,7 +512,7 @@ impl Addons {
                     let had = dir.and_then(|d| addon::installed(d, &pack.id));
                     self.row(ui, &pack.id, addon::TRANSLATIONS, had.as_ref(), busy, press);
                 } else {
-                    // every pack published with Cut Craft's translations is signed
+                    // every pack published with PowerWhittle's translations is signed
                     ui.weak(tr!("language-community-supported"));
                     if ui
                         .add_enabled(!busy, egui::Button::new(tr!("addons-install")))
@@ -525,7 +525,7 @@ impl Addons {
         }
     }
 
-    /// How much of Cut Craft `pack` (installed in `dir`) covers, worked out once for each
+    /// How much of PowerWhittle `pack` (installed in `dir`) covers, worked out once for each
     /// version of it.
     fn coverage_of(&self, dir: &Path, pack: &crate::languages::Pack) -> u32 {
         let mut known = self.coverage.borrow_mut();
@@ -621,12 +621,12 @@ fn remove_question(name: &str) -> String {
     format!("Remove {name}? Its folder is deleted, so you'll need to download it again to use it.")
 }
 
-/// The tool add-ons this Cut Craft has tools for: a tool add-on only works through a Cut
+/// The tool add-ons this PowerWhittle has tools for: a tool add-on only works through a Cut
 /// Craft tool made for it (Relief from Photo for Depth, Generate Border for Borders), never
 /// with its own interface.
 pub const TOOLS: &[&str] = &[crate::depth::ADDON_ID, crate::borders::ADDON_ID];
 
-/// Whether this Cut Craft can use the add-on `m` describes, or why not, said before it is
+/// Whether this PowerWhittle can use the add-on `m` describes, or why not, said before it is
 /// installed.
 pub fn usable(m: &Manifest) -> Result<(), String> {
     match m.kind.as_str() {
@@ -634,23 +634,23 @@ pub fn usable(m: &Manifest) -> Result<(), String> {
         "language" if m.id.starts_with(LANGUAGE_PREFIX) => Ok(()),
         "language" => Err(format!(
             "{} is a language pack whose id does not start with \"{LANGUAGE_PREFIX}\", so \
-             Cut Craft would not list it with the languages.",
+             PowerWhittle would not list it with the languages.",
             m.name
         )),
         "tool" if TOOLS.contains(&m.id.as_str()) => Ok(()),
         "tool" => Err(format!(
-            "{} is a tool this version of Cut Craft has no place for. Tool add-ons work \
-             through Cut Craft's own tools, so only those on the official list install.",
+            "{} is a tool this version of PowerWhittle has no place for. Tool add-ons work \
+             through PowerWhittle's own tools, so only those on the official list install.",
             m.name
         )),
         "content" => Err(format!(
-            "{} is a content pack, which this version of Cut Craft cannot use yet. Update \
-             Cut Craft (Help ▸ Check for Updates) and try again.",
+            "{} is a content pack, which this version of PowerWhittle cannot use yet. Update \
+             PowerWhittle (Help ▸ Check for Updates) and try again.",
             m.name
         )),
         kind => Err(format!(
-            "{} is a kind of add-on (\"{kind}\") this version of Cut Craft does not know. \
-             Update Cut Craft and try again.",
+            "{} is a kind of add-on (\"{kind}\") this version of PowerWhittle does not know. \
+             Update PowerWhittle and try again.",
             m.name
         )),
     }
@@ -659,14 +659,14 @@ pub fn usable(m: &Manifest) -> Result<(), String> {
 /// What to say once `m` is installed.
 fn installed_words(m: &Manifest) -> String {
     let more = match m.kind.as_str() {
-        "gadget" => " It is in the Gadgets menu the next time Cut Craft starts.",
+        "gadget" => " It is in the Gadgets menu the next time PowerWhittle starts.",
         "language" => " Pick it in Edit ▸ Options ▸ Language.",
         _ => "",
     };
     format!("{} {} is installed.{more}", m.name, m.version)
 }
 
-/// The tool the installed add-on `id` brings, when Cut Craft knows it: the Depth add-on's
+/// The tool the installed add-on `id` brings, when PowerWhittle knows it: the Depth add-on's
 /// is Relief from Photo, the Borders add-on's Generate Border.
 pub fn tool_of(id: &str) -> Option<&'static str> {
     match id {
@@ -677,8 +677,8 @@ pub fn tool_of(id: &str) -> Option<&'static str> {
 }
 
 /// The add-ons installed in `dir` that are not gadgets (a gadget lists itself), by name in
-/// the order of their ids, each with the tool it brings when Cut Craft knows it, and whether
-/// it is official (signed with Cut Craft's release key).
+/// the order of their ids, each with the tool it brings when PowerWhittle knows it, and whether
+/// it is official (signed with PowerWhittle's release key).
 pub fn installed_tools(dir: &Path) -> Vec<(String, Option<&'static str>, bool)> {
     installed_ids(dir)
         .into_iter()
@@ -707,7 +707,7 @@ fn installed_ids(dir: &Path) -> Vec<String> {
 }
 
 /// An installed add-on's line in the Add-ons window: its version, and whether it is official
-/// (signed with Cut Craft's release key) or not, marked so it is seen.
+/// (signed with PowerWhittle's release key) or not, marked so it is seen.
 pub fn installed_line(version: &str, signed: bool) -> String {
     let official = if signed {
         "official"
@@ -721,7 +721,7 @@ pub fn installed_line(version: &str, signed: bool) -> String {
 /// once they say so.
 pub fn unsigned_warning(offer: &Offer) -> String {
     format!(
-        "{} {} is not an official Cut Craft add-on: it is not signed with Cut Craft's release \
+        "{} {} is not an official PowerWhittle add-on: it is not signed with PowerWhittle's release \
          key, so nobody has checked what it does. {NOT_RESPONSIBLE} Install it only if you \
          trust {}.",
         offer.repo, offer.release.tag, offer.repo.owner
@@ -729,7 +729,7 @@ pub fn unsigned_warning(offer: &Offer) -> String {
 }
 
 /// What every unsigned add-on warning says.
-pub const NOT_RESPONSIBLE: &str = "Cut Craft and its author are not responsible for what an \
+pub const NOT_RESPONSIBLE: &str = "PowerWhittle and its author are not responsible for what an \
     unsigned add-on does or can do, including anything harmful or malicious. A tool add-on \
     is a program that runs on this computer with your permissions.";
 
@@ -895,7 +895,7 @@ mod tests {
             "{words}"
         );
         assert!(
-            words.contains("not an official Cut Craft add-on"),
+            words.contains("not an official PowerWhittle add-on"),
             "{words}"
         );
         assert_eq!(

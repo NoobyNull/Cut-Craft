@@ -27,7 +27,7 @@ is the order the toolpaths are cut and saved in, top first.
 - Inside a group, a toolpath moves only inside that group; it steps past a whole group inside
   it in one press.
 - A toolpath that cuts only what the toolpaths above it leave ([Rotary Roughing](help:rotary_roughing_toolpath))
-  goes out of date (⚠) when a move changes what is above it. Cut Craft says so, with **Put it
+  goes out of date (⚠) when a move changes what is above it. PowerWhittle says so, with **Put it
   back** to undo the move, or **Keep the new order** to recalculate it later.
 - Dragging a toolpath in the list by its grip (≡) moves it too: see
   [Arrange Toolpaths](help:arrange_toolpaths).

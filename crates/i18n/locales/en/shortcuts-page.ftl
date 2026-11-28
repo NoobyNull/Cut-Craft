@@ -1,6 +1,6 @@
 # src/app/shortcuts_page.rs
 shortcuts-page-add = Add…
-shortcuts-page-back-to-cut-craft-s = Back to Cut Craft's own shortcut for this. If another action has that key now, you are asked whether to move it back here
+shortcuts-page-back-to-cut-craft-s = Back to PowerWhittle's own shortcut for this. If another action has that key now, you are asked whether to move it back here
 shortcuts-page-cancel = Cancel
 shortcuts-page-find = Find
 shortcuts-page-move-it-here = Move it here

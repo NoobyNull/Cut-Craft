@@ -4,7 +4,7 @@
 //! of the part looked at; zoomed out, a quarter of the points over the whole preview.
 //! Nothing is thrown away on zooming out: the tiles stay on the card within a memory budget
 //! the Preview detail slider sets, the ones not looked at for longest let go first. All of
-//! it goes with the preview (Reset Preview, a new preview) and when Cut Craft closes.
+//! it goes with the preview (Reset Preview, a new preview) and when PowerWhittle closes.
 //!
 //! The tiles of a level share its heights on the card, so the shading and the shadows run
 //! on across their edges; and a frame draws one level throughout, so no cracks open where

@@ -847,7 +847,7 @@ pub fn clipart_previews_path() -> Option<PathBuf> {
     cache_dir().map(|dir| dir.join("clipart-previews"))
 }
 
-/// Where Cut Craft keeps files it can make again: `%LOCALAPPDATA%\cut-craft` on Windows,
+/// Where PowerWhittle keeps files it can make again: `%LOCALAPPDATA%\cut-craft` on Windows,
 /// `~/Library/Caches/cut-craft` on macOS, elsewhere `$XDG_CACHE_HOME/cut-craft`, else
 /// `~/.cache/cut-craft`.
 fn cache_dir() -> Option<PathBuf> {
@@ -920,7 +920,7 @@ pub fn load_tools_joining(path: &Path) -> Result<(ToolDatabase, Vec<String>), St
 /// Bit library files Bit Library ▸ Import Bits reads.
 pub const TOOL_FILE_EXTENSIONS: [&str; 3] = ["vtdb", "tools", "json"];
 
-/// The tools in a Vectric `.vtdb`, a Fusion 360 `.tools` or a Cut Craft `.json` database.
+/// The tools in a Vectric `.vtdb`, a Fusion 360 `.tools` or a PowerWhittle `.json` database.
 pub fn read_tool_file(path: &Path) -> Result<ToolDatabase, String> {
     let ext = path
         .extension()

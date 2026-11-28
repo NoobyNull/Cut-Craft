@@ -1,4 +1,4 @@
-//! The docs page at `/docs`: Swagger UI, carried inside Cut Craft (no internet needed), showing
+//! The docs page at `/docs`: Swagger UI, carried inside PowerWhittle (no internet needed), showing
 //! the description at [`DESCRIPTION`] so every call can be read about and tried in a browser.
 
 use crate::ApiError;
@@ -9,7 +9,7 @@ pub const DESCRIPTION: &str = "/api/v1/openapi.json";
 
 /// How the page is set up: it reads [`DESCRIPTION`], lets calls be tried straight away, and
 /// keeps a token typed into Authorize while the page stays open. No address bar: it shows
-/// only Cut Craft's own calls.
+/// only PowerWhittle's own calls.
 pub(crate) fn config() -> Arc<utoipa_swagger_ui::Config<'static>> {
     Arc::new(
         utoipa_swagger_ui::Config::new([DESCRIPTION])

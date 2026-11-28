@@ -488,7 +488,7 @@ fn my_gadgets_items(installed: &[(String, String)]) -> Vec<MenuItem> {
 }
 
 impl MenuSystem {
-    /// Adds Cut Craft's own Lua gadgets to the Gadgets menu, below the built-in ones, then
+    /// Adds PowerWhittle's own Lua gadgets to the Gadgets menu, below the built-in ones, then
     /// the My Gadgets submenu listing what the user installed (see [`Self::set_my_gadgets`]).
     pub fn add_gadgets(
         &mut self,

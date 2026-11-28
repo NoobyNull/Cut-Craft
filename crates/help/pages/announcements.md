@@ -5,8 +5,8 @@ see-also: settings, updates, finding_help
 
 # Announcements
 
-Now and then the team has news for everyone who uses Cut Craft: a new name, a big new feature,
-or a note for a holiday. These come up in the **Announcements** window when Cut Craft starts.
+Now and then the team has news for everyone who uses PowerWhittle: a new name, a big new feature,
+or a note for a holiday. These come up in the **Announcements** window when PowerWhittle starts.
 
 ## When one comes up
 
@@ -21,7 +21,7 @@ Nothing comes up during first-time setup.
 
 - Tick **Don't show this again** under an announcement to stop that one coming up. Others
   still do.
-- Untick **Show announcements when Cut Craft starts** at the foot of the window to stop them
+- Untick **Show announcements when PowerWhittle starts** at the foot of the window to stop them
   all. The same switch is in **Edit ▸ Options ▸ Updates** (see [Changing settings](help:settings)).
 
 ## Reading them again
@@ -31,15 +31,15 @@ Nothing comes up during first-time setup.
 
 ## Where they come from
 
-Some come with each new version of Cut Craft, in your language. Others the team writes on
-GitHub, in a file called `announcements.md` in Cut Craft's repository. As it starts, Cut Craft
+Some come with each new version of PowerWhittle, in your language. Others the team writes on
+GitHub, in a file called `announcements.md` in PowerWhittle's repository. As it starts, PowerWhittle
 reads that file, the same way it looks for [updates](help:updates). Nothing about you or your
-computer is sent. Every announcement is written by a person: Cut Craft never makes one up.
+computer is sent. Every announcement is written by a person: PowerWhittle never makes one up.
 
 When your computer is offline, you see only the announcements that came with your version,
-and nothing complains. Turning announcements off also stops Cut Craft reading that file.
+and nothing complains. Turning announcements off also stops PowerWhittle reading that file.
 
 ## Support us on GitHub
 
-Some announcements end with **Support us on GitHub**, which opens Cut Craft's page there. A
+Some announcements end with **Support us on GitHub**, which opens PowerWhittle's page there. A
 star, watching it for new releases, and telling us about problems all help.

@@ -12,7 +12,7 @@ subtab-as-section = { $hint }. Right-click to put it back in the tab row
 tab-not-implemented = { $tab } tools not implemented yet
 
 # The start page's link to the community. $site is a site's name, such as GitHub.
-start-community-link = Cut Craft on { $site }
+start-community-link = PowerWhittle on { $site }
 
 # Rows a tool form can have.
 form-next-step = Next:
@@ -71,7 +71,7 @@ reorder-put-back-done = The old order is back
 
 # Draw Text's spelling check.
 spelling-title = Spelling
-spelling-no-dictionary = Spelling: no dictionary found (put a Hunspell .dic and .aff in Cut Craft's dictionaries folder)
+spelling-no-dictionary = Spelling: no dictionary found (put a Hunspell .dic and .aff in PowerWhittle's dictionaries folder)
 spelling-none-wrong = No spelling mistakes
 spelling-add-word = Add Word
 spelling-remove-word = Remove Word
@@ -123,7 +123,7 @@ depth-addon-downloading = Downloading the Depth add-on...
 depth-addon-asking = The Add-ons window is asking whether to install it.
 depth-addon-install = Install Depth Add-on
     .tooltip = Downloads it from GitHub once; Gadgets ▸ Add-ons updates it
-    .disabled = Cut Craft has no settings folder to put it in
+    .disabled = PowerWhittle has no settings folder to put it in
 
 # Generate Border: a repeating border made with the Borders add-on and the person's own Google key.
 border-google-title = Your Google key
@@ -133,7 +133,7 @@ border-key = Google key
 border-save-key = Save Key
     .tooltip = Keep this key in this computer's password store for next time
 border-key-saved = Key saved in this computer's password store.
-border-key-saved-file = This computer has no password store, so the key is saved in a private file in Cut Craft's settings folder.
+border-key-saved-file = This computer has no password store, so the key is saved in a private file in PowerWhittle's settings folder.
 border-key-kept = Your Google key is saved on this computer.
 border-forget-key = Forget Key
     .tooltip = Remove the key from this computer. You can type it in again at any time
@@ -155,21 +155,21 @@ shortcuts-change = Change Shortcuts…
     .tooltip = Set your own keys, or the mouse's thumb buttons and wheel click, in Options ▸ Mouse and Shortcuts
 
 # Help ▸ Credits.
-credits-intro = Cut Craft is built with free libraries, pictures and icons made by other people. Thank you to all of them. Each keeps its own licence, shown here in full: click a line to read it.
+credits-intro = PowerWhittle is built with free libraries, pictures and icons made by other people. Thank you to all of them. Each keeps its own licence, shown here in full: click a line to read it.
 credits-search = Search by library or licence name
 credits-showing = Showing { $shown } of { $total }
 credits-none = Nothing matches "{ $search }". Try part of a library's name, such as serde, or a licence, such as MIT.
 credits-more = { $names } and { $count } more
 
 # Help ▸ About.
-about-name = Cut Craft
+about-name = PowerWhittle
 about-version = Version { $version }
 about-what = 2D and 3D design and CNC toolpaths.
 about-license = License
 about-read-license = Read the full license
 about-acknowledgements = Acknowledgements
 about-credits = Credits…
-    .tooltip = The libraries, pictures and icons Cut Craft is built with, and their licences
+    .tooltip = The libraries, pictures and icons PowerWhittle is built with, and their licences
 about-contributors = Contributors on GitHub
 about-commits = { $count ->
     [one] { $count } commit

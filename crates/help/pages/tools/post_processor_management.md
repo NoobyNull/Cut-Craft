@@ -4,7 +4,7 @@ see-also: save_toolpaths, check_tool_changer, job_setup, rotary_firmware
 ---
 
 A **post-processor** (post for short) turns your toolpaths into G-code written the way your
-machine's controller reads it. Cut Craft comes with many: one for each controller, in
+machine's controller reads it. PowerWhittle comes with many: one for each controller, in
 millimetres or inches, with arcs, straight lines only, or a 4th axis (rotary). The filters at
 the top of **Machine ▸ Post-Processor Management** narrow the list to the ones that suit you.
 
@@ -28,7 +28,7 @@ the top of **Machine ▸ Post-Processor Management** narrow the list to the ones
      **grblHAL** (see [The 4th axis and your firmware](help:rotary_firmware)).
 3. Pick your controller in **Any controller** to see only its posts, or type part of a name
    in **Search posts…**.
-4. The posts are grouped: **Installed by you** first, then Cut Craft's own under their
+4. The posts are grouped: **Installed by you** first, then PowerWhittle's own under their
    controller. Hover a post to read what it is for.
 5. Click a post and press **Select** to make it the one your machine saves toolpaths through.
 

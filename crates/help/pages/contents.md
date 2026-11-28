@@ -3,9 +3,9 @@ reviewed: 2026-11-24
 see-also:
 ---
 
-# Cut Craft Help
+# PowerWhittle Help
 
-Cut Craft draws 2D vectors and 3D models on a sheet of material, then makes the toolpaths
+PowerWhittle draws 2D vectors and 3D models on a sheet of material, then makes the toolpaths
 a CNC machine cuts them with.
 
 ![The Help window: search along the top, the pages listed, related pages down the side](pictures/help-contents.png)
@@ -17,25 +17,25 @@ a CNC machine cuts them with.
   height with its height buttons, and Auto-rotate to see the job from every side.
 - [Groups](help:groups): step inside a group to change one thing in it; text in a
   group stays editable.
-- [Checks before cutting](help:checks_before_cutting): what Cut Craft checks before
+- [Checks before cutting](help:checks_before_cutting): what PowerWhittle checks before
   it saves your toolpaths, what each check protects you from, and how to fix what it finds.
 - [Changing settings](help:settings): Edit ▸ Options, and how Apply, Cancel and Close
   keep or throw away your changes.
 - [Did You Know?](help:tips): short tips by subject, from drawing to cutting safely, one
-  shown each time Cut Craft starts. Each links to the page that says more.
+  shown each time PowerWhittle starts. Each links to the page that says more.
 - [Announcements](help:announcements): news and notes from the team at start, and how to
   turn them off.
-- [Updates](help:updates): install a new version in one click; Cut Craft reopens on
+- [Updates](help:updates): install a new version in one click; PowerWhittle reopens on
   your job.
 - [Backing up your settings](help:backups): Help ▸ Back Up Settings, what goes in, and the
-  backups Cut Craft makes by itself before updates and other big changes.
+  backups PowerWhittle makes by itself before updates and other big changes.
 - [Reporting a bug](help:bug_reports): right-click ▸ Report a Bug Here…, what each report
   sends (the details of your computer included), and how to switch those off.
 - [Protect the Machine](help:protect_the_machine): what is never saved because it could
   damage the machine, and the only way past, per machine in Machine Configuration.
 - [Collet and Holder Collisions](help:collisions): the collet nut, spindle or shank
   hitting wood beside a deep cut, shown red in the preview and asked about before saving.
-- [Web API](help:web_api): let a program or script drive Cut Craft, off until you
+- [Web API](help:web_api): let a program or script drive PowerWhittle, off until you
   switch it on in Options.
 - [How long the job takes to cut](help:cutting_time): what the machining time counts, and
   the machine settings that make it match your machine.
@@ -43,7 +43,7 @@ a CNC machine cuts them with.
   calculations use, and the status bar's Crawl, Walk, Run and Sprint.
 - [Long jobs and the time left](help:progress): the progress window, how its "about 2
   minutes left" is worked out, and Cancel.
-- [Using Cut Craft in another language](help:language): install a language pack and
+- [Using PowerWhittle in another language](help:language): install a language pack and
   switch to it in Options.
 
 ## Everyday basics
@@ -70,16 +70,16 @@ a CNC machine cuts them with.
 - [First-Time Setup](help:first_time_setup): your machine and usual material, asked again.
 - [Confirmation Choices](help:confirmation_choices): what happens when something looks
   wrong.
-- [Screen readers](help:screen_readers): using Cut Craft by keyboard or with a screen
+- [Screen readers](help:screen_readers): using PowerWhittle by keyboard or with a screen
   reader (Narrator, NVDA, Orca, VoiceOver).
 
-## Windows that open beside Cut Craft
+## Windows that open beside PowerWhittle
 
 Some tools open in a window of their own: Did You Know?, Options, the Bit Library,
 Machine Configuration, View G-code, Report a Bug and others. Each one stays in front of
-Cut Craft's main window until you close it, so clicking the main window never hides it.
+PowerWhittle's main window until you close it, so clicking the main window never hides it.
 You can still use the main window while it is open. It does not cover other programs,
-and it is minimised along with Cut Craft.
+and it is minimised along with PowerWhittle.
 
 A file or folder window opened from one of these windows (Save, Open, Browse...) belongs
 to that window and opens in front of it.
@@ -96,15 +96,15 @@ operator needs, use **Toolpaths ▸ Print Job Sheet** or **Toolpaths ▸ Print P
 
 ## Newer post-processors
 
-Cut Craft's own post-processors come with Cut Craft, so **Help ▸ Check for Updates** brings the
+PowerWhittle's own post-processors come with PowerWhittle, so **Help ▸ Check for Updates** brings the
 newest ones. Post-processors you added yourself are read from their folder each time, so
 there is nothing to update; see **Machine ▸ Post-Processor Management**.
 
 ## Updates
 
-Every time Cut Craft starts, it asks GitHub whether there is a new version. If there is, it
+Every time PowerWhittle starts, it asks GitHub whether there is a new version. If there is, it
 asks you: "A new version is available. Download, install and relaunch?" **Install Now**
-downloads it, checks it is genuine, installs it, and reopens Cut Craft on your job, with
+downloads it, checks it is genuine, installs it, and reopens PowerWhittle on your job, with
 any unsaved changes kept as they were. **Help ▸ Check for Updates**, or right-clicking the
 version number in the bottom-right corner, asks straight away. See
 [Updates](help:updates) for every step, what to do if it goes wrong, and how copies

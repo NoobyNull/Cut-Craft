@@ -267,7 +267,7 @@ impl Harness {
         self.app.icons = Icons::load(std::path::Path::new("/no/icons"));
     }
 
-    /// What Copy or Cut put on Cut Craft's clipboard.
+    /// What Copy or Cut put on PowerWhittle's clipboard.
     pub(in super::super) fn clipboard(&self) -> &[Path] {
         &self.app.clipboard
     }

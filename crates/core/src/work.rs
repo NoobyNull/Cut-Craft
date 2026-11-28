@@ -6,7 +6,7 @@
 //! - **How many cores**: Options ▸ Performance's limit ([`Limit`]), by default 80% of them
 //!   rounded down, so the computer keeps some for everything else.
 //! - **Their priority**: while the limit is on, each thread lowers its own priority as it
-//!   starts ([`cut_craft_priority`]), so a video, the browser and Cut Craft's own window come
+//!   starts ([`cut_craft_priority`]), so a video, the browser and PowerWhittle's own window come
 //!   first. It still runs flat out when nothing else wants the processor.
 //! - **A count of what is running** ([`running`]), which the status bar's [`Gauge`] turns into
 //!   how briskly the calculation is going: Crawl, Walk, Run or Sprint ([`Pace`]).
@@ -352,7 +352,7 @@ pub fn each<T: Sync, U: Send>(items: &[T], f: impl Fn(&T) -> U + Sync) -> Vec<U>
     out.into_iter().flatten().collect()
 }
 
-/// The processor time all of Cut Craft's threads have used so far, for [`Gauge::tick`]; none
+/// The processor time all of PowerWhittle's threads have used so far, for [`Gauge::tick`]; none
 /// where the system will not say.
 pub fn process_time() -> Option<Duration> {
     cut_craft_priority::process_time()
@@ -400,7 +400,7 @@ impl Pace {
 }
 
 /// Measures a calculation's [`Pace`] once a second while one runs: fed every frame with the
-/// time, Cut Craft's processor time so far and the threads [`running`].
+/// time, PowerWhittle's processor time so far and the threads [`running`].
 #[derive(Debug, Default)]
 pub struct Gauge {
     /// When the second being measured began, and the processor time then.

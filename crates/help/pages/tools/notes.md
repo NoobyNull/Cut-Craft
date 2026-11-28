@@ -28,7 +28,7 @@ are links; anything else is shown as you typed it.
 
 ## Live values: variables
 
-A **variable** is a value Cut Craft fills in for you, written between double braces, like
+A **variable** is a value PowerWhittle fills in for you, written between double braces, like
 `{{material.thickness}}`. It always shows the value now: change the material in Job Setup
 and the notes change with it. While writing, a variable shows as a coloured chip (red if
 it is spelt wrong); point at one to see its value. **Preview** shows every value.
@@ -52,7 +52,7 @@ The **Variable Explorer** lists every variable by where it comes from:
   feeds and speed, stepover, pass depth, run time and its own notes from the Toolpath
   Summary, plus a list of them all and the total run time.
 - **Document Variables**: the ones you set in Edit ▸ Document Variables.
-- **System**: today's date, the time and the Cut Craft version.
+- **System**: today's date, the time and the PowerWhittle version.
 
 Each row shows a name and its value now; point at it for what it is and how to type it.
 To put one in the notes:

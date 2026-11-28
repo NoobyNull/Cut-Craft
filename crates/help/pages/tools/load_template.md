@@ -21,4 +21,4 @@ see-also: save_selected_toolpath_as_template, save_all_visible_toolpaths_as_temp
   of the [Toolpath List](help:group_toolpaths).
 - A group this job already has keeps its place in the list; the template's toolpaths join
   it there.
-- Templates saved by an older Cut Craft load as before, with their groups one level deep.
+- Templates saved by an older PowerWhittle load as before, with their groups one level deep.

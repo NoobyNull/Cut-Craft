@@ -158,7 +158,7 @@ further out than the model, the toolpath cuts the material down to the model.
 
 ![After Import on a rotary job: the model drawn as it really is round the axis, the same as while it was imported](pictures/rotary-imported-as-it-is.png)
 
-Cut Craft also keeps a model's heights round the axis, for the tools that work on
+PowerWhittle also keeps a model's heights round the axis, for the tools that work on
 heights. Keeping the model makes the job file bigger, by about the size of the model's
 file.
 

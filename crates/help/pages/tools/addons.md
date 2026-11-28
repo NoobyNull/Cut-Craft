@@ -3,7 +3,7 @@ reviewed: 2026-11-26
 see-also: relief_from_photo, open_gadgets_folder, settings, language, confirmation_choices, web_api
 ---
 
-**Add-ons** brings in extra tools that are too big to come with Cut Craft, such as the Depth
+**Add-ons** brings in extra tools that are too big to come with PowerWhittle, such as the Depth
 add-on that [Relief from Photo](help:relief_from_photo) uses, and gadgets other people have
 written. Everything you install is listed in **Gadgets ▸ My Gadgets**, and gets a
 **Gadgets** section among the tool buttons.
@@ -26,7 +26,7 @@ written. Everything you install is listed in **Gadgets ▸ My Gadgets**, and get
 2. Press **Install** beside the add-on you want. For one that is not on the list, type its
    GitHub repository under **Install from GitHub** (such as `owner/name`, or paste its link)
    and press **Install**.
-3. If the add-on is **not official**, Cut Craft says so (**⚠ Not official**) and asks before
+3. If the add-on is **not official**, PowerWhittle says so (**⚠ Not official**) and asks before
    installing it. You can still install it with **Install Anyway**, but nobody has checked
    what it does, so do that only if you trust whoever made it.
 4. When it is done, the add-on shows in **Gadgets ▸ My Gadgets** straight away.
@@ -35,17 +35,17 @@ written. Everything you install is listed in **Gadgets ▸ My Gadgets**, and get
 
 Under **Languages**, each language with a pack has its own **Install** button. Each is
 **Official, community supported**: checked and signed, but translated by volunteers (see
-[Using Cut Craft in another language](help:language)). An installed pack also says who
+[Using PowerWhittle in another language](help:language)). An installed pack also says who
 translated it and how much is done. A language
 pack doesn't appear in My Gadgets. Pick it in **Edit ▸ Options ▸ Language** instead (see
-[Using Cut Craft in another language](help:language)).
+[Using PowerWhittle in another language](help:language)).
 
 ## Use what you installed
 
 - **From the menu**: open **Gadgets ▸ My Gadgets** and click it. An add-on opens the tool
   it brings: **Depth (Relief from Photo)** opens Relief from Photo.
 - **From the tool buttons**: once a gadget, or an add-on that brings a tool (such as Depth),
-  is installed, a **Gadgets** section appears. An add-on Cut Craft has no tool for is only
+  is installed, a **Gadgets** section appears. An add-on PowerWhittle has no tool for is only
   in My Gadgets, where clicking it opens Add-ons.
   It always comes after every other group, so no button you know moves for it.
   - **Classic**: on the Design page, under the sub-tabs. If the page shows only your
@@ -58,15 +58,15 @@ Gadgets section.
 
 ## Official and not official
 
-An **official** add-on is signed with Cut Craft's release key: Cut Craft's author made or
-checked it, and Cut Craft checks the signature when it downloads it. The Depth add-on is
+An **official** add-on is signed with PowerWhittle's release key: PowerWhittle's author made or
+checked it, and PowerWhittle checks the signature when it downloads it. The Depth add-on is
 official. A copy installed before it was signed still says **not official**: press
 **Remove**, then **Install** again.
 
 Anything else is **not official**: a gadget you put in the My Gadgets folder yourself, or an
 add-on from someone else's GitHub repository. It still installs and works, but:
 
-- Cut Craft warns you before installing it, and asks before its code first runs (see
+- PowerWhittle warns you before installing it, and asks before its code first runs (see
   below).
 - The Add-ons window says so beside it, such as
   **Version 0.1.0 installed, ⚠ not official (not signed)**.
@@ -75,15 +75,15 @@ add-on from someone else's GitHub repository. It still installs and works, but:
 ## Running unsigned code
 
 Nothing that is not official runs until you say so. The first time you use a gadget or
-add-on that is not official, Cut Craft asks **Do you want to run this unsigned code?** and
-explains that nobody has checked it, and that Cut Craft and its author are not responsible
+add-on that is not official, PowerWhittle asks **Do you want to run this unsigned code?** and
+explains that nobody has checked it, and that PowerWhittle and its author are not responsible
 for what it does. You choose:
 
 1. **Run and Remember** runs it now, and from now on without asking, until it changes.
-2. **Run This Time** runs it now, and asks again after Cut Craft closes.
-3. **Don't Run** leaves it alone. Cut Craft asks again the next time you use it.
+2. **Run This Time** runs it now, and asks again after PowerWhittle closes.
+3. **Don't Run** leaves it alone. PowerWhittle asks again the next time you use it.
 
-"Until it changes" means Cut Craft remembers the code itself, not just its name. If an
+"Until it changes" means PowerWhittle remembers the code itself, not just its name. If an
 update arrives, you edit the file, or someone puts a different file in its place, you are
 asked again.
 
@@ -100,16 +100,16 @@ unsigned code only after you have said yes in the window.
 
 Open **Add-ons...** again: an add-on with a newer release shows an **Update** button.
 **Remove** asks first, because you would have to download it again to use it. A removed
-add-on leaves My Gadgets at once; a removed gadget leaves the menu when Cut Craft restarts.
+add-on leaves My Gadgets at once; a removed gadget leaves the menu when PowerWhittle restarts.
 
-When one of Cut Craft's own add-ons moves to a new home on GitHub (the Depth add-on and the
+When one of PowerWhittle's own add-ons moves to a new home on GitHub (the Depth add-on and the
 language packs are moving to the Power-Whittle organisation), you don't need to do anything.
-Cut Craft knows both addresses and looks in Power-Whittle first, falling back to the old
+PowerWhittle knows both addresses and looks in Power-Whittle first, falling back to the old
 address while the new one is still empty. Your copy keeps updating, and its next update
 quietly records the new address. You never need to remove it and install it again.
 
 ## Your own gadgets
 
 A gadget is a small `.lua` file. Pick **Gadgets ▸ My Gadgets ▸ Open My Gadgets Folder**,
-put the file there, and restart Cut Craft: it shows in My Gadgets and in the Gadgets
+put the file there, and restart PowerWhittle: it shows in My Gadgets and in the Gadgets
 section. See [Open My Gadgets Folder](help:open_gadgets_folder).

@@ -59,7 +59,7 @@ Under **Depth**:
 - **Depth from**: **Google** turns the picture it drew into a depth map, so the depth
   matches the picture. **Depth add-on** works it out on your own computer instead, free and
   with nothing more sent, using the [Depth add-on](help:relief_from_photo). If your copy of
-  the Depth add-on is not official, Cut Craft asks before running it too, just as it asks
+  the Depth add-on is not official, PowerWhittle asks before running it too, just as it asks
   about the Borders add-on (see [Running unsigned code](help:addons)).
 - **Depth curve**: below 1 the middle heights rise, for a fuller carving; above 1 they fall,
   for crisper tops. 1 leaves them as they came.
@@ -74,11 +74,11 @@ Google AI Studio (the form's **Get a free Google key** link opens the page), pas
 
 - The key is kept in your computer's password store (Windows Credential Manager, the macOS
   Keychain, or the Linux keyring). If the computer has none, it goes in a private file in
-  Cut Craft's settings folder that only you can read.
+  PowerWhittle's settings folder that only you can read.
 - It is never saved in your jobs, your settings, exports or bug reports.
 - **Forget Key** removes it from this computer.
 - Generating sends Google only the style and your Details. Google bills what you generate
-  to your own account; Cut Craft charges nothing.
+  to your own account; PowerWhittle charges nothing.
 
 ## The Borders add-on
 

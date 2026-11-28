@@ -359,7 +359,7 @@ pub struct Reporter {
     /// A crash log the last run left, to offer as a report, and whether its log starts
     /// ticked (the person said yes to sending crash logs).
     crash: Option<(String, bool)>,
-    /// Cut Craft's crash-report service (its `/v1/crash` address), once there is one: a
+    /// PowerWhittle's crash-report service (its `/v1/crash` address), once there is one: a
     /// crash's log goes there by itself for people who said yes.
     pub crash_service: Option<String>,
     /// How a crash's log is posted to the service (replaced in tests).
@@ -461,8 +461,8 @@ impl Reporter {
         let (crash, _) = self.crash_sending.take()?;
         match result {
             Ok(()) => Some(
-                "Cut Craft closed with an error last time. Its crash report was sent: thank \
-                 you, it helps fix Cut Craft."
+                "PowerWhittle closed with an error last time. Its crash report was sent: thank \
+                 you, it helps fix PowerWhittle."
                     .into(),
             ),
             Err(failed) => {
@@ -472,8 +472,8 @@ impl Reporter {
                     && logs::put_back_crash(dir, &crash).is_ok()
                 {
                     return Some(
-                        "Cut Craft closed with an error last time. Its crash report could not \
-                         be sent just now; Cut Craft will try again the next time it starts."
+                        "PowerWhittle closed with an error last time. Its crash report could not \
+                         be sent just now; PowerWhittle will try again the next time it starts."
                             .into(),
                     );
                 }
@@ -566,8 +566,9 @@ impl Reporter {
     fn open_crash(&mut self, crash: &str, send_log: bool, host: &Host) {
         self.draft = Some(Draft {
             title: privacy::crash_title(crash),
-            text: "Cut Craft closed with an error the last time it ran.\n\nWhat were you doing?\n"
-                .into(),
+            text:
+                "PowerWhittle closed with an error the last time it ran.\n\nWhat were you doing?\n"
+                    .into(),
             at: egui::Pos2::ZERO,
             regions: vec![],
             widget: None,
@@ -759,13 +760,13 @@ fn computer_lines() -> Vec<String> {
 fn what_is_sent(ui: &mut egui::Ui, draft: &mut Draft) {
     ui.separator();
     ui.strong(cut_craft_i18n::t!(
-        "May Cut Craft send these with your report?"
+        "May PowerWhittle send these with your report?"
     ));
     ui.weak(cut_craft_i18n::t!(PUBLIC_NOTE));
     if let Some(image) = &draft.screenshot {
         ui.checkbox(
             &mut draft.send_screenshot,
-            cut_craft_i18n::t!("A picture of the Cut Craft window"),
+            cut_craft_i18n::t!("A picture of the PowerWhittle window"),
         );
         ui.weak(cut_craft_i18n::t!(
             "It shows your design as it is on screen."
@@ -789,11 +790,11 @@ fn what_is_sent(ui: &mut egui::Ui, draft: &mut Draft) {
         let label = if draft.crash {
             "The crash log"
         } else {
-            "Cut Craft's log"
+            "PowerWhittle's log"
         };
         ui.checkbox(&mut draft.send_log, label);
         ui.weak(cut_craft_i18n::t!(
-            "What Cut Craft was doing: the tools used, what each did and how it ended. Your \
+            "What PowerWhittle was doing: the tools used, what each did and how it ended. Your \
              user name and home folder are left out."
         ));
         ui.collapsing(cut_craft_i18n::t!("See the log"), |ui| {
@@ -1021,7 +1022,7 @@ mod tests {
             pick_pictures: &Vec::new,
             translation: &|| None,
         };
-        let crash = "Cut Craft 0.6.3 on linux crashed: panicked at src/a.rs:1:1:\nboom\n\n\
+        let crash = "PowerWhittle 0.6.3 on linux crashed: panicked at src/a.rs:1:1:\nboom\n\n\
                      Backtrace:\n  at /home/sam/src/a.rs\n";
         for allowed in [true, false] {
             let mut reporter = Reporter::new("me/app", None);
@@ -1041,7 +1042,7 @@ mod tests {
             *SENT.lock().unwrap() = body.to_owned();
             Ok(())
         }
-        let crash = "Cut Craft 0.6.16 on Ubuntu 24.04 aarch64 crashed: panicked at src/a.rs:1:1:\n\
+        let crash = "PowerWhittle 0.6.16 on Ubuntu 24.04 aarch64 crashed: panicked at src/a.rs:1:1:\n\
                      boom\n\nBacktrace:\n  0: a\n\nSystem: Ubuntu 24.04.1 LTS\n\nLog:\n";
         let ctx = egui::Context::default();
         for details in [true, false] {
@@ -1141,7 +1142,7 @@ mod tests {
             pick_pictures: &Vec::new,
             translation: &|| None,
         };
-        let crash = "Cut Craft 0.6.16 on Debian GNU/Linux 12 x86_64 crashed: panicked at \
+        let crash = "PowerWhittle 0.6.16 on Debian GNU/Linux 12 x86_64 crashed: panicked at \
                      src/a.rs:1:1:\nboom\n\nBacktrace:\n  0: a\n\nSystem: Debian GNU/Linux 12 \
                      (bookworm)\n\nLog:\n";
         let mut reporter = Reporter::new("me/app", None);

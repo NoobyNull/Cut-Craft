@@ -729,7 +729,7 @@ impl CutCraftApp {
         }
         let mut open = true;
         let title = match info {
-            Info::About => "About Cut Craft".to_owned(),
+            Info::About => "About PowerWhittle".to_owned(),
             Info::Shortcuts => "Keyboard Shortcuts".to_owned(),
             Info::Credits => "Credits".to_owned(),
             Info::Summary => "Toolpath Summary".to_owned(),
@@ -810,7 +810,7 @@ impl CutCraftApp {
     }
 }
 
-/// The About window: what Cut Craft is, its license, thanks and contributors. Gives whether
+/// The About window: what PowerWhittle is, its license, thanks and contributors. Gives whether
 /// Credits was clicked.
 fn about(ui: &mut egui::Ui) -> bool {
     ui.heading(tr!("about-name"));
@@ -845,17 +845,17 @@ fn about(ui: &mut egui::Ui) -> bool {
     credits
 }
 
-/// The About window's plain summary of Cut Craft's own license (the top of LICENSE).
-pub(super) const LICENCE_SUMMARY: &str = "Cut Craft is source-available, not open source. \
+/// The About window's plain summary of PowerWhittle's own license (the top of LICENSE).
+pub(super) const LICENCE_SUMMARY: &str = "PowerWhittle is source-available, not open source. \
 It is licensed under the PolyForm Strict License 1.0.0 with an extra permission: people and \
 one-person businesses may use it free of charge for any purpose, including making and selling \
 things with it. Larger businesses may use it for noncommercial purposes only. Nobody may share, \
-sell or change Cut Craft itself, except to offer changes back to the project. The LICENSE file \
+sell or change PowerWhittle itself, except to offer changes back to the project. The LICENSE file \
 is what applies.";
 
-/// The About window's thanks to the program that inspired Cut Craft (ACKNOWLEDGEMENTS.md in full).
-pub(super) const ACKNOWLEDGEMENT: &str = "Thank you to Vectric Ltd. Cut Craft was inspired by Vectric Aspire, \
-whose tools and workflow showed what a hobby CNC program can be. Cut Craft is an independent \
+/// The About window's thanks to the program that inspired PowerWhittle (ACKNOWLEDGEMENTS.md in full).
+pub(super) const ACKNOWLEDGEMENT: &str = "Thank you to Vectric Ltd. PowerWhittle was inspired by Vectric Aspire, \
+whose tools and workflow showed what a hobby CNC program can be. PowerWhittle is an independent \
 program written from scratch in Rust; it is not affiliated with or endorsed by Vectric and uses \
 none of Vectric's code. Vectric and Aspire are trademarks of their owners.";
 

@@ -8,7 +8,7 @@
 //!   add-on's files;
 //! - any large files the manifest lists under `downloads` (model weights, say), once for
 //!   every computer;
-//! - optionally `<file>.minisig` beside each, signed with Cut Craft's release key. Those
+//! - optionally `<file>.minisig` beside each, signed with PowerWhittle's release key. Those
 //!   are "signed"; an add-on without signatures may still be installed, once the user has
 //!   been warned. A signature that does not match refuses the install outright.
 //!
@@ -28,7 +28,7 @@ pub const RECORD: &str = "installed.json";
 /// The manifest at the top of an add-on's download.
 pub const MANIFEST: &str = "addon.toml";
 
-/// An add-on Cut Craft offers by name, its repository filled in.
+/// An add-on PowerWhittle offers by name, its repository filled in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Official {
     pub id: &'static str,
@@ -62,7 +62,7 @@ pub const TRANSLATIONS: &str = "Power-Whittle/CutCraft-Translations";
 
 /// Repositories known by more than one address, because they moved from `NoobyNull` to the
 /// Power-Whittle organisation. Each list is one repository: an add-on installed from any of
-/// its addresses is the same add-on, so it keeps updating, and Cut Craft's own add-ons stay
+/// its addresses is the same add-on, so it keeps updating, and PowerWhittle's own add-ons stay
 /// its own. The address in [`OFFICIAL`] or [`TRANSLATIONS`] (Power-Whittle) is preferred
 /// ([`current_address`]); the others are asked, in order, only while it has no release, so
 /// downloads work before and after the move ([`first_answer`]).
@@ -95,7 +95,7 @@ pub fn same_home(a: &Repo, b: &Repo) -> bool {
     addresses_of(a).iter().any(|x| same(x, b))
 }
 
-/// The address Cut Craft downloads `repo`'s add-ons from now: for a repository that moved,
+/// The address PowerWhittle downloads `repo`'s add-ons from now: for a repository that moved,
 /// the one in [`OFFICIAL`] or [`TRANSLATIONS`]; any other is itself.
 pub fn current_address(repo: &Repo) -> Repo {
     let now: Vec<&str> = OFFICIAL
@@ -134,7 +134,7 @@ fn first_answer(
 
 /// Where to report a wrong or missing word in a language pack from `repo`: its GitHub
 /// Issues. Language packs are community supported, so their translators answer there, not
-/// Cut Craft.
+/// PowerWhittle.
 pub fn wording_issues(repo: &Repo) -> String {
     format!("https://github.com/{repo}/issues")
 }
@@ -246,7 +246,7 @@ pub struct Manifest {
     /// `tool`, `gadget` or `content`.
     pub kind: String,
     pub version: String,
-    /// The Cut Craft versions it works with, such as `>=0.5.0`.
+    /// The PowerWhittle versions it works with, such as `>=0.5.0`.
     #[serde(default)]
     pub needs_cutcraft: Option<String>,
     /// Its program, for a tool (`.exe` is added on Windows), made runnable on install.
@@ -326,18 +326,18 @@ impl Manifest {
         Ok(m)
     }
 
-    /// Whether this Cut Craft (`current`) is one it works with.
+    /// Whether this PowerWhittle (`current`) is one it works with.
     pub fn suits(&self, current: &Version) -> Result<(), String> {
         let Some(needs) = &self.needs_cutcraft else {
             return Ok(());
         };
         let req = semver::VersionReq::parse(needs)
-            .map_err(|_| format!("the add-on needs an odd Cut Craft version \"{needs}\""))?;
+            .map_err(|_| format!("the add-on needs an odd PowerWhittle version \"{needs}\""))?;
         if req.matches(current) {
             Ok(())
         } else {
             Err(format!(
-                "{} needs Cut Craft {needs}; this is {current}. Update Cut Craft first \
+                "{} needs PowerWhittle {needs}; this is {current}. Update PowerWhittle first \
                  (Help ▸ Check for Updates).",
                 self.name
             ))
@@ -483,7 +483,7 @@ impl Offer {
 }
 
 /// What to say when GitHub has no release of `repo` (or no such repository). For an add-on
-/// Cut Craft offers by name, that only means it has not been published yet, so it says so
+/// PowerWhittle offers by name, that only means it has not been published yet, so it says so
 /// without blaming the person; for any other, it points at the likely typo.
 pub fn no_release(repo: &Repo) -> String {
     let full = repo.to_string();
@@ -493,7 +493,7 @@ pub fn no_release(repo: &Repo) -> String {
     match official {
         Some(official) => format!(
             "The {} add-on is not available to download yet. Nothing is wrong on your \
-             computer: try again after the next Cut Craft update.",
+             computer: try again after the next PowerWhittle update.",
             official.name
         ),
         None => format!(
@@ -505,7 +505,7 @@ pub fn no_release(repo: &Repo) -> String {
 
 /// Asks GitHub for `repo`'s newest release, as an add-on for this computer, or as the zip
 /// called `named` in it.
-/// One of Cut Craft's own add-ons that moved is asked for at its preferred address first.
+/// One of PowerWhittle's own add-ons that moved is asked for at its preferred address first.
 pub fn find(repo: &Repo, named: Option<&str>) -> Result<Offer, String> {
     let (from, json) = first_answer(repo, &Repo::latest_url, &crate::get_text).map_err(|e| {
         if e.contains("no releases") {
@@ -520,14 +520,14 @@ pub fn find(repo: &Repo, named: Option<&str>) -> Result<Offer, String> {
 /// The newest release of the installed add-on `id`, if it is newer.
 pub fn update_for(addons: &Path, id: &str) -> Result<Option<Offer>, String> {
     let record = installed(addons, id).ok_or("that add-on is not installed")?;
-    // from where Cut Craft prefers it now, so one installed before a move moves too
+    // from where PowerWhittle prefers it now, so one installed before a move moves too
     let offer = find(&record.repo, record.zip.as_deref())?;
     Ok(offer.is_newer_than(&record).then_some(offer))
 }
 
 /// Installs (or updates) `offer` into `addons`, telling `progress` the bytes downloaded of
 /// the whole. The caller asks the user first when it is not signed. `usable` says whether
-/// this Cut Craft can use the add-on its manifest describes (its kind, say), or why not;
+/// this PowerWhittle can use the add-on its manifest describes (its kind, say), or why not;
 /// nothing is installed unless it can.
 pub fn install(
     addons: &Path,
@@ -548,7 +548,7 @@ pub fn install(
 
 type Fetch<'a> = dyn Fn(&Asset, &dyn Fn(u64)) -> Result<Vec<u8>, String> + 'a;
 
-/// [`install`], with the Cut Craft version, release key and downloader given.
+/// [`install`], with the PowerWhittle version, release key and downloader given.
 fn install_with(
     addons: &Path,
     offer: &Offer,
@@ -585,7 +585,7 @@ fn install_with(
             .by_name(MANIFEST)
             .map_err(|_| {
                 format!(
-                    "{} has no {MANIFEST}: it is not a Cut Craft add-on",
+                    "{} has no {MANIFEST}: it is not a PowerWhittle add-on",
                     offer.zip.name
                 )
             })?
@@ -732,7 +732,7 @@ fn fetch_optional_with(
 }
 
 /// Whether `repo`'s add-on may go in the folder its manifest names: never in place of one
-/// of Cut Craft's own add-ons (which come only from their own repositories), nor of an
+/// of PowerWhittle's own add-ons (which come only from their own repositories), nor of an
 /// add-on installed from another repository. An update from the same repository may, at
 /// any of its addresses ([`same_home`]).
 fn owns_its_id(addons: &Path, manifest: &Manifest, repo: &Repo) -> Result<(), String> {
@@ -1041,7 +1041,7 @@ mod tests {
                 &self.key,
                 &|m| {
                     if m.kind == "theme" {
-                        Err("Cut Craft cannot use a theme".into())
+                        Err("PowerWhittle cannot use a theme".into())
                     } else {
                         Ok(())
                     }
@@ -1286,7 +1286,7 @@ mod tests {
     #[test]
     fn another_repository_s_add_on_never_takes_an_installed_or_official_add_on_s_place() {
         let fork = Repo::parse("someone/CutCraft-Depth-fork").unwrap();
-        // Cut Craft's own id comes only from its own repository
+        // PowerWhittle's own id comes only from its own repository
         let addons = scratch("fork");
         let e = depth_release(false)
             .install_from(fork.clone(), &addons, &platform())
@@ -1319,7 +1319,7 @@ mod tests {
                 &r(&format!("noobynull/{}", name.to_lowercase())),
                 &new
             ));
-            // both lead to the address Cut Craft downloads it from now
+            // both lead to the address PowerWhittle downloads it from now
             assert_eq!(current_address(&old), current_address(&new), "{name}");
         }
         assert_eq!(
@@ -1348,7 +1348,7 @@ mod tests {
             if url.contains("/NoobyNull/") {
                 Ok("old".to_owned())
             } else {
-                Err("GitHub has no releases of Cut Craft yet".to_owned())
+                Err("GitHub has no releases of PowerWhittle yet".to_owned())
             }
         };
         assert_eq!(
@@ -1384,7 +1384,7 @@ mod tests {
         let fork = Repo::parse("someone/fork").unwrap();
         let none = |url: &str| -> Result<String, String> {
             asked.borrow_mut().push(url.to_owned());
-            Err("GitHub has no releases of Cut Craft yet".to_owned())
+            Err("GitHub has no releases of PowerWhittle yet".to_owned())
         };
         assert!(first_answer(&fork, &Repo::latest_url, &none).is_err());
         assert_eq!(asked.borrow().len(), 1);
@@ -1420,7 +1420,7 @@ mod tests {
             .unwrap();
         // and the add-on now says where it came from: the new address
         assert_eq!(installed(&addons, "depth").unwrap().repo, new);
-        // a fresh install from the new address is Cut Craft's own add-on too
+        // a fresh install from the new address is PowerWhittle's own add-on too
         fs::remove_dir_all(&addons).unwrap();
         depth_release(true)
             .install_from(new.clone(), &addons, &platform())
@@ -1636,7 +1636,7 @@ mod tests {
         let addons = scratch("not");
         let no_manifest = fake(&[("x.zip", zip(&[("readme", b"hi")]))], false);
         let e = no_manifest.install(&addons, &platform()).unwrap_err();
-        assert!(e.contains("not a Cut Craft add-on"), "{e}");
+        assert!(e.contains("not a PowerWhittle add-on"), "{e}");
         let escaping = "id = \"../x\"\nname = \"x\"\nkind = \"tool\"\nversion = \"1.0.0\"";
         assert!(
             Manifest::parse(escaping)
@@ -1690,7 +1690,7 @@ mod tests {
         let m = Manifest::parse(DEPTH).unwrap();
         assert_eq!(m.suits(&Version::new(0, 5, 3)), Ok(()));
         let e = m.suits(&Version::new(0, 4, 9)).unwrap_err();
-        assert!(e.contains("needs Cut Craft >=0.5.0"), "{e}");
+        assert!(e.contains("needs PowerWhittle >=0.5.0"), "{e}");
     }
 
     #[test]

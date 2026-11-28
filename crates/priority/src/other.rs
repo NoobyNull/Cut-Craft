@@ -1,4 +1,4 @@
-//! Systems with no per-thread priority Cut Craft knows how to set: nothing changes.
+//! Systems with no per-thread priority PowerWhittle knows how to set: nothing changes.
 
 use std::time::Duration;
 

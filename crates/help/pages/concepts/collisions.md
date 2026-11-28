@@ -10,7 +10,7 @@ the bit, and the **spindle** (or router) body. On a deep cut any of them can run
 still standing beside the cut, such as the wall round a narrow slot or uncut stock round a
 deep profile. That can ruin the part, damage the nut, or pull the bit out of the collet.
 
-Cut Craft checks for this for you. It cuts every toolpath in order on the same material as
+PowerWhittle checks for this for you. It cuts every toolpath in order on the same material as
 the preview, so wood that an earlier toolpath already cleared away does not count, and
 wood left standing does.
 
@@ -30,7 +30,7 @@ wood left standing does.
 Nothing is refused: the toolpath is still made and you can still save it once you have
 read the warning.
 
-## Telling Cut Craft your sizes
+## Telling PowerWhittle your sizes
 
 The check is only as good as the sizes it knows. Measure them once with a ruler.
 
@@ -44,7 +44,7 @@ The check is only as good as the sizes it knows. Measure them once with a ruler.
 3. Set the bit's **Flute length** and **Shank diameter** too, so a narrow bit on a wider
    shank (a 1/8 in bit with a 1/4 in shank) is checked for its shank rubbing.
 
-Until you set a bit's Stick-out, Cut Craft guesses it, and the warning says so. The guess
+Until you set a bit's Stick-out, PowerWhittle guesses it, and the warning says so. The guess
 is the length that cuts (the flutes, or the V's height on a V-bit), plus the neck if the bit
 has one, plus 5 mm of shank showing. A bit with none of these is taken as 25 mm. The check
 uses this guess to decide how high the nut sits, so measure and set the real figure.

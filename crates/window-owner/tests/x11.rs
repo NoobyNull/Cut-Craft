@@ -135,7 +135,7 @@ fn a_dialog_window_is_marked_as_the_main_windows_own() {
         return;
     };
     let pid = std::process::id();
-    let main = window(&conn, screen, pid, "Cut Craft");
+    let main = window(&conn, screen, pid, "PowerWhittle");
     // another program's window of the same title is left alone
     let other = window(&conn, screen, pid + 1, "Did You Know?");
     let tips = window(&conn, screen, pid, "Did You Know?");

@@ -23,7 +23,7 @@ pub(super) fn posts_section(
         ui.strong(cut_craft_i18n::t!("Associated Post-Processors"));
         if machine.posts.is_empty() {
             ui.weak(cut_craft_i18n::t!(
-                "None: toolpaths are saved through Cut Craft's own FluidNC post"
+                "None: toolpaths are saved through PowerWhittle's own FluidNC post"
             ));
         }
         let default = machine.post().map(str::to_owned);
@@ -183,7 +183,7 @@ pub struct PostManager {
     pub(super) folded: std::collections::HashSet<&'static str>,
 }
 
-/// The posts shown, in their groups: the ones installed by you, then Cut Craft's own by
+/// The posts shown, in their groups: the ones installed by you, then PowerWhittle's own by
 /// controller. Groups with nothing shown are left out.
 pub(super) fn groups(
     shown: &[(Entry, Capabilities)],
@@ -341,7 +341,7 @@ impl Editing {
     }
 }
 
-/// Edit: a custom post's instructions, saved to its file, with what Cut Craft makes of them
+/// Edit: a custom post's instructions, saved to its file, with what PowerWhittle makes of them
 /// (a post that does not read shows why, and is marked ⚠ in the list until it does).
 pub(super) fn editor(ctx: &egui::Context, editing: &mut Option<Editing>) -> Option<PostOutcome> {
     let edit = editing.as_mut()?;
@@ -631,7 +631,7 @@ impl PostManager {
         asked
     }
 
-    /// Inspect: View, Changelog and Customize (which opens the copy in Edit) for Cut Craft's posts;
+    /// Inspect: View, Changelog and Customize (which opens the copy in Edit) for PowerWhittle's posts;
     /// View, Changelog, Edit, Open File Location and Delete for custom ones.
     pub(super) fn inspect(
         &mut self,

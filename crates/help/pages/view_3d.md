@@ -67,7 +67,7 @@ first, then turns it.
 
 ## Which way is X, Y and Z
 
-Every axis has one colour all through Cut Craft: **X is red, Y is green and Z is blue**.
+Every axis has one colour all through PowerWhittle: **X is red, Y is green and Z is blue**.
 The same colours are on the arrows in the views, on the rings and arrows you drag to turn
 or move something, and on the **X**, **Y** and **Z** boxes in the forms, so a red box always
 means X.

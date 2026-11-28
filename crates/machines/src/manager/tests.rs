@@ -182,7 +182,7 @@ fn a_custom_post_is_edited_and_saved_to_its_file() {
     let own = library.entries().into_iter().last().unwrap();
     assert!(
         Editing::of(&own).is_none(),
-        "Cut Craft's own are customised, not edited"
+        "PowerWhittle's own are customised, not edited"
     );
     let mut edit = Editing::of(&copy).expect("a custom post opens");
     edit.text.push_str("\n+ my change\n");

@@ -117,7 +117,7 @@ impl Capabilities {
                     Some(note)
                         if !note.is_empty()
                             && !note.starts_with("Made by")
-                            && !note.starts_with("Written for Cut Craft") =>
+                            && !note.starts_with("Written for PowerWhittle") =>
                     {
                         notes.push(note);
                     }
@@ -176,7 +176,7 @@ impl Capabilities {
 /// over what each post's lines say.
 #[derive(Clone, Debug, Default)]
 pub struct CapabilityDb {
-    /// `capabilities.json`; `None` keeps corrections only while Cut Craft runs.
+    /// `capabilities.json`; `None` keeps corrections only while PowerWhittle runs.
     path: Option<PathBuf>,
     edits: BTreeMap<String, Capabilities>,
 }
@@ -463,8 +463,14 @@ mod tests {
             search: "grbl   ARCS".into(),
             ..Filter::all()
         };
-        assert!(words.shows("Cut Craft GRBL Arcs (mm) (*.nc)", &Capabilities::default()));
-        assert!(!words.shows("Cut Craft Mach3 Arcs (mm) (*.nc)", &Capabilities::default()));
+        assert!(words.shows(
+            "PowerWhittle GRBL Arcs (mm) (*.nc)",
+            &Capabilities::default()
+        ));
+        assert!(!words.shows(
+            "PowerWhittle Mach3 Arcs (mm) (*.nc)",
+            &Capabilities::default()
+        ));
     }
 
     #[test]

@@ -665,6 +665,6 @@ pub fn layer_menu(doc: &Document, layer: &Layer) -> Vec<MenuItem> {
 pub fn version_menu() -> Vec<MenuItem> {
     vec![
         MenuItem::with_action("Check for Updates...", "check_for_updates"),
-        MenuItem::new("About Cut Craft", ""),
+        MenuItem::with_action("About PowerWhittle", "about_cut_craft"),
     ]
 }

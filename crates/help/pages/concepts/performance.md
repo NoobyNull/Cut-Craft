@@ -6,10 +6,10 @@ see-also: settings, progress, preview_detail, view_3d
 # Keeping the computer responsive
 
 Calculating a toolpath, a preview or a big import can keep every core of your computer
-busy. Cut Craft keeps some of the computer for everything else, so a video, the browser
-and Cut Craft's own window stay smooth while it works.
+busy. PowerWhittle keeps some of the computer for everything else, so a video, the browser
+and PowerWhittle's own window stay smooth while it works.
 
-## What Cut Craft does while it calculates
+## What PowerWhittle does while it calculates
 
 - **It uses a share of the processor's cores**, 80% to start with: on a computer with 32
   cores it uses 25, on one with 4 it uses 3. It always keeps at least one core working.
@@ -18,7 +18,7 @@ and Cut Craft's own window stay smooth while it works.
   wants it, the calculation still runs at full speed, so on a quiet computer this costs
   nothing.
 - **It shares the graphics card too.** Some previews and toolpaths are worked out on the
-  graphics card, which also draws your desktop and your videos. Cut Craft gives the card
+  graphics card, which also draws your desktop and your videos. PowerWhittle gives the card
   its work in short pieces and lets it rest after each one, so at 80% the card spends about
   a fifth of the time on everything else. The status bar's word is about the processor
   only.

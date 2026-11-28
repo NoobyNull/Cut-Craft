@@ -14,7 +14,7 @@ pub(super) struct Row {
     pub id: String,
     pub label: String,
     pub shortcuts: Vec<Trigger>,
-    /// Its shortcuts are set in Options rather than Cut Craft's own.
+    /// Its shortcuts are set in Options rather than PowerWhittle's own.
     pub changed: bool,
 }
 
@@ -26,7 +26,7 @@ pub(super) enum Edit {
     /// Stop waiting, changing nothing.
     Cancel,
     Remove(String, Trigger),
-    /// Back to Cut Craft's own shortcuts for this action.
+    /// Back to PowerWhittle's own shortcuts for this action.
     Reset(String),
     /// Take the clashing shortcut from the other action and give it to this one.
     Move,
@@ -109,7 +109,7 @@ impl CutCraftApp {
         .collect()
     }
 
-    /// Sets `id`'s shortcuts in the Options window, used once Apply is pressed; Cut Craft's
+    /// Sets `id`'s shortcuts in the Options window, used once Apply is pressed; PowerWhittle's
     /// own set is kept as no change.
     fn set_shortcuts(&mut self, id: &str, set: &[Trigger]) {
         let own: Vec<Trigger> = (self.default_bindings().into_iter())
@@ -171,7 +171,7 @@ impl CutCraftApp {
             .collect()
     }
 
-    /// Reset: `id` back to Cut Craft's own shortcuts. One another action has taken since is
+    /// Reset: `id` back to PowerWhittle's own shortcuts. One another action has taken since is
     /// asked about first, as adding it would be ("already runs … Move it here?"); until
     /// then `id` keeps the rest of its own.
     fn reset_shortcuts(&mut self, id: &str) {

@@ -1,4 +1,4 @@
-//! What computer Cut Craft is running on, for bug and crash reports: the operating system by
+//! What computer PowerWhittle is running on, for bug and crash reports: the operating system by
 //! its everyday name and exact version (macOS 14.5 Sonoma, Windows 11 Pro 23H2 build
 //! 22631.4460, Debian GNU/Linux 12), whether the processor is Intel/AMD or ARM, and the
 //! graphics card and how it is drawn to. Someone reporting a bug rarely knows these, and a
@@ -19,7 +19,7 @@ const WINDOWS_11_BUILD: u32 = 22_000;
 /// The first Windows 10 build.
 const WINDOWS_10_BUILD: u32 = 10_240;
 
-/// The computer Cut Craft is running on.
+/// The computer PowerWhittle is running on.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct System {
     /// The operating system and its release, short: "Windows 11 23H2", "macOS 14 Sonoma",
@@ -28,7 +28,7 @@ pub struct System {
     /// The same, exactly: "Windows 11 Pro 23H2 (build 22631.4460)",
     /// "macOS 14.5 Sonoma (build 23F79)", "Ubuntu 24.04.1 LTS (Noble Numbat)".
     pub os_exact: String,
-    /// The processor family Cut Craft was built for: `x86_64` or `aarch64`.
+    /// The processor family PowerWhittle was built for: `x86_64` or `aarch64`.
     pub arch: String,
     /// More that matters on this system, each "what: value": the Linux kernel and desktop
     /// session (Wayland or X11), or that a Mac runs the Intel build through Rosetta.
@@ -89,7 +89,7 @@ pub fn this_if_read() -> Option<&'static System> {
     THIS.get()
 }
 
-/// Says which graphics card draws Cut Craft and how, once it is known at startup.
+/// Says which graphics card draws PowerWhittle and how, once it is known at startup.
 pub fn set_graphics(name: &str, backend: &str, driver: &str, driver_info: &str) {
     let _ = GRAPHICS.set(graphics_line(name, backend, driver, driver_info));
 }
@@ -135,7 +135,7 @@ pub fn report_lines() -> Vec<String> {
 pub fn without_details(crash: &str) -> String {
     let (first, rest) = crash.split_once('\n').unwrap_or((crash, ""));
     let first = match (first.split_once(" on "), first.split_once(" crashed: ")) {
-        (Some((head, _)), Some((_, panic))) if head.starts_with("Cut Craft ") => {
+        (Some((head, _)), Some((_, panic))) if crate::logs::after_app_name(head).is_some() => {
             format!("{head} on {} crashed: {panic}", std::env::consts::OS)
         }
         _ => first.to_owned(),
@@ -531,14 +531,14 @@ HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion
 
     #[test]
     fn a_crash_log_can_go_without_the_details_of_the_computer() {
-        let crash = "Cut Craft 0.6.16 on Windows 11 23H2 x86_64 crashed: panicked at a.rs:1:1:\n\
+        let crash = "PowerWhittle 0.6.16 on Windows 11 23H2 x86_64 crashed: panicked at a.rs:1:1:\n\
                      boom\n\nBacktrace:\n  0: here\n\nSystem: Windows 11 Pro 23H2 (build \
                      22631.4460)\nProcessor: x86_64\nGraphics: Card (Dx12)\n\nLog:\nline\n";
         let plain = without_details(crash);
         assert_eq!(
             plain,
             format!(
-                "Cut Craft 0.6.16 on {} crashed: panicked at a.rs:1:1:\nboom\n\nBacktrace:\n  \
+                "PowerWhittle 0.6.16 on {} crashed: panicked at a.rs:1:1:\nboom\n\nBacktrace:\n  \
                  0: here\n\nLog:\nline\n",
                 std::env::consts::OS
             )

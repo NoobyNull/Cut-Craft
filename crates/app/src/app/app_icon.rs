@@ -1,4 +1,4 @@
-//! Cut Craft's own icon on its windows: the title bar, the taskbar and Alt+Tab. Without it
+//! PowerWhittle's own icon on its windows: the title bar, the taskbar and Alt+Tab. Without it
 //! the windows show the window library's stand-in. The same `.ico` is built into
 //! `cut-craft.exe` on Windows (`build.rs`), so Explorer and shortcuts show it too.
 
@@ -63,7 +63,7 @@ mod tests {
 
     #[test]
     fn the_main_window_shows_cut_crafts_icon() {
-        let builder = super::super::main_viewport(None, "Cut Craft", true);
+        let builder = super::super::main_viewport(None, "PowerWhittle", true);
         assert_eq!(builder.icon, Some(window_icon()));
     }
 }

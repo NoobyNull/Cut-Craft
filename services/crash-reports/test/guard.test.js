@@ -16,8 +16,8 @@ const sha = async (t) => new Uint8Array(await crypto.subtle.digest('SHA-256', ne
 
 /** What CutCraft's crash_text writes. */
 const crashLog = ({ version = '0.6.4', os = 'linux', file = 'crates/cam/src/pocket.rs', line = 120,
-  message = 'index out of bounds: the len is 3 but the index is 7' } = {}) =>
-  `Cut Craft ${version} on ${os} crashed: panicked at ${file}:${line}:9:\n${message}\n\nBacktrace:\n` +
+  message = 'index out of bounds: the len is 3 but the index is 7', app = 'PowerWhittle' } = {}) =>
+  `${app} ${version} on ${os} crashed: panicked at ${file}:${line}:9:\n${message}\n\nBacktrace:\n` +
   '   0: 0x55d0c0ffee01 - <unknown>\n   1: 0x55d0c0ffee02 - <unknown>\n\nLog:\n10:00:00.000 INFO  cut_craft: started\n';
 
 let n = 0;
@@ -53,11 +53,18 @@ test('a real CutCraft crash log with a solved proof of work is taken', async () 
   assert.equal(r.status, 202, JSON.stringify(await r.clone().json()));
 });
 
+test('a crash log written before the rename from Cut Craft is still taken', async () => {
+  const e = env();
+  const r = await post(e, report({ log: crashLog({ app: 'Cut Craft' }) }), NOW);
+  assert.equal(r.status, 202, JSON.stringify(await r.clone().json()));
+});
+
 test('reports that do not look like CutCraft wrote them are refused', async () => {
   const e = env();
   const bad = [
     report({ version: 'v1', log: crashLog({ version: 'v1' }) }),
     report({ log: 'hello there' }),
+    report({ log: crashLog({ app: 'SomethingElse' }) }),
     report({ log: crashLog({ version: '9.9.9' }) }), // version in the log disagrees
     report({ log: crashLog().replace('\n\nBacktrace:\n', '\n\n') }),
     report({ log: crashLog().replace('panicked at ', 'fell over at ') }),

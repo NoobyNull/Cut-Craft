@@ -311,7 +311,7 @@ pub const HINTS: &[(&str, &str)] = &[
     ),
     (
         "community:0",
-        "GitHub: opens Cut Craft's page on GitHub, where you can report problems and see what is coming",
+        "GitHub: opens PowerWhittle's page on GitHub, where you can report problems and see what is coming",
     ),
     (
         "community:1",

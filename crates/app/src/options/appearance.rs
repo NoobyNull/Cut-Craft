@@ -1,18 +1,18 @@
-//! How Cut Craft looks: themes, the canvas colours, its lines and the language.
+//! How PowerWhittle looks: themes, the canvas colours, its lines and the language.
 
 use super::{Deserialize, JsonSchema, Serialize, egui, rgb};
 
-/// How Cut Craft looks.
+/// How PowerWhittle looks.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Appearance {
     /// Light, dark, or the desktop's own
     #[serde(default)]
     pub theme: Theme,
-    /// The desktop's own title bar above the menus, rather than Cut Craft's in the menu bar
+    /// The desktop's own title bar above the menus, rather than PowerWhittle's in the menu bar
     #[serde(default)]
     #[schemars(title = "Use the desktop's title bar")]
     pub system_title_bar: bool,
-    /// The colors vectors, toolpaths and rapid moves are drawn in. Standard: as Cut Craft
+    /// The colors vectors, toolpaths and rapid moves are drawn in. Standard: as PowerWhittle
     /// has always drawn them. Color-blind friendly: colors told apart by how light or dark
     /// they are, not only by their hue. My own colors: pick each one below, for each theme
     #[serde(default)]
@@ -68,7 +68,7 @@ impl WrapBands {
     }
 }
 
-/// The size Cut Craft has always drawn its text at: egui's, plus 15%.
+/// The size PowerWhittle has always drawn its text at: egui's, plus 15%.
 pub(super) fn text_size() -> u32 {
     115
 }
@@ -185,7 +185,7 @@ impl CanvasColours {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum LinePalette {
-    /// Vectors in the text color, toolpaths orange, rapid moves red: as Cut Craft has
+    /// Vectors in the text color, toolpaths orange, rapid moves red: as PowerWhittle has
     /// always drawn them
     #[default]
     Standard,
@@ -442,7 +442,7 @@ pub(super) fn on() -> bool {
     true
 }
 
-/// Which language Cut Craft's words are in. Its page lists the choices itself (the packs
+/// Which language PowerWhittle's words are in. Its page lists the choices itself (the packs
 /// installed), so it has no settings of the ordinary kind.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Language {

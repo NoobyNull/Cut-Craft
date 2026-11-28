@@ -37,7 +37,7 @@ fn a_new_job_is_set_up_over_the_2d_view() {
 fn it_starts_on_the_start_page_with_the_no_job_menus() {
     let h = Harness::at_start();
     assert_eq!(h.screen(), Screen::Start);
-    assert_eq!(h.window_title(), "Cut Craft", "no job, so no file name");
+    assert_eq!(h.window_title(), "PowerWhittle", "no job, so no file name");
     assert_eq!(
         h.menu_names(),
         ["File", "Edit", "Machine", "Toolpaths", "Gadgets", "Help"]
@@ -664,7 +664,7 @@ fn answering_dont_save_keeps_the_job_unsaved_until_something_replaces_it() {
         h.has_unsaved_changes(),
         "backing out after No must not mark the work saved"
     );
-    assert!(h.job_title("Cut Craft").contains('*'));
+    assert!(h.job_title("PowerWhittle").contains('*'));
     assert!(!h.discard_answered(&rfd::MessageDialogResult::Cancel));
     assert!(h.has_unsaved_changes());
     // a file that will not open leaves the job unsaved too
@@ -744,8 +744,8 @@ fn a_file_named_on_the_command_line_opens_at_startup() {
 
 #[test]
 fn save_anyway_is_asked_in_the_window_not_by_a_dialog_that_can_hide_behind_it() {
-    // a 0.6.11 user: the save question sometimes opened behind Cut Craft's window. Linux
-    // shows rfd's questions as zenity windows of their own, not kept above Cut Craft's
+    // a 0.6.11 user: the save question sometimes opened behind PowerWhittle's window. Linux
+    // shows rfd's questions as zenity windows of their own, not kept above PowerWhittle's
     let mut h = ready_for_output();
     let form = one_file_form();
     let post = h.form_post(&form).unwrap();

@@ -1,5 +1,5 @@
 # The status line along the window's foot: what the app says it did, or why it did not.
-# A value put in ({ $tool }, { $path }, { $error }) is filled in by Cut Craft: keep it as it is.
+# A value put in ({ $tool }, { $path }, { $error }) is filled in by PowerWhittle: keep it as it is.
 
 ## Undo, the preview, gadgets and imports
 # $problems: what went wrong with each, separated by semicolons.
@@ -79,7 +79,7 @@ status-stepped-out-of-group = Stepped out of the group: a click picks whole grou
 ## Gadgets
 # $file: the gadget's file. $error: what was wrong.
 status-gadget-not-used = { $file } could not be used: { $error }
-status-no-gadgets-folder = Cut Craft has no settings folder on this computer to keep gadgets in
+status-no-gadgets-folder = PowerWhittle has no settings folder on this computer to keep gadgets in
 status-could-not-open-gadgets-folder = Could not open the My Gadgets folder, { $path } ({ $error })
 
 ## Jobs and files
@@ -112,7 +112,7 @@ status-set-up-start = Set up: { $machine }new jobs { $size }. Press Create a new
 status-setup-skipped = Setup skipped. Help ▸ Run First-Time Setup Again asks the questions again.
 
 ## Options
-status-title-bar-next-start = The title bar changes next time Cut Craft starts.
+status-title-bar-next-start = The title bar changes next time PowerWhittle starts.
 
 ## The 3D view's handles
 status-let-go-off-material = Let go off the material: nothing was changed
@@ -130,7 +130,7 @@ status-preview-new-material = Job Setup changed the material, so the preview sta
 
 ## The 3D view
 # $number: the button's number.
-status-spacemouse-button-unused = SpaceMouse button { $number } does nothing in Cut Craft yet
+status-spacemouse-button-unused = SpaceMouse button { $number } does nothing in PowerWhittle yet
 
 ## The sample project
 status-sample-opened = Sample sign opened with its toolpaths made. Press Preview All Toolpaths on the Toolpaths page to watch it cut
@@ -157,9 +157,9 @@ status-import-cancelled = Import cancelled
 status-open-a-job-to-import = Open or make a job to import { $file } into
 
 ## After a crash
-status-closed-with-error = Cut Craft closed with an error last time. To send crash reports, change Edit ▸ Options ▸ Bug Reports.
+status-closed-with-error = PowerWhittle closed with an error last time. To send crash reports, change Edit ▸ Options ▸ Bug Reports.
 # $path: where its crash log is kept.
-status-closed-with-error-log = Cut Craft closed with an error last time. Its crash log is kept in { $path }. To send crash reports, change Edit ▸ Options ▸ Bug Reports.
+status-closed-with-error-log = PowerWhittle closed with an error last time. Its crash log is kept in { $path }. To send crash reports, change Edit ▸ Options ▸ Bug Reports.
 status-select-to-zoom = select something to zoom to
 
 ## The Web API

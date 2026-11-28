@@ -1,5 +1,5 @@
 //! The `OpenAPI` description of the Web API that the docs page (`/docs`) shows. It is made from
-//! the app's own tools and menu items each time it is asked for, so a tool added to Cut Craft
+//! the app's own tools and menu items each time it is asked for, so a tool added to PowerWhittle
 //! (or a gadget installed) is in it straight away, ready to try with its starting settings.
 
 use serde_json::{Map, Value, json};
@@ -106,19 +106,19 @@ pub fn document(tools: &[Tool<'_>], actions: &[(String, String)], token: bool) -
     let mut doc = json!({
         "openapi": "3.0.3",
         "info": {
-            "title": "Cut Craft Web API",
+            "title": "PowerWhittle Web API",
             "version": env!("CARGO_PKG_VERSION"),
-            "description": "Drive Cut Craft the way you do with the mouse. Every call runs in \
+            "description": "Drive PowerWhittle the way you do with the mouse. Every call runs in \
                 the open window, as a click would, and is one Undo step. Lengths are in the \
                 job's units. Help ▸ Contents ▸ Web API explains more.",
         },
         "servers": [{ "url": "/api/v1" }],
         "paths": {
             "/status": get(
-                "What Cut Craft is doing",
+                "What PowerWhittle is doing",
                 "The version, whether a job is open, whether it is busy, the job's units, the \
                  open form and the status bar's message. progress is GET progress's answer.",
-                "Cut Craft's state",
+                "PowerWhittle's state",
             ),
             "/commands": get(
                 "Every tool",
@@ -296,7 +296,7 @@ fn more_paths(
         "/view.png".into(),
         json!({ "get": {
         "summary": "A picture of the 2D or 3D view",
-        "description": "The view as Cut Craft's window draws it, as a PNG. The window shows \
+        "description": "The view as PowerWhittle's window draws it, as a PNG. The window shows \
             that view for a moment while the picture is taken, then goes back to how it was. \
             Open this in a web browser to see the job.",
         "parameters": [
@@ -348,7 +348,7 @@ fn more_paths(
         "/progress".into(),
         get(
             "How far a slow job has got",
-            "Whether Cut Craft is calculating or previewing, what, how far along (0 to 1, when \
+            "Whether PowerWhittle is calculating or previewing, what, how far along (0 to 1, when \
          it can tell), for how long, and the time left as the progress window says it \
          (seconds_left once it can judge, time_left in words). Answered straight away, even \
          while busy.",
@@ -413,7 +413,7 @@ fn more_paths(
             is left out. With \
             \"save_to\", the files are saved there as well; an earlier save there is written \
             over only with \"replace\": true, archived or replaced as Options say. Nothing is sent to the machine: \
-            Cut Craft is not a G-code sender.",
+            PowerWhittle is not a G-code sender.",
         "requestBody": body(json!({
             "type": "object",
             "properties": {

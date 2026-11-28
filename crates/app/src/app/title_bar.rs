@@ -1,4 +1,4 @@
-//! Cut Craft's own title bar, drawn in the menu bar's row so the window is one surface:
+//! PowerWhittle's own title bar, drawn in the menu bar's row so the window is one surface:
 //! the space beside the menus moves the window, its buttons minimise, maximise and close
 //! it, and the window's edges resize it. Options ▸ Appearance gives back the desktop's.
 

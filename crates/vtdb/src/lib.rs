@@ -1,6 +1,6 @@
 //! Vectric `.vtdb` tool databases: a SQLite file of tool geometries,
 //! cutting data per machine and material, and a tool tree. Vendors publish these (Amana,
-//! IDC Woodcraft, CIC), so Cut Craft reads them into its own tool database.
+//! IDC Woodcraft, CIC), so PowerWhittle reads them into its own tool database.
 //!
 //! What was learned from three vendor files (nothing in them names the enumerations):
 //! `tool_geometry.tool_type` 0 ball nose, 1 end mill, 2 radiused end mill, 3 V-bit,
@@ -15,7 +15,7 @@ use rusqlite::{Connection, OpenFlags};
 use std::collections::HashMap;
 use std::path::Path;
 
-/// Every tool in the file that Cut Craft has a shape for, with its cutting data for each
+/// Every tool in the file that PowerWhittle has a shape for, with its cutting data for each
 /// material the file has data for, in the file's groups.
 pub fn read(path: &Path) -> Result<ToolDatabase, String> {
     let db = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
@@ -101,7 +101,7 @@ fn from_db(db: &Connection) -> Result<ToolDatabase, String> {
         }
     }
     if out.tools.is_empty() {
-        return Err("no tools Cut Craft can use were found in the file".into());
+        return Err("no tools PowerWhittle can use were found in the file".into());
     }
     Ok(out)
 }

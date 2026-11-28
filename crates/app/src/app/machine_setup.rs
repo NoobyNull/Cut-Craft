@@ -20,7 +20,7 @@ impl CutCraftApp {
 
     /// Reads the machines kept at `path`. One that cannot be read is said, copied aside to
     /// `machines.json.bad`, and never saved over this run: machine changes are not saved
-    /// until it is put right or moved away and Cut Craft is started again.
+    /// until it is put right or moved away and PowerWhittle is started again.
     pub(super) fn load_machines_at(&mut self, path: &std::path::Path) {
         match cut_craft_machines::Machines::load(path) {
             Ok(machines) => {
@@ -36,7 +36,7 @@ impl CutCraftApp {
                 };
                 self.status.set_message(&format!(
                     "Your machines could not be read ({e}); {kept}. Machine changes will not \
-                     be saved until it is fixed or moved away and Cut Craft is restarted"
+                     be saved until it is fixed or moved away and PowerWhittle is restarted"
                 ));
                 self.machines = cut_craft_machines::Machines::default();
                 self.machines_path = None;
@@ -62,7 +62,7 @@ impl CutCraftApp {
     pub(super) fn machines_changed(&mut self, done: &str) {
         if self.machines_unsaved {
             self.status.set_message(&format!(
-                "{done}, but not saved: the machines file could not be read when Cut Craft \
+                "{done}, but not saved: the machines file could not be read when PowerWhittle \
                  started, so it is not saved over"
             ));
             return;

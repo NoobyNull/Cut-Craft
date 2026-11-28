@@ -1,6 +1,6 @@
-// Cut Craft's own posts: add a new one here by hand.
+// PowerWhittle's own posts: add a new one here by hand.
 
-/// Cut Craft's own posts, as (file name, text): provided, not edited (customise a copy).
+/// PowerWhittle's own posts, as (file name, text): provided, not edited (customise a copy).
 pub const BUILT_IN: [(&str, &str); 37] = [
     (
         "fluidnc_atc_mm.pp",

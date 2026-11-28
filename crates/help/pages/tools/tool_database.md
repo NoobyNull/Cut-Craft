@@ -38,7 +38,7 @@ before cutting ask you to tick it, so a typing slip is not cut
 
 Under **Bit Shape**, **Stick-out** is how far the bit pokes out below the collet nut, from
 its tip up to the nut's face. Measure it once the bit is tightened in. Until you set it,
-Cut Craft guesses it from the length that cuts (flutes, or a V-bit's V height) plus any neck
+PowerWhittle guesses it from the length that cuts (flutes, or a V-bit's V height) plus any neck
 plus 5 mm, or 25 mm when none of those are set, and says so.
 On a deep cut the collet nut or spindle can hit wood beside the cut: see
 [Collet and Holder Collisions](help:collisions).

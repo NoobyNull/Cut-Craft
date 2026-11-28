@@ -1,5 +1,5 @@
 //! Checks before cutting: what in a toolpath the tool may not manage on the machine. These
-//! checks are Cut Craft's own.
+//! checks are PowerWhittle's own.
 
 use crate::check_list::Check;
 use crate::component::placed_model;

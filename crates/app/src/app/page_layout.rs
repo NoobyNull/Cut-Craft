@@ -157,7 +157,7 @@ impl CutCraftApp {
         }
     }
 
-    /// The middle of the window with no job open: the Cut Craft logo, which carries the
+    /// The middle of the window with no job open: the PowerWhittle logo, which carries the
     /// name itself, so no heading under it.
     pub(super) fn splash(ui: &mut egui::Ui) {
         let space = ui.available_size();

@@ -714,7 +714,7 @@ pub(super) const TOURS: &[Tour] = &[
         tool: "material_setup",
         steps: &[
             Step {
-                caption: "Before the first toolpath, tell Cut Craft about the board on the \
+                caption: "Before the first toolpath, tell PowerWhittle about the board on the \
                           machine. On the Toolpaths page, press **Material Setup** (under Job \
                           and Tools). It also opens by itself the first time you make a \
                           toolpath.",

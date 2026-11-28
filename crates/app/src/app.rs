@@ -701,17 +701,17 @@ pub(crate) struct CutCraftApp {
     /// Gadgets ▸ Add-ons, and the installs it (or Relief from Photo) starts; where add-ons
     /// are installed (none in tests).
     addons: crate::addons::Addons,
-    /// The language packs installed, each with how much of Cut Craft it covers (a
+    /// The language packs installed, each with how much of PowerWhittle it covers (a
     /// percentage), for Options ▸ Language while it is open; read again when it next opens.
     language_packs: Option<Vec<(crate::languages::Pack, u32)>>,
     /// The machines (Machine Configuration), the active one's default post saving
-    /// toolpaths; without one, Cut Craft's own `FluidNC` post for the job does.
+    /// toolpaths; without one, PowerWhittle's own `FluidNC` post for the job does.
     machines: cut_craft_machines::Machines,
     /// Where `machines` is kept; `None` keeps them in memory (tests).
     machines_path: Option<std::path::PathBuf>,
     /// The machines file could not be read at start: it is never saved over this run.
     machines_unsaved: bool,
-    /// Cut Craft's posts and the user's custom ones.
+    /// PowerWhittle's posts and the user's custom ones.
     posts: cut_craft_machines::Library,
     /// The open Machine Configuration Management and Post-Processor Management windows.
     machine_window: Option<cut_craft_machines::MachineManager>,
@@ -762,12 +762,12 @@ pub(crate) struct CutCraftApp {
     updates: crate::update::Updates,
     /// Install Now or Relaunch Now: the new version, started once the window has closed.
     restart_after_close: Option<std::path::PathBuf>,
-    /// The gadgets the user installed (not Cut Craft's own), by name: label and command id.
+    /// The gadgets the user installed (not PowerWhittle's own), by name: label and command id.
     my_gadgets: Vec<(String, &'static str)>,
     /// The add-ons installed that are not gadgets, by name, each with the tool it brings
-    /// when Cut Craft knows it, and whether it is official (`crate::addons::installed_tools`).
+    /// when PowerWhittle knows it, and whether it is official (`crate::addons::installed_tools`).
     installed_addons: Vec<(String, Option<&'static str>, bool)>,
-    /// Gadgets from the My Gadgets folder or unsigned add-ons, not from Cut Craft's own
+    /// Gadgets from the My Gadgets folder or unsigned add-ons, not from PowerWhittle's own
     /// signed builds, by command id.
     unsigned_gadgets: std::collections::HashMap<String, crate::gadgets::Unsigned>,
     /// The one check before unsigned code runs: gadgets and add-on programs alike.
@@ -957,7 +957,7 @@ pub(crate) struct CutCraftApp {
     /// Files from the Library waiting to be added, one after another, each with the level
     /// Add to Level puts it on.
     import_queue: std::collections::VecDeque<(std::path::PathBuf, Option<crate::clipart::ToLevel>)>,
-    /// A drawing or picture Cut Craft was started with (Open With) while no job was open:
+    /// A drawing or picture PowerWhittle was started with (Open With) while no job was open:
     /// imported once Job Setup's OK has made the job to hold it.
     import_after_setup: Option<std::path::PathBuf>,
     /// Where `recent` is saved; `None` keeps it in memory (tests).
@@ -978,7 +978,7 @@ pub(crate) struct CutCraftApp {
     /// Window title last sent to the viewport.
     title: String,
     /// Whether the window opened with the desktop's title bar. A Mac keeps the window it opened
-    /// with until Cut Craft restarts, so its menu row follows this rather than Options.
+    /// with until PowerWhittle restarts, so its menu row follows this rather than Options.
     title_bar_at_start: bool,
 }
 

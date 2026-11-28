@@ -1,15 +1,15 @@
-+ Cut Craft's post for hobby routers on grbl (grbl 1.1, grblHAL), millimetres, tools changed
++ PowerWhittle's post for hobby routers on grbl (grbl 1.1, grblHAL), millimetres, tools changed
 + by hand: grbl refuses M6, so a tool change stops the spindle and pauses (M0) for the new
 + tool, to be resumed from the sender once it is in and zeroed.
-+ Written for Cut Craft from the documented .pp format (re/SPEC.md).
++ Written for PowerWhittle from the documented .pp format (re/SPEC.md).
 
 + History
 + Who        When       What
 + ========== ========== ==========================================
-+ Cut Craft  2026-10-27 First version: arcs, tool change by hand (M0)
-+ Cut Craft  2026-10-31 Dwell written as G4
++ PowerWhittle  2026-10-27 First version: arcs, tool change by hand (M0)
++ PowerWhittle  2026-10-31 Dwell written as G4
 
-POST_NAME = "Cut Craft GRBL Arcs (mm) (*.nc)"
+POST_NAME = "PowerWhittle GRBL Arcs (mm) (*.nc)"
 FILE_EXTENSION = "nc"
 UNITS = "MM"
 LINE_ENDING = "[10]"

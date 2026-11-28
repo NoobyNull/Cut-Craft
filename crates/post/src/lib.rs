@@ -9,11 +9,25 @@ mod winding;
 pub use built_in::BUILT_IN;
 mod render;
 
-/// The name one of Cut Craft's own rotary posts has now, given the name it had before they
-/// were renamed (machines keep their posts by name): "… Wrap Y to A G93 (mm) …" is now
-/// "… Rotary A, cylinder along X, G93 (mm) …", and GRBL's rotary posts are grblHAL's
-/// (standard GRBL 1.1 has no A axis). `None` for any other name.
+/// The name one of the app's own posts has now, given a name it had before (machines keep
+/// their posts by name): first the rotary posts' rename ([`rotary_renamed`]), then the app's
+/// rename from Cut Craft to `PowerWhittle`, which every built-in post's name starts with.
+/// `None` for any other name, so a custom post keeps its name.
 pub fn renamed(old: &str) -> Option<String> {
+    let older = rotary_renamed(old).unwrap_or_else(|| old.to_owned());
+    let now = format!("PowerWhittle {}", older.strip_prefix("Cut Craft ")?);
+    BUILT_IN
+        .iter()
+        .filter_map(|(_, text)| Post::parse(text).ok())
+        .any(|post| post.name == now)
+        .then_some(now)
+}
+
+/// The name one of the rotary posts had after they were renamed, given the name it had
+/// before: "… Wrap Y to A G93 (mm) …" became "… Rotary A, cylinder along X, G93 (mm) …", and
+/// GRBL's rotary posts became grblHAL's (standard GRBL 1.1 has no A axis). `None` for any
+/// other name.
+fn rotary_renamed(old: &str) -> Option<String> {
     if old == "Cut Craft FluidNC ATC Wrap A G93 (mm) (*.nc)" {
         return Some("Cut Craft FluidNC ATC Rotary A, G93 (mm) (*.nc)".into());
     }

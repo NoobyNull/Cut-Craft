@@ -316,7 +316,7 @@ fn column(heading: &str) -> Column {
 }
 
 /// Millimetres per unit for a unit written in brackets after a heading (`Length (in)`,
-/// `Width [mm]`), if there is one Cut Craft knows.
+/// `Width [mm]`), if there is one PowerWhittle knows.
 fn heading_unit(heading: &str) -> Option<(f64, &'static str)> {
     let h = heading.trim().to_lowercase();
     let unit = h.split_once(['(', '['])?.1;
@@ -520,7 +520,7 @@ impl Importer for ImportCutList {
         let total: u64 = entries.iter().map(|e| u64::from(e.quantity)).sum();
         if total > MOST_PARTS {
             return Err(CommandError::Failed(format!(
-                "The cut list asks for {total} parts; Cut Craft imports up to {MOST_PARTS} at \
+                "The cut list asks for {total} parts; PowerWhittle imports up to {MOST_PARTS} at \
                  once. Check the quantities, or split the list into smaller files."
             )));
         }

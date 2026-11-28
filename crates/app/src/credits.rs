@@ -1,4 +1,4 @@
-//! Help ▸ Credits: the libraries, pictures and icons Cut Craft is built with, and their
+//! Help ▸ Credits: the libraries, pictures and icons PowerWhittle is built with, and their
 //! licences. The texts are the committed `credits` folder at the top of the repository:
 //! `libraries.md` is made by cargo-about from Cargo.lock (CI fails when it is stale) and
 //! `other.md`, for what Cargo.lock does not list, is kept by hand.
@@ -111,7 +111,7 @@ pub fn credits(markdown: &str) -> Vec<Credit<'_>> {
         .collect()
 }
 
-/// Every credit Cut Craft ships: the hand-kept ones first, then the libraries.
+/// Every credit PowerWhittle ships: the hand-kept ones first, then the libraries.
 pub fn all() -> Vec<Credit<'static>> {
     let mut all = credits(OTHER);
     all.extend(credits(LIBRARIES));

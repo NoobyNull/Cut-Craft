@@ -80,7 +80,7 @@ impl Exporter for ExportEps {
 fn eps_with(doc: &Document, line: f64) -> Vec<u8> {
     let (w, h) = page(doc);
     let mut out = format!(
-        "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 {} {}\n%%HiResBoundingBox: 0 0 {w:.3} {h:.3}\n%%Creator: Cut Craft\n%%EndComments\n{line} setlinewidth\n",
+        "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 {} {}\n%%HiResBoundingBox: 0 0 {w:.3} {h:.3}\n%%Creator: PowerWhittle\n%%EndComments\n{line} setlinewidth\n",
         w.ceil(),
         h.ceil()
     );

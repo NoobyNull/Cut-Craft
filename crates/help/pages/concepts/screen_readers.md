@@ -5,7 +5,7 @@ see-also: contents, settings
 
 # Screen readers
 
-Cut Craft tells screen readers what is on the screen: the name of each button, box and
+PowerWhittle tells screen readers what is on the screen: the name of each button, box and
 choice, and what it is set to. It works with the screen reader your computer already has:
 
 | Computer | Screen reader |
@@ -14,7 +14,7 @@ choice, and what it is set to. It works with the screen reader your computer alr
 | Linux | Orca (on most desktops, **Super+Alt+S**) |
 | Mac | VoiceOver (**⌘+F5**) |
 
-Start the screen reader before or after Cut Craft; either way it picks Cut Craft up.
+Start the screen reader before or after PowerWhittle; either way it picks PowerWhittle up.
 
 ## Moving round with the keyboard
 

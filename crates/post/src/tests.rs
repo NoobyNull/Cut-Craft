@@ -24,12 +24,7 @@ fn every_old_rotary_name_is_renamed_to_a_post_cut_craft_has() {
     assert_eq!(renamed_count, 24);
     let new = renamed("Cut Craft FluidNC ATC Wrap A G93 (mm) (*.nc)").unwrap();
     assert!(names.contains(&new), "{new}");
-    assert_eq!(
-        renamed("Cut Craft GRBL Wrap Y to A G93 (mm) (*.nc)").as_deref(),
-        Some("Cut Craft grblHAL Rotary A, cylinder along X, G93 (mm) (*.nc)")
-    );
     for kept in [
-        "Cut Craft GRBL Arcs (mm) (*.nc)",
         "My Wrap Y to A (mm)",
         "Cut Craft GRBL Wrap Y to Anything",
         "Cut Craft GRBL Wrap Y to A (mm) (*.nc) - Custom",
@@ -763,7 +758,7 @@ fn header_variables_describe_the_job_the_file_and_the_time() {
             "(600.000 400.000 20.000 0.000 600.000 0.000 400.000 -20.000 0.000)",
             "(Material Surface / Bottom Left Corner / MM / 6.000)",
             &format!(
-                "(Cut Craft {} / Test G-code (mm) (*.nc) / )",
+                "(PowerWhittle {} / Test G-code (mm) (*.nc) / )",
                 env!("CARGO_PKG_VERSION")
             ),
         ]
@@ -1079,4 +1074,29 @@ fn a_post_without_drill_bank_blocks_refuses_drill_bank_toolpaths() {
     );
     let why = Post::parse(&both).unwrap().render(&doc, &file).unwrap_err();
     assert!(why.contains("not both"), "{why}");
+}
+
+#[test]
+fn machines_keep_their_post_after_the_rename_to_powerwhittle() {
+    use super::*;
+    let names: Vec<String> = BUILT_IN
+        .iter()
+        .map(|(_, text)| Post::parse(text).unwrap().name)
+        .collect();
+    assert!(
+        names.iter().all(|n| n.starts_with("PowerWhittle ")),
+        "{names:?}"
+    );
+    for name in &names {
+        let old = name.replacen("PowerWhittle ", "Cut Craft ", 1);
+        assert_eq!(renamed(&old).as_ref(), Some(name), "{old}");
+        assert_eq!(renamed(name), None, "{name} is a name posts have now");
+    }
+    // an old rotary name goes through both renames
+    assert_eq!(
+        renamed("Cut Craft GRBL Wrap Y to A G93 (mm) (*.nc)").as_deref(),
+        Some("PowerWhittle grblHAL Rotary A, cylinder along X, G93 (mm) (*.nc)")
+    );
+    // a custom post someone named like a built-in one keeps its name
+    assert_eq!(renamed("Cut Craft GRBL Arcs (mm) (*.nc) - Custom"), None);
 }

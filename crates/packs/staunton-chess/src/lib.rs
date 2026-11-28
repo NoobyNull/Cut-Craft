@@ -92,7 +92,7 @@ pub fn files() -> Result<(Pack, Vec<File>), String> {
     let mut files = vec![tutorial_job()?];
     files.extend(Piece::ALL.iter().map(|&p| model(p, Cut::Half)));
     files.push(model(Piece::Knight, Cut::Whole));
-    let mut pack = Pack::new(ID, "Staunton Chess Set", Licence::Cc0, "Cut Craft");
+    let mut pack = Pack::new(ID, "Staunton Chess Set", Licence::Cc0, "PowerWhittle");
     "A full chess set in the classic Staunton pattern: halves to cut from \
         3/4″ wood and glue, and a knight to cut from both sides as a first two-sided job. \
         Free to carve and sell (CC0)."

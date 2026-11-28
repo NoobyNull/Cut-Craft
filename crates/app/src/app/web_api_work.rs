@@ -2,7 +2,7 @@
 //! of the views, the state, the toolpaths with their times, calculating and previewing,
 //! G-code, saving and exporting. Each runs through what the matching button runs; a call
 //! that starts a slow job (or a picture) is answered once it is done, and the calls after it
-//! wait their turn. Nothing is ever sent to the machine: Cut Craft is not a G-code sender.
+//! wait their turn. Nothing is ever sent to the machine: PowerWhittle is not a G-code sender.
 
 use super::{CutCraftApp, Split, View, files, view3d};
 use cut_craft_core::document::EntityId;
@@ -236,7 +236,7 @@ impl CutCraftApp {
             if now - asked_at > PICTURE_WITHIN {
                 return Some(Err(ApiError {
                     status: 503,
-                    message: "Cut Craft's window did not draw the picture. It must be open on \
+                    message: "PowerWhittle's window did not draw the picture. It must be open on \
                               screen, not minimised: show it, then try again."
                         .into(),
                 }));
@@ -782,7 +782,7 @@ fn picture_png(
     Ok(png.into_inner())
 }
 
-/// A path a call gives, which must be whole: a bare name would land wherever Cut Craft was
+/// A path a call gives, which must be whole: a bare name would land wherever PowerWhittle was
 /// started from.
 fn whole_path(path: &str) -> Result<std::path::PathBuf, ApiError> {
     let path = std::path::PathBuf::from(path.trim());

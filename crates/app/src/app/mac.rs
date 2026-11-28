@@ -1,4 +1,4 @@
-//! How Cut Craft looks and behaves on a Mac, so it feels like a Mac app: the system font, the
+//! How PowerWhittle looks and behaves on a Mac, so it feels like a Mac app: the system font, the
 //! system's colours, rounded controls and soft shadows, the window's own traffic-light buttons
 //! beside the menus, shortcuts written ⌘Z rather than Ctrl+Z, and the Mac's own keys (the
 //! delete key, ⇧⌘Z, ⌘,). Nothing here changes Windows or Linux: each use checks
@@ -8,7 +8,7 @@ use super::egui;
 use crate::shortcut;
 use egui::{Color32, CornerRadius, KeyboardShortcut, Shadow, Stroke, Theme, Vec2, Visuals};
 
-/// Whether Cut Craft is running on a Mac.
+/// Whether PowerWhittle is running on a Mac.
 pub(super) fn is_mac(ctx: &egui::Context) -> bool {
     ctx.os() == egui::os::OperatingSystem::Mac
 }
@@ -16,7 +16,7 @@ pub(super) fn is_mac(ctx: &egui::Context) -> bool {
 /// The Mac's UI fonts, the first installed used: San Francisco under the names it goes by, then
 /// Helvetica Neue, the system font before it.
 // ponytail: unconfirmed which of the San Francisco names fontdb finds on each macOS release;
-// Helvetica Neue is on every Mac Cut Craft supports, so the worst case is the older system font
+// Helvetica Neue is on every Mac PowerWhittle supports, so the worst case is the older system font
 pub(super) const UI_FONTS: [&str; 6] = [
     "SF Pro Text",
     "SF Pro",
@@ -50,7 +50,7 @@ pub(super) fn viewport(
     }
 }
 
-/// A menu's shortcut written as a Mac's menus write it: `Ctrl+Shift+V` is ⇧⌘V (Cut Craft's Ctrl
+/// A menu's shortcut written as a Mac's menus write it: `Ctrl+Shift+V` is ⇧⌘V (PowerWhittle's Ctrl
 /// is the Mac's ⌘), with the modifiers in the Mac's order and its symbols for named keys.
 pub(super) fn shortcut_text(text: &str) -> String {
     let text = MAC_KEYS
@@ -93,10 +93,10 @@ pub(super) fn shortcut_text(text: &str) -> String {
 /// Engrave's Ctrl+Q has none there, as ⌘Q quits every Mac app ([`SYSTEM_KEYS`]).
 const MAC_KEYS: [(&str, &str); 2] = [("Ctrl+Y", "Ctrl+Shift+Z"), ("Ctrl+Q", "")];
 
-/// Keys the Mac keeps for itself: ⌘Q quits before Cut Craft sees it.
+/// Keys the Mac keeps for itself: ⌘Q quits before PowerWhittle sees it.
 const SYSTEM_KEYS: [&str; 1] = ["Ctrl+Q"];
 
-/// Whether the Mac takes `keys` for itself, so no Cut Craft action can have them there.
+/// Whether the Mac takes `keys` for itself, so no PowerWhittle action can have them there.
 pub(super) fn kept_by_the_mac(keys: KeyboardShortcut) -> bool {
     SYSTEM_KEYS.iter().any(|k| shortcut::parse(k) == Some(keys))
 }

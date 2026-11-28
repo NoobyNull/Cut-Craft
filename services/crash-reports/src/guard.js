@@ -15,8 +15,9 @@ const VERSION = /^\d{1,4}\.\d{1,4}\.\d{1,4}(?:-[0-9A-Za-z.]{1,20})?$/;
 /** Whether the report looks like one CutCraft wrote. Returns an error message, or null. */
 export function checkShape(report) {
   if (!VERSION.test(report.version)) return 'version is not a CutCraft release number.';
-  const head = `Cut Craft ${report.version} on `;
-  if (!report.log.startsWith(head)) return 'log does not start the way a CutCraft crash log does.';
+  // the app was Cut Craft until 0.7.10; a log written before the update is sent after it
+  const heads = [`PowerWhittle ${report.version} on `, `Cut Craft ${report.version} on `];
+  if (!heads.some((head) => report.log.startsWith(head))) return 'log does not start the way a CutCraft crash log does.';
   const firstLine = report.log.slice(0, report.log.indexOf('\n') === -1 ? undefined : report.log.indexOf('\n'));
   if (!firstLine.includes(' crashed: ')) return 'log does not say what crashed.';
   if (!report.log.includes('\nBacktrace:\n')) return 'log has no backtrace.';
@@ -90,7 +91,7 @@ export async function countIp(db, ip, signature, now) {
   ).bind(day, await ipHash(db, ip, day), signature).run();
 }
 
-const PANIC = /^Cut Craft \S+ on [^\n]*? crashed: panicked at (.+?):\d+:\d+:\n([\s\S]*?)\n\nBacktrace:\n/;
+const PANIC = /^(?:PowerWhittle|Cut Craft) \S+ on [^\n]*? crashed: panicked at (.+?):\d+:\d+:\n([\s\S]*?)\n\nBacktrace:\n/;
 
 /** A source path as it reads on every machine: from `crates/` (or the Rust `library/`) on. */
 function samePath(path) {

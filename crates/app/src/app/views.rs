@@ -16,7 +16,7 @@ use cut_craft_i18n::tr;
 /// Where a crash log is kept when the person chose not to send crash logs.
 const LAST_CRASH: &str = "last-crash.log";
 
-/// The extensions of the files that, dropped or opened with Cut Craft, open as a job.
+/// The extensions of the files that, dropped or opened with PowerWhittle, open as a job.
 const DROPPED_JOBS: [&str; 3] = [
     JOB_EXTENSION,
     OLD_JOB_EXTENSION,
@@ -325,7 +325,7 @@ impl CutCraftApp {
         let form = self.form.as_ref().map_or("none", |f| f.id);
         [
             format!(
-                "Cut Craft {} ({}), {}",
+                "PowerWhittle {} ({}), {}",
                 env!("CARGO_PKG_VERSION"),
                 option_env!("CUT_CRAFT_COMMIT").unwrap_or("unknown commit"),
                 std::env::consts::OS

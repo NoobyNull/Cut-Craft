@@ -59,7 +59,7 @@ The 2D view shows this for you:
 
 [Zoom to Job](help:zoom_to_job) fits the sheet and both bands, so the seams are always in
 view. To change how far the bands reach, open **Edit ▸ Options ▸ Appearance** and set
-**Rotary wrap bands** to **Quarter turn** (90°, the one Cut Craft starts with), **Half
+**Rotary wrap bands** to **Quarter turn** (90°, the one PowerWhittle starts with), **Half
 turn** (180°: the whole of the other side at once) or **Off**.
 
 Toolpaths are not drawn again in the bands: to see a rotary toolpath all the way round, use
