@@ -70,6 +70,21 @@ impl CutCraftApp {
             self.language_packs = None;
         }
         let language_packs = self.language_packs.clone().unwrap_or_default();
+        let on_icons = fields
+            .get(self.options_editor.page)
+            .is_some_and(|f| f.key == crate::options::ICONS);
+        if on_icons && self.icon_sets.is_none() {
+            self.icon_sets = Some(
+                self.addons
+                    .dir()
+                    .map_or_default(crate::icon_themes::installed),
+            );
+        } else if !on_icons {
+            self.icon_sets = None;
+        }
+        let icon_sets = self.icon_sets.clone().unwrap_or_default();
+        let chosen_icons = self.edited_options().icons.set.clone();
+        let mut icons_picked = None;
         let on_backups = fields
             .get(self.options_editor.page)
             .is_some_and(|f| f.key == BACKUPS);
@@ -165,6 +180,9 @@ impl CutCraftApp {
                             *show_advanced,
                         );
                     }
+                    if category.key == crate::options::ICONS {
+                        icons_picked = super::icons_page::show(ui, &icon_sets, &chosen_icons);
+                    }
                     if category.key == "confirmations" {
                         forget_unsigned = unsigned_code_section(ui, unsigned_remembered);
                     }
@@ -202,6 +220,13 @@ impl CutCraftApp {
                 .take()
                 .unwrap_or_else(|| self.edited_options().clone());
             options.language.pack = pack;
+            changed = Some(options);
+        }
+        if let Some(set) = icons_picked {
+            let mut options = changed
+                .take()
+                .unwrap_or_else(|| self.edited_options().clone());
+            options.icons.set = set;
             changed = Some(options);
         }
         // kept until Apply
@@ -352,6 +377,7 @@ impl CutCraftApp {
         }
         let language =
             (options.language != self.options.language).then(|| options.language.pack.clone());
+        let icons = (options.icons != self.options.icons).then(|| options.icons.set.clone());
         options.apply();
         // the window never changes the toolbars of your own or Favourites: changes made
         // while it was open (menus, Customize Toolbars) stay
@@ -361,6 +387,9 @@ impl CutCraftApp {
         self.save_options();
         if let Some(pack) = language {
             self.use_language(&pack);
+        }
+        if let Some(set) = icons {
+            self.use_icons(&set);
         }
         // clipping turned on or off: the toolpaths made again with or without it
         if self.sync_machine_keep_out() {

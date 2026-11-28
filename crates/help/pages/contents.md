@@ -45,6 +45,8 @@ a CNC machine cuts them with.
   minutes left" is worked out, and Cancel.
 - [Using PowerWhittle in another language](help:language): install a language pack and
   switch to it in Options.
+- [Choosing the icons](help:icons): flat icons, or a 3D icon theme from Add-ons, picked in
+  Options.
 
 ## Everyday basics
 

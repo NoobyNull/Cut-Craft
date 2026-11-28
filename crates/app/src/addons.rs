@@ -630,7 +630,7 @@ pub const TOOLS: &[&str] = &[crate::depth::ADDON_ID, crate::borders::ADDON_ID];
 /// installed.
 pub fn usable(m: &Manifest) -> Result<(), String> {
     match m.kind.as_str() {
-        "gadget" => Ok(()),
+        "gadget" | "icons" => Ok(()),
         "language" if m.id.starts_with(LANGUAGE_PREFIX) => Ok(()),
         "language" => Err(format!(
             "{} is a language pack whose id does not start with \"{LANGUAGE_PREFIX}\", so \
@@ -661,6 +661,7 @@ fn installed_words(m: &Manifest) -> String {
     let more = match m.kind.as_str() {
         "gadget" => " It is in the Gadgets menu the next time PowerWhittle starts.",
         "language" => " Pick it in Edit ▸ Options ▸ Language.",
+        "icons" => " Pick it in Edit ▸ Options ▸ Icons.",
         _ => "",
     };
     format!("{} {} is installed.{more}", m.name, m.version)
@@ -686,7 +687,7 @@ pub fn installed_tools(dir: &Path) -> Vec<(String, Option<&'static str>, bool)> 
             let text = std::fs::read_to_string(dir.join(&id).join(addon::MANIFEST)).ok()?;
             let manifest = Manifest::parse(&text).ok()?;
             let signed = addon::installed(dir, &id).is_some_and(|r| r.signed);
-            (!matches!(manifest.kind.as_str(), "gadget" | "language"))
+            (!matches!(manifest.kind.as_str(), "gadget" | "language" | "icons"))
                 .then(|| (manifest.name, tool_of(&id), signed))
         })
         .collect()
@@ -825,6 +826,13 @@ mod tests {
                 .unwrap_err()
                 .contains("does not know")
         );
+        let icons = Manifest::parse(
+            "id = \"icons-3d\"\nname = \"3D Icons\"\nkind = \"icons\"\nversion = \"1.0.0\"\n\
+             [[icon_sets]]\nfolder = \"3d\"\nname = \"3D\"\n",
+        )
+        .unwrap();
+        assert_eq!(usable(&icons), Ok(()));
+        assert!(installed_words(&icons).contains("Options ▸ Icons"));
         assert!(installed_words(&m("g", "gadget")).contains("Gadgets menu"));
         let ru = Manifest::parse(
             "id = \"language-ru\"\nname = \"Русский\"\nkind = \"language\"\nversion = \

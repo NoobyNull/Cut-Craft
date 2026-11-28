@@ -54,6 +54,13 @@ pub const OFFICIAL: &[Official] = &[
                 key, for Generate Border. About 5 MB.",
         repo: "Power-Whittle/CutCraft-Borders",
     },
+    Official {
+        id: "icons-3d",
+        name: "3D Icons",
+        about: "Every button and picture drawn in 3D, face-on or angled. Pick it in Edit ▸ \
+                Options ▸ Icons; anything it lacks keeps its flat icon.",
+        repo: "Power-Whittle/CutCraft-Icons-3D",
+    },
 ];
 
 /// The repository every language pack is published on: each release carries one
@@ -243,7 +250,7 @@ pub struct Manifest {
     /// Its folder's name: lower-case letters, digits, `-` and `_`.
     pub id: String,
     pub name: String,
-    /// `tool`, `gadget` or `content`.
+    /// `tool`, `gadget`, `language`, `icons` or `content`.
     pub kind: String,
     pub version: String,
     /// The PowerWhittle versions it works with, such as `>=0.5.0`.
@@ -274,6 +281,19 @@ pub struct Manifest {
     /// supported, so the Add-ons window and Options credit them.
     #[serde(default)]
     pub translators: Vec<String>,
+    /// For an icon theme (kind `icons`): the sets of icons it brings, each a folder of the
+    /// add-on laid out like PowerWhittle's own icons, offered by name in Edit ▸ Options ▸ Icons.
+    #[serde(default)]
+    pub icon_sets: Vec<IconSet>,
+}
+
+/// One set of icons an icon theme brings.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct IconSet {
+    /// Its folder in the add-on, also what Options keeps to remember it.
+    pub folder: String,
+    /// What Options ▸ Icons calls it.
+    pub name: String,
 }
 
 impl Manifest {
@@ -304,6 +324,22 @@ impl Manifest {
             return Err(format!(
                 "the add-on lists \"{host}\" as a web host; list host names only, such as \
                  relay.example.com"
+            ));
+        }
+        if m.kind == "icons" && m.icon_sets.is_empty() {
+            return Err(format!(
+                "the icon theme \"{}\" lists no icon sets ([[icon_sets]] with a folder and a \
+                 name)",
+                m.id
+            ));
+        }
+        if !m.icon_sets.is_empty() && m.kind != "icons" {
+            return Err("only icon themes may list icon sets".to_owned());
+        }
+        if let Some(set) = m.icon_sets.iter().find(|s| !plain_name(&s.folder)) {
+            return Err(format!(
+                "the add-on asks for an odd folder \"{}\"",
+                set.folder
             ));
         }
         if !m.network.is_empty() && m.kind != "gadget" {
@@ -1457,6 +1493,25 @@ mod tests {
         let other = Repo::parse("someone/CutCraft-Translations").unwrap();
         assert!(owns_its_id(&addons, &manifest, &other).is_err());
         fs::remove_dir_all(addons).unwrap();
+    }
+
+    #[test]
+    fn an_icon_theme_lists_its_sets_as_plain_folders() {
+        let base =
+            "id = \"icons-3d\"\nname = \"3D Icons\"\nkind = \"icons\"\nversion = \"1.0.0\"\n";
+        let m = Manifest::parse(&format!(
+            "{base}[[icon_sets]]\nfolder = \"3d\"\nname = \"3D\"\n\
+             [[icon_sets]]\nfolder = \"3d-angled\"\nname = \"3D (angled)\"\n"
+        ))
+        .unwrap();
+        let folders: Vec<_> = m.icon_sets.iter().map(|s| s.folder.as_str()).collect();
+        assert_eq!(folders, ["3d", "3d-angled"]);
+        assert!(Manifest::parse(base).unwrap_err().contains("no icon sets"));
+        let odd = format!("{base}[[icon_sets]]\nfolder = \"../x\"\nname = \"X\"\n");
+        assert!(Manifest::parse(&odd).unwrap_err().contains("odd folder"));
+        let tool = "id = \"x\"\nname = \"x\"\nkind = \"tool\"\nversion = \"1.0.0\"\n\
+                    [[icon_sets]]\nfolder = \"a\"\nname = \"A\"\n";
+        assert!(Manifest::parse(tool).is_err());
     }
 
     #[test]

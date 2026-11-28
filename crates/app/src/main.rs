@@ -40,6 +40,7 @@ mod frame_rate;
 mod gadgets;
 mod gui;
 mod hints;
+mod icon_themes;
 mod icons;
 mod languages;
 mod marks;

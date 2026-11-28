@@ -332,6 +332,10 @@ setting-language-73db9b = Language
 setting-the-language-powerwhittle-s-words-6d34a9 =
     The language PowerWhittle's words are in: English, built in, or a language pack
     installed from Gadgets ▸ Add-ons.
+setting-icons-522cd9 = Icons
+setting-the-icons-powerwhittle-s-buttons-527375 =
+    The icons PowerWhittle's buttons and pictures are drawn with: the flat ones, built in,
+    or a set from an icon theme installed from Gadgets ▸ Add-ons.
 setting-job-defaults-1d7eee = Job Defaults
 setting-how-powerwhittle-starts-and-what-ef49d9 =
     How PowerWhittle starts, and what every new job starts with: the material, where X0 Y0

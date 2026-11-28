@@ -33,6 +33,7 @@ env:
   ADDONS: >-
     Power-Whittle/CutCraft-Borders
     Power-Whittle/CutCraft-Depth
+    Power-Whittle/CutCraft-Icons-3D
     Power-Whittle/CutCraft-Translations
 
 jobs:

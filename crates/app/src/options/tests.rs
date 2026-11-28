@@ -247,6 +247,7 @@ fn they_load_back_as_saved_and_fill_gaps_with_defaults() {
             "General Settings",
             "Performance",
             "Language",
+            "Icons",
             "Job Defaults",
             "Confirmation Choices",
             "Importing and Exporting",
